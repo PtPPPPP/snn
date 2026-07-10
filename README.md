@@ -17,7 +17,6 @@ SNN（Smart Neural Network）学生科技社团的官方网站，面向人工智
 - [TypeScript](https://www.typescriptlang.org/) 5
 - [Vinext](https://github.com/cloudflare/vinext) + [Vite](https://vite.dev/)
 - [Cloudflare Workers](https://workers.cloudflare.com/)
-- [Drizzle ORM](https://orm.drizzle.team/)（可选 D1 数据库支持）
 
 ## 本地运行
 
@@ -58,7 +57,6 @@ npm run dev
 | `npm test` | 执行构建验证与页面元数据测试 |
 | `npm run lint` | 检查代码规范 |
 | `npm run validate:artifact` | 单独验证现有构建产物 |
-| `npm run db:generate` | 根据数据库结构生成 Drizzle 迁移 |
 
 > 原生 Windows 开发请使用前文的 `npx vite`。项目脚本包含 Linux shell 命令或环境变量语法，不能直接在原生 PowerShell 中完整运行。
 
@@ -68,9 +66,6 @@ npm run dev
 .
 ├── app/                  # 页面、布局、样式与认证辅助代码
 ├── public/               # Logo、机械臂图片、公众号二维码等静态资源
-├── db/                   # Cloudflare D1 与 Drizzle 数据库配置
-├── drizzle/              # 数据库迁移文件
-├── examples/d1/          # D1 数据库示例
 ├── scripts/              # 安装、构建与产物验证脚本
 ├── tests/                # 自动化测试
 ├── worker/               # Cloudflare Worker 入口
@@ -87,7 +82,7 @@ npm run dev
 npm run build
 ```
 
-`.openai/hosting.json` 预留了可选的 D1 与 R2 配置项；配置绑定后，`vite.config.ts` 会在本地开发时模拟对应资源。当前配置未启用 D1 或 R2，网站的静态展示功能无需这些资源。
+`.openai/hosting.json` 预留了可选的 D1 与 R2 配置项；配置绑定后，`vite.config.ts` 会在本地开发时模拟对应资源。当前配置未启用 D1 或 R2，网站的展示功能无需这些资源。
 
 ## 相关项目
 
