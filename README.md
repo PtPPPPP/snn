@@ -1,108 +1,100 @@
-# vinext-starter
+# SNN 社团网站
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+SNN（Smart Neural Network）学生科技社团的官方网站，面向人工智能、机器人与创客方向，集中展示社团定位、活动机制、共创项目和招募方式。
 
-## Prerequisites
+## 网站内容
 
-- Node.js `>=22.13.0`
-- Linux with `flock`, `curl`, and GNU `timeout`
+- **社团介绍**：说明 SNN 面向新手、项目驱动和成果公开的理念
+- **共创项目**：展示提示词工程、低空无人机和具身智能等项目方向
+- **活动机制**：介绍技术小课、项目冲刺与开放交流
+- **加入方式**：通过公众号二维码获取活动、项目和招募信息
+- **响应式页面**：适配桌面端与移动端浏览
 
-## Sites Lifecycle
+## 技术栈
 
-The Sites lifecycle CLI runs the locked dependency install before returning this checkout. Edit the source under `app/`, then checkpoint when a coherent milestone is ready to inspect or share. The remote Sites builder runs `npm run build` against the pushed commit. Do not repeat install or build as a normal pre-checkpoint step.
+- [Next.js](https://nextjs.org/) 16
+- [React](https://react.dev/) 19
+- [TypeScript](https://www.typescriptlang.org/) 5
+- [Vinext](https://github.com/cloudflare/vinext) + [Vite](https://vite.dev/)
+- [Cloudflare Workers](https://workers.cloudflare.com/)
+- [Drizzle ORM](https://orm.drizzle.team/)（可选 D1 数据库支持）
 
-This starter does not use `wrangler.jsonc`.
+## 本地运行
 
-`install:ci` is intentionally a single, non-retrying `npm ci`. It refuses a concurrent install for the same project, consumes a matching image-seeded npm cache with `--prefer-offline` while retaining registry fallback for a missing cache object, otherwise downloads and verifies the complete vinext tarball recorded in `package-lock.json`, limits npm to one socket, and terminates a stalled install. `build` applies a short timeout and then validates the Sites artifact. These helpers target Linux and use GNU `timeout`; they are not native macOS scripts.
+### 环境要求
 
-Scripts that need writable project-scoped home, npm, XDG, and temporary paths use `scripts/sites-env.sh`. The `dev` and `start` scripts honor the caller's runtime environment and keep Wrangler logs inside the checkout. The generated `.sites-runtime/` directory is disposable and ignored by Git.
+- Node.js `>= 22.13.0`
+- npm
 
-## Included Shape
+### Windows
 
-- edit site code under `app/`
-- `app/chatgpt-auth.ts` provides optional dispatch-owned ChatGPT sign-in helpers
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/index.ts` reads the D1 binding from the Cloudflare Worker environment
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
-
-## Workspace Auth Headers
-
-OpenAI workspace sites can read the current user's email from
-`oai-authenticated-user-email`.
-
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
+```powershell
+npm install
+npx vite
 ```
 
-## Optional Dispatch-Owned ChatGPT Sign-In
+启动后打开终端显示的本地地址，通常为 <http://localhost:5173>。
 
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
+更详细的 Windows 操作说明见 [README-WINDOWS.md](./README-WINDOWS.md)。
 
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
+### Linux
 
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
+项目的完整脚本依赖 `bash`、`flock`、`curl` 和 GNU `timeout`：
 
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
+```bash
+npm run install:ci
+npm run dev
+```
 
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
+## 常用命令
 
-## Diagnostic Commands
+以下命令用于 Linux、WSL 或其他具备 Bash 工具链的环境：
 
-- `npm run install:ci`: perform the one bounded lockfile install
-- `npm run dev`: start the Vite/Vinext development server
-- `npm run build`: build and validate the deployable Sites artifact
-- `npm run start`: start the built Vinext application
-- `npm test`: build, validate, and verify the rendered development-preview metadata
-- `npm run validate:artifact`: recheck an existing artifact's manifest and ESM `default.fetch` export
-- `npm run db:generate`: generate Drizzle migrations after schema changes
+| 命令 | 用途 |
+| --- | --- |
+| `npm run dev` | 启动本地开发服务器 |
+| `npm run build` | 构建并验证部署产物 |
+| `npm run start` | 启动已构建的网站 |
+| `npm test` | 执行构建验证与页面元数据测试 |
+| `npm run lint` | 检查代码规范 |
+| `npm run validate:artifact` | 单独验证现有构建产物 |
+| `npm run db:generate` | 根据数据库结构生成 Drizzle 迁移 |
 
-Use build and validation commands for targeted diagnosis after a remote failure, not as part of the normal checkpoint path.
+> 原生 Windows 开发请使用前文的 `npx vite`。项目脚本包含 Linux shell 命令或环境变量语法，不能直接在原生 PowerShell 中完整运行。
 
-The timeout defaults can be overridden for a controlled canary with `SITES_INSTALL_TIMEOUT`, `SITES_INSTALL_KILL_AFTER`, `SITES_BUILD_TIMEOUT`, and `SITES_BUILD_KILL_AFTER`. A timeout fails the command; the helpers never retry an unchanged install or build.
+## 项目结构
 
-## Learn More
+```text
+.
+├── app/                  # 页面、布局、样式与认证辅助代码
+├── public/               # Logo、机械臂图片、公众号二维码等静态资源
+├── db/                   # Cloudflare D1 与 Drizzle 数据库配置
+├── drizzle/              # 数据库迁移文件
+├── examples/d1/          # D1 数据库示例
+├── scripts/              # 安装、构建与产物验证脚本
+├── tests/                # 自动化测试
+├── worker/               # Cloudflare Worker 入口
+└── vite.config.ts        # Vinext、Vite 与本地绑定配置
+```
 
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+网站主要内容位于 [`app/page.tsx`](./app/page.tsx)，全局样式位于 [`app/globals.css`](./app/globals.css)，图片资源位于 [`public/`](./public/)。
+
+## 部署说明
+
+项目使用 Vinext 构建，可部署到 Cloudflare Workers。远程构建环境应运行：
+
+```bash
+npm run build
+```
+
+`.openai/hosting.json` 预留了可选的 D1 与 R2 配置项；配置绑定后，`vite.config.ts` 会在本地开发时模拟对应资源。当前配置未启用 D1 或 R2，网站的静态展示功能无需这些资源。
+
+## 相关项目
+
+- [Intent2Prompt](https://github.com/PtPPPPP/intent2prompt)
+- [低空无人机哨兵](https://github.com/PtPPPPP/low-altitude-drone-sentinel)
+- [具身智能训练平台](https://github.com/PtPPPPP/embodied-training-platform)
+
+## License
+
+本项目暂未声明开源许可证。
