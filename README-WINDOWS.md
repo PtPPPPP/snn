@@ -27,7 +27,7 @@ npx vite
 
 - `app/page.tsx`：首页文字与页面结构
 - `app/globals.css`：网站样式和移动端适配
-- `public/`：Logo、公众号二维码和机械臂图片
+- `public/assets/`：Logo、公众号二维码和机械臂图片
 - `package.json`：项目依赖与命令
 
 ## 常用操作
@@ -43,4 +43,3 @@ npx vite
 ```powershell
 code .
 ```
-

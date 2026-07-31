@@ -53,7 +53,7 @@ export default function Home() {
         <a className="brand" href="#top" aria-label="SNN 首页">
           <img
             className="brand-logo"
-            src="/snn-logo-fixed.png"
+            src="/assets/snn-logo-fixed.png"
             alt="SNN 社团 Logo"
           />
           <span className="brand-divider" aria-hidden="true" />
@@ -120,7 +120,7 @@ export default function Home() {
           </div>
           <img
             className="robot-arm"
-            src="/snn-robot-arm.png"
+            src="/assets/snn-robot-arm.png"
             alt="银色工业机器人机械臂"
           />
           <div className="code-note" aria-hidden="true">
@@ -270,7 +270,10 @@ export default function Home() {
             <span>SCAN TO FOLLOW ↘</span>
           </div>
           <div className="wechat-qr-wrap">
-            <img src="/snn-wechat.jpg" alt="SNN 社团公众号二维码" />
+            <img
+              src="/assets/snn-wechat.jpg"
+              alt="SNN 社团公众号二维码"
+            />
             <span className="corner corner-a" aria-hidden="true" />
             <span className="corner corner-b" aria-hidden="true" />
           </div>
@@ -285,7 +288,7 @@ export default function Home() {
         <a className="brand footer-brand" href="#top" aria-label="返回首页顶部">
           <img
             className="brand-logo"
-            src="/snn-logo-fixed.png"
+            src="/assets/snn-logo-fixed.png"
             alt="SNN 社团 Logo"
           />
           <span className="brand-divider" aria-hidden="true" />

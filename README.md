@@ -65,14 +65,14 @@ npm run dev
 ```text
 .
 ├── app/                  # 页面、布局、样式与认证辅助代码
-├── public/               # Logo、机械臂图片、公众号二维码等静态资源
+├── public/assets/        # Logo、机械臂图片、公众号二维码等静态资源
 ├── scripts/              # 安装、构建与产物验证脚本
 ├── tests/                # 自动化测试
 ├── worker/               # Cloudflare Worker 入口
 └── vite.config.ts        # Vinext、Vite 与本地绑定配置
 ```
 
-网站主要内容位于 [`app/page.tsx`](./app/page.tsx)，全局样式位于 [`app/globals.css`](./app/globals.css)，图片资源位于 [`public/`](./public/)。
+网站主要内容位于 [`app/page.tsx`](./app/page.tsx)，全局样式位于 [`app/globals.css`](./app/globals.css)，图片资源位于 [`public/assets/`](./public/assets/)。
 
 ## 部署说明
 
