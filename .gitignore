@@ -40,3 +40,7 @@ next-env.d.ts
 /.sites-runtime/
 /outputs/
 /work/
+/ftp-upload/
+/.static-export-temp/
+/.vinext/
+*.tsbuildinfo

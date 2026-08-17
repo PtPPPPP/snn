@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const projects = [
   {
     index: "01",
@@ -68,6 +70,9 @@ export default function Home() {
           <a href="#about">关于我们</a>
           <a href="#activities">活动</a>
           <a href="#projects">项目</a>
+          <Link className="nav-ai" href="/ai">
+            SNN AI
+          </Link>
           <a className="nav-join" href="#join">
             加入 SNN <span aria-hidden="true">↗</span>
           </a>

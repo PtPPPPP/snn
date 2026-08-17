@@ -114,6 +114,10 @@ a {
   border: 1px solid var(--ink);
 }
 
+.main-nav .nav-ai {
+  color: var(--blue);
+}
+
 .hero {
   position: relative;
   display: grid;
@@ -257,10 +261,12 @@ a {
 .robot-arm {
   position: absolute;
   z-index: 2;
-  right: -11vw;
-  bottom: -9%;
-  width: min(68vw, 1040px);
+  inset: 0;
+  width: 100%;
+  height: 100%;
   max-width: none;
+  object-fit: contain;
+  object-position: center;
   mix-blend-mode: multiply;
   filter: saturate(0.72) contrast(1.03);
   pointer-events: none;
@@ -882,7 +888,7 @@ footer {
     gap: 20px;
   }
 
-  .main-nav a:not(.nav-join) {
+  .main-nav a:not(.nav-join):not(.nav-ai) {
     display: none;
   }
 
@@ -904,16 +910,17 @@ footer {
 
   .hero-visual {
     position: absolute;
-    right: -10%;
+    right: 0;
     bottom: 82px;
-    width: 70%;
+    width: 65%;
     height: 70%;
     opacity: 0.76;
   }
 
   .robot-arm {
-    right: -28%;
-    width: 105vw;
+    inset: 0;
+    width: 100%;
+    height: 100%;
   }
 
   .projects-heading,
@@ -961,6 +968,15 @@ footer {
 
   .main-nav .nav-join {
     padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  .main-nav {
+    gap: 12px;
+  }
+
+  .main-nav .nav-ai {
+    padding: 10px 0;
     font-size: 13px;
   }
 
@@ -1016,17 +1032,17 @@ footer {
   }
 
   .hero-visual {
-    right: -32%;
+    right: 0;
     bottom: 58px;
-    width: 115%;
+    width: 100%;
     height: 49%;
-    opacity: 0.52;
+    opacity: 0.68;
   }
 
   .robot-arm {
-    right: -24%;
-    bottom: -12%;
-    width: 158vw;
+    inset: 0;
+    width: 100%;
+    height: 100%;
   }
 
   .blueprint {
