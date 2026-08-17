@@ -44,3 +44,13 @@ next-env.d.ts
 /.static-export-temp/
 /.vinext/
 *.tsbuildinfo
+
+# local AI node data and model weights
+/ai-node/.env
+/ai-node/models/
+/ai-node/data/
+/ai-node/logs/
+*.gguf
+
+# Cloudflare Worker local secrets
+/cloudflare-ai-gateway/.dev.vars

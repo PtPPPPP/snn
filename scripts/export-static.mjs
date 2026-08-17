@@ -63,13 +63,18 @@ const staticCss = cssSource.replace('@import "tailwindcss";', "").trimStart();
 const aiCss = await readFile(path.join(root, "app", "ai", "ai-chat.module.css"), "utf8");
 const aiClientSource = await readFile(path.join(root, "lib", "ai-client.ts"), "utf8");
 const ftpChatSource = await readFile(path.join(root, "app", "ai", "ftp-chat.ts"), "utf8");
-const compiledAiClient = ts.transpileModule(aiClientSource, {
-  compilerOptions: {
-    module: ts.ModuleKind.ESNext,
-    target: ts.ScriptTarget.ES2022,
-  },
-  fileName: "ai-client.ts",
-}).outputText;
+const compiledAiClient = ts
+  .transpileModule(aiClientSource, {
+    compilerOptions: {
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ES2022,
+    },
+    fileName: "ai-client.ts",
+  })
+  .outputText.replace(
+    /const buildBaseUrl = typeof process === "undefined"\s*\? undefined\s*:\s*process\.env\.NEXT_PUBLIC_SNN_AI_API_BASE_URL;/,
+    "const buildBaseUrl = undefined;",
+  );
 const compiledFtpChat = ts
   .transpileModule(ftpChatSource, {
     compilerOptions: {

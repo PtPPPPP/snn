@@ -12,6 +12,9 @@
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "export:static": "node scripts/export-static.mjs",
     "build:ftp": "npm run export:static",
+    "ai:node": "npm --prefix ai-node run start",
+    "test:ai-node": "npm --prefix ai-node test",
+    "test:ai-gateway": "npm --prefix cloudflare-ai-gateway test",
     "test": "npm run build && node --test tests/rendered-html.test.mjs",
     "validate:artifact": "bash scripts/validate-artifact.sh",
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next"
