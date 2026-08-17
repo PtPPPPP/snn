@@ -137,6 +137,18 @@
   background: var(--blue);
 }
 
+.statusChecking {
+  animation: statusPulse 900ms ease-in-out infinite alternate;
+}
+
+.statusOnline {
+  background: #3f9d31;
+}
+
+.statusOffline {
+  background: var(--muted);
+}
+
 .statusCard div {
   display: grid;
   gap: 5px;
@@ -362,6 +374,13 @@
   to {
     opacity: 0.3;
     transform: translateY(-2px);
+  }
+}
+
+@keyframes statusPulse {
+  to {
+    opacity: 0.35;
+    transform: scale(0.75);
   }
 }
 

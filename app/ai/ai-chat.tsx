@@ -2,11 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { getAiStatus, sendChatMessage } from "../../lib/ai-client";
 import ChatInput from "./chat-input";
 import ChatMessage, { ChatMessageModel } from "./chat-message";
 import styles from "./ai-chat.module.css";
 
-const mockReply = "SNN AI 后端尚未连接。当前页面为聊天界面测试版本。";
+const unavailableReply = "SNN AI 节点当前未连接，请稍后再试。";
+
+type AiNodeState = "checking" | "offline" | "online";
 
 function createMessage(role: ChatMessageModel["role"], content: string): ChatMessageModel {
   return {
@@ -19,38 +22,93 @@ function createMessage(role: ChatMessageModel["role"], content: string): ChatMes
 export default function AiChat() {
   const [messages, setMessages] = useState<ChatMessageModel[]>([]);
   const [isResponding, setIsResponding] = useState(false);
+  const [aiNodeState, setAiNodeState] = useState<AiNodeState>("checking");
+  const [modelName, setModelName] = useState<string | null>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
-  const responseTimerRef = useRef<number | undefined>(undefined);
+  const requestVersionRef = useRef(0);
 
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, isResponding]);
 
   useEffect(() => {
-    return () => window.clearTimeout(responseTimerRef.current);
+    let isCurrent = true;
+
+    void getAiStatus().then((status) => {
+      if (!isCurrent) {
+        return;
+      }
+
+      setAiNodeState(status.online ? "online" : "offline");
+      setModelName(status.model);
+    });
+
+    return () => {
+      isCurrent = false;
+    };
   }, []);
 
   function startNewConversation() {
-    window.clearTimeout(responseTimerRef.current);
+    requestVersionRef.current += 1;
     setMessages([]);
     setIsResponding(false);
   }
 
   function sendMessage(content: string) {
-    setMessages((currentMessages) => [
-      ...currentMessages,
-      createMessage("user", content),
-    ]);
+    const nextMessages = [...messages, createMessage("user", content)];
+    const requestVersion = requestVersionRef.current + 1;
+
+    requestVersionRef.current = requestVersion;
+    setMessages(nextMessages);
     setIsResponding(true);
 
-    responseTimerRef.current = window.setTimeout(() => {
-      setMessages((currentMessages) => [
-        ...currentMessages,
-        createMessage("assistant", mockReply),
-      ]);
-      setIsResponding(false);
-    }, 420);
+    void sendChatMessage({
+      messages: nextMessages.map(({ role, content: messageContent }) => ({
+        role,
+        content: messageContent,
+      })),
+    })
+      .then((response) => {
+        if (requestVersionRef.current !== requestVersion) {
+          return;
+        }
+
+        setMessages((currentMessages) => [
+          ...currentMessages,
+          createMessage("assistant", response.reply),
+        ]);
+      })
+      .catch(() => {
+        if (requestVersionRef.current !== requestVersion) {
+          return;
+        }
+
+        setAiNodeState("offline");
+        setModelName(null);
+        setMessages((currentMessages) => [
+          ...currentMessages,
+          createMessage("assistant", unavailableReply),
+        ]);
+      })
+      .finally(() => {
+        if (requestVersionRef.current === requestVersion) {
+          setIsResponding(false);
+        }
+      });
   }
+
+  const statusLabel =
+    aiNodeState === "checking"
+      ? "Checking AI Node..."
+      : aiNodeState === "online"
+        ? "SNN AI · Online"
+        : "SNN AI · Offline";
+  const statusDetail =
+    aiNodeState === "checking"
+      ? "正在检查本地 AI 节点"
+      : aiNodeState === "online"
+        ? modelName ?? "AI 节点已就绪"
+        : "本地模型尚未连接";
 
   return (
     <main className={styles.page}>
@@ -75,10 +133,19 @@ export default function AiChat() {
             <p className={styles.description}>由 SNN 本地 AI 节点提供推理服务。</p>
           </div>
           <div className={styles.statusCard} aria-label="AI 服务状态">
-            <span className={styles.statusDot} aria-hidden="true" />
+            <span
+              className={`${styles.statusDot} ${
+                aiNodeState === "online"
+                  ? styles.statusOnline
+                  : aiNodeState === "checking"
+                    ? styles.statusChecking
+                    : styles.statusOffline
+              }`}
+              aria-hidden="true"
+            />
             <div>
-              <strong>SNN AI · Demo</strong>
-              <span>本地模型尚未连接</span>
+              <strong>{statusLabel}</strong>
+              <span>{statusDetail}</span>
             </div>
           </div>
           <button className={styles.newChatButton} type="button" onClick={startNewConversation}>
@@ -88,8 +155,8 @@ export default function AiChat() {
 
         <div className={styles.chatPanel}>
           <div className={styles.panelHeader}>
-            <span>CHAT / DEMO MODE</span>
-            <span>NO MODEL CONNECTED</span>
+            <span>CHAT / HTTP READY</span>
+            <span>{aiNodeState === "online" ? "NODE READY" : "NODE OFFLINE"}</span>
           </div>
           <div className={styles.messages} aria-live="polite">
             {messages.length === 0 ? (
@@ -97,7 +164,7 @@ export default function AiChat() {
                 <span className={styles.emptyMark}>SNN / AI</span>
                 <h2>从一个问题开始。</h2>
                 <p>
-                  这里将接入 SNN 本地 AI 节点。现在可以体验对话流程，回复内容为演示文本。
+                  这里将连接 SNN 本地 AI 节点。节点离线时，页面会保留消息并提示服务暂不可用。
                 </p>
               </div>
             ) : (
