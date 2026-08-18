@@ -104,7 +104,17 @@ test("chat forwards only validated messages and returns the website contract", a
       assert.equal(upstreamBody.stream, false);
       assert.equal(upstreamBody.max_tokens, 128);
       assert.equal(upstreamBody.messages[0].role, "system");
-      assert.match(upstreamBody.messages[1].content, /\/no_think/);
+      assert.equal(upstreamBody.messages.at(-1).content, "你好");
+      assert.deepEqual(upstreamBody.chat_template_kwargs, {
+        enable_thinking: false,
+        preserve_thinking: false,
+      });
+      assert.equal(upstreamBody.temperature, 0.7);
+      assert.equal(upstreamBody.top_p, 0.8);
+      assert.equal(upstreamBody.top_k, 20);
+      assert.equal(upstreamBody.min_p, 0);
+      assert.equal(upstreamBody.presence_penalty, 1.5);
+      assert.equal("reasoning_effort" in upstreamBody, false);
     },
   );
 });
@@ -199,16 +209,18 @@ test("chat stream forwards split upstream SSE events as delta and done events", 
       assert.equal(response.status, 200);
       assert.match(response.headers.get("content-type") ?? "", /^text\/event-stream/);
       assert.equal(upstreamBody.stream, true);
-      assert.match(upstreamBody.messages[1].content, /\/no_think/);
+      assert.equal(upstreamBody.chat_template_kwargs.enable_thinking, false);
       assert.match(body, /event: delta\ndata: {"text":"你好"}/);
       assert.doesNotMatch(body, /内部推理/);
+      assert.doesNotMatch(body, /event: reasoning_start/);
       assert.match(body, /event: delta\ndata: {"text":"，我是 SNN AI"}/);
-      assert.match(body, /event: done\ndata: {"model":"Qwen3-test","requestId":"[0-9a-f-]+"}/);
+      assert.match(body, /"thinking":false/);
+      assert.match(body, /"reasoningObserved":false/);
     },
   );
 });
 
-test("thinking mode adds an internal think instruction without changing user content", async () => {
+test("thinking mode uses Qwen-compatible parameters without modifying user messages", async () => {
   let upstreamBody;
   await withNode(
     async (_url, init) => {
@@ -228,8 +240,47 @@ test("thinking mode adds an internal think instruction without changing user con
       });
       assert.equal(response.status, 200);
       await response.json();
-      assert.match(upstreamBody.messages[1].content, /\/think/);
       assert.equal(upstreamBody.messages.at(-1).content, "解释 Transformer");
+      assert.deepEqual(upstreamBody.chat_template_kwargs, {
+        enable_thinking: true,
+        preserve_thinking: false,
+      });
+      assert.equal(upstreamBody.reasoning_effort, "xhigh");
+      assert.equal(upstreamBody.temperature, 1.0);
+      assert.equal(upstreamBody.top_p, 0.95);
+      assert.equal(upstreamBody.top_k, 20);
+      assert.equal(upstreamBody.min_p, 0);
+      assert.equal(upstreamBody.presence_penalty, 0);
+    },
+  );
+});
+
+test("thinking stream emits reasoning_start before delta and reports observed reasoning", async () => {
+  await withNode(
+    async () =>
+      sseResponse([
+        'data: {"choices":[{"delta":{"reasoning_content":"先分析问题"}}]}\n\n',
+        'data: {"choices":[{"delta":{"content":"这是正式回答。"}}]}\n\n',
+        'data: [DONE]\n\n',
+      ]),
+    async (baseUrl) => {
+      const response = await fetch(baseUrl + "/api/ai/chat/stream", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: "解释 Transformer" }],
+          thinking: true,
+        }),
+      });
+      const body = await response.text();
+
+      assert.equal(response.status, 200);
+      assert.ok(body.indexOf("event: reasoning_start") < body.indexOf("event: delta"));
+      assert.match(body, /event: delta\ndata: {"text":"这是正式回答。"}/);
+      assert.match(body, /"thinking":true/);
+      assert.match(body, /"reasoningObserved":true/);
+      assert.match(body, /"thinkingMs":\d+/);
+      assert.doesNotMatch(body, /先分析问题/);
     },
   );
 });

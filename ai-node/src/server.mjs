@@ -136,28 +136,42 @@ async function runtimeReady(config, fetchImpl) {
   return true;
 }
 
-function applyThinkingMode(config, messages, thinking) {
-  const modeInstruction = thinking
-    ? "/think\n允许更充分分析复杂问题后再回答。"
-    : "/no_think\n快速、直接、简洁回答。";
-
-  return [
-    { role: "system", content: config.systemPrompt },
-    { role: "system", content: modeInstruction },
-    ...messages,
-  ];
-}
-
 function buildUpstreamBody(config, messages, stream, thinking) {
+  const thinkingParameters = thinking
+    ? {
+        chat_template_kwargs: {
+          enable_thinking: true,
+          preserve_thinking: false,
+        },
+        reasoning_effort: "xhigh",
+        temperature: 1.0,
+        top_p: 0.95,
+        top_k: 20,
+        min_p: 0,
+        presence_penalty: 0,
+      }
+    : {
+        chat_template_kwargs: {
+          enable_thinking: false,
+          preserve_thinking: false,
+        },
+        temperature: 0.7,
+        top_p: 0.8,
+        top_k: 20,
+        min_p: 0,
+        presence_penalty: 1.5,
+      };
+
   return JSON.stringify({
     model: config.model,
-    messages: applyThinkingMode(config, messages, thinking),
+    messages: [{ role: "system", content: config.systemPrompt }, ...messages],
     stream,
     max_tokens: config.maxOutputTokens,
+    ...thinkingParameters,
   });
 }
 
-async function forwardSse(upstreamResponse, response, config, requestId, signal) {
+async function forwardSse(upstreamResponse, response, config, requestId, signal, thinking) {
   if (!upstreamResponse.body) {
     throw new UpstreamError("response");
   }
@@ -166,6 +180,9 @@ async function forwardSse(upstreamResponse, response, config, requestId, signal)
   const decoder = new TextDecoder();
   let buffer = "";
   let done = false;
+  let reasoningObserved = false;
+  let reasoningStartedAt = null;
+  let thinkingMs = null;
 
   function handleEvent(eventBlock) {
     const event = parseSseEvent(eventBlock);
@@ -175,7 +192,15 @@ async function forwardSse(upstreamResponse, response, config, requestId, signal)
 
     if (event.done) {
       done = true;
-      writeSse(response, "done", { model: config.model, requestId });
+      writeSse(response, "done", {
+        model: config.model,
+        requestId,
+        thinking,
+        reasoningObserved,
+        ...(reasoningObserved
+          ? { thinkingMs: thinkingMs ?? Math.round(performance.now() - reasoningStartedAt) }
+          : {}),
+      });
       return;
     }
 
@@ -184,14 +209,22 @@ async function forwardSse(upstreamResponse, response, config, requestId, signal)
     }
 
     const delta = event.payload?.choices?.[0]?.delta;
-    const reasoning = delta?.reasoning_content;
-    if (typeof reasoning === "string" && reasoning.length > 0) {
-      // Keep model reasoning internal. The UI only shows a short thinking status.
+    const reasoning = delta?.reasoning_content ?? delta?.reasoning;
+    if (thinking && typeof reasoning === "string" && reasoning.length > 0) {
+      if (!reasoningObserved) {
+        reasoningObserved = true;
+        reasoningStartedAt = performance.now();
+        writeSse(response, "reasoning_start", {});
+      }
+      // Keep model reasoning internal. The UI only receives an observed-status event.
       return;
     }
 
     const text = delta?.content;
     if (typeof text === "string" && text.length > 0) {
+      if (reasoningObserved && thinkingMs === null) {
+        thinkingMs = Math.round(performance.now() - reasoningStartedAt);
+      }
       writeSse(response, "delta", { text });
     }
   }
@@ -377,6 +410,7 @@ export function createAiNodeServer(config, { fetchImpl = fetch, logger = console
           config,
           requestId,
           upstreamAbortController.signal,
+          thinking,
         );
       } catch (error) {
         upstreamStatus = error.status ?? null;

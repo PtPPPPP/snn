@@ -45,7 +45,7 @@ function renderWelcome() {
 
 function appendMessage(message: AiChatMessage, isThinking = false) {
   if (!messageList) {
-    return { bubble: undefined, thinkingLine: undefined };
+    return { bubble: undefined, row: undefined, thinkingLine: undefined };
   }
 
   const followStream = shouldFollowMessages();
@@ -70,7 +70,7 @@ function appendMessage(message: AiChatMessage, isThinking = false) {
   if (followStream) {
     messageList.scrollTop = messageList.scrollHeight;
   }
-  return { bubble, thinkingLine };
+  return { bubble, row, thinkingLine };
 }
 
 function shouldFollowMessages() {
@@ -118,7 +118,7 @@ function setThinkingMode(enabled: boolean) {
 
   thinkingToggle.setAttribute("aria-pressed", String(enabled));
   thinkingToggle.classList.toggle("thinkingToggleActive", enabled);
-  thinkingToggle.innerHTML = `<span aria-hidden="true">${enabled ? "●" : "○"}</span> ${THINKING_MODE.label}`;
+  thinkingToggle.innerHTML = `<span aria-hidden="true">◇</span> ${THINKING_MODE.label}`;
   try {
     window.localStorage.setItem(THINKING_STORAGE_KEY, String(enabled));
   } catch {
@@ -162,15 +162,13 @@ async function handleSubmit(event: SubmitEvent) {
   }
   appendMessage(message);
   messages.push(assistantMessage);
-  const { assistantBubble, thinkingLine } = (() => {
-    const result = appendMessage(assistantMessage, activeThinking);
-    return { assistantBubble: result.bubble, thinkingLine: result.thinkingLine };
-  })();
+  const { bubble: assistantBubble, row: assistantRow } = appendMessage(assistantMessage);
+  let thinkingLine: HTMLSpanElement | undefined;
   input.value = "";
   input.disabled = true;
   sendButton.textContent = "停止生成";
   streamController = controller;
-  thinkingStartedAt = activeThinking ? performance.now() : null;
+  thinkingStartedAt = null;
   thinkingToggle?.setAttribute("disabled", "");
 
   try {
@@ -178,6 +176,17 @@ async function handleSubmit(event: SubmitEvent) {
       messages: requestMessages,
       thinking: activeThinking,
       signal: controller.signal,
+      onReasoningStart() {
+        if (requestVersion !== activeRequestVersion || !activeThinking || !assistantRow || !assistantBubble) {
+          return;
+        }
+
+        thinkingStartedAt = performance.now();
+        thinkingLine = document.createElement("span");
+        thinkingLine.className = "thinkingLine";
+        thinkingLine.textContent = THINKING_MODE.thinking;
+        assistantRow.insertBefore(thinkingLine, assistantBubble);
+      },
       onDelta(text) {
         if (requestVersion !== activeRequestVersion || !assistantBubble) {
           return;
@@ -194,11 +203,15 @@ async function handleSubmit(event: SubmitEvent) {
           messageList.scrollTop = messageList.scrollHeight;
         }
       },
-      onDone() {
-        if (thinkingStartedAt !== null && thinkingLine) {
-          thinkingLine.textContent = `已思考 ${((performance.now() - thinkingStartedAt) / 1_000).toFixed(1)} 秒`;
-          thinkingStartedAt = null;
+      onDone(metadata) {
+        if (
+          metadata.reasoningObserved &&
+          typeof metadata.thinkingMs === "number" &&
+          thinkingLine
+        ) {
+          thinkingLine.textContent = "已思考 " + (metadata.thinkingMs / 1_000).toFixed(1) + " 秒";
         }
+        thinkingStartedAt = null;
       },
       onError(message) {
         if (requestVersion === activeRequestVersion) {

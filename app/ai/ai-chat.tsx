@@ -44,6 +44,7 @@ export default function AiChat() {
       return false;
     }
   });
+  const [isThinkingRequest, setIsThinkingRequest] = useState(false);
   const messagesRef = useRef<HTMLDivElement>(null);
   const shouldFollowStreamRef = useRef(true);
   const requestVersionRef = useRef(0);
@@ -83,6 +84,7 @@ export default function AiChat() {
     requestVersionRef.current += 1;
     setMessages([]);
     setIsResponding(false);
+    setIsThinkingRequest(false);
     setStreamNotice(null);
     thinkingStartedAtRef.current = null;
   }
@@ -112,10 +114,7 @@ export default function AiChat() {
 
   function sendMessage(content: string) {
     const activeThinking = thinkingMode;
-    const assistantMessage = {
-      ...createMessage("assistant", ""),
-      ...(activeThinking ? { isThinking: true } : {}),
-    };
+    const assistantMessage = createMessage("assistant", "");
     const requestMessages = [...messages, createMessage("user", content)];
     const nextMessages = [...requestMessages, assistantMessage];
     const requestVersion = requestVersionRef.current + 1;
@@ -123,10 +122,11 @@ export default function AiChat() {
 
     requestVersionRef.current = requestVersion;
     streamControllerRef.current = controller;
-    thinkingStartedAtRef.current = activeThinking ? performance.now() : null;
+    thinkingStartedAtRef.current = null;
     shouldFollowStreamRef.current = true;
     setMessages(nextMessages);
     setIsResponding(true);
+    setIsThinkingRequest(activeThinking);
     setStreamNotice(null);
 
     void streamChatMessage({
@@ -136,6 +136,18 @@ export default function AiChat() {
       })),
       thinking: activeThinking,
       signal: controller.signal,
+      onReasoningStart: () => {
+        if (requestVersionRef.current !== requestVersion || !activeThinking) {
+          return;
+        }
+
+        thinkingStartedAtRef.current = performance.now();
+        setMessages((currentMessages) =>
+          currentMessages.map((message) =>
+            message.id === assistantMessage.id ? { ...message, isThinking: true } : message,
+          ),
+        );
+      },
       onDelta: (text) => {
         if (requestVersionRef.current !== requestVersion) {
           return;
@@ -160,10 +172,11 @@ export default function AiChat() {
           }),
         );
       },
-      onDone: () => {
-        const startedAt = thinkingStartedAtRef.current;
+      onDone: (metadata) => {
         const thinkingSeconds =
-          startedAt === null ? undefined : (performance.now() - startedAt) / 1_000;
+          metadata.reasoningObserved && typeof metadata.thinkingMs === "number"
+            ? metadata.thinkingMs / 1_000
+            : undefined;
         thinkingStartedAtRef.current = null;
         setMessages((currentMessages) =>
           currentMessages.map((message) =>
@@ -200,6 +213,7 @@ export default function AiChat() {
       .finally(() => {
         if (requestVersionRef.current === requestVersion) {
           setIsResponding(false);
+          setIsThinkingRequest(false);
           streamControllerRef.current = null;
           thinkingStartedAtRef.current = null;
           setMessages((currentMessages) =>
@@ -292,9 +306,9 @@ export default function AiChat() {
             ) : (
               messages.map((message) => <ChatMessage key={message.id} message={message} />)
             )}
-            {isResponding ? (
+            {isResponding && !isThinkingRequest ? (
               <div className={styles.typing}>
-                <span>{thinkingMode ? THINKING_MODE.thinking : "SNN AI 正在准备回复"}</span>
+                <span>SNN AI 正在准备回复</span>
                 <i />
                 <i />
                 <i />

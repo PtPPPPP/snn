@@ -23,11 +23,15 @@ type SendChatMessageOptions = {
 export type AiStreamDone = {
   model?: string;
   requestId?: string;
+  thinking?: boolean;
+  reasoningObserved?: boolean;
+  thinkingMs?: number;
 };
 
 type StreamChatMessageOptions = SendChatMessageOptions & {
   signal: AbortSignal;
   onDelta: (text: string) => void;
+  onReasoningStart: () => void;
   onDone: (metadata: AiStreamDone) => void;
   onError: (message: string) => void;
 };
@@ -183,6 +187,7 @@ export async function streamChatMessage({
   thinking = false,
   signal,
   onDelta,
+  onReasoningStart,
   onDone,
   onError,
 }: StreamChatMessageOptions): Promise<void> {
@@ -230,12 +235,26 @@ export async function streamChatMessage({
       return;
     }
 
+    if (parsed.event === "reasoning_start") {
+      onReasoningStart();
+      return;
+    }
+
     if (parsed.event === "done") {
       completed = true;
       onDone({
         ...(typeof parsed.payload.model === "string" ? { model: parsed.payload.model } : {}),
         ...(typeof parsed.payload.requestId === "string"
           ? { requestId: parsed.payload.requestId }
+          : {}),
+        ...(typeof parsed.payload.thinking === "boolean"
+          ? { thinking: parsed.payload.thinking }
+          : {}),
+        ...(typeof parsed.payload.reasoningObserved === "boolean"
+          ? { reasoningObserved: parsed.payload.reasoningObserved }
+          : {}),
+        ...(typeof parsed.payload.thinkingMs === "number"
+          ? { thinkingMs: parsed.payload.thinkingMs }
           : {}),
       });
       return;

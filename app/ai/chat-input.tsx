@@ -48,18 +48,20 @@ export default function ChatInput({
 
   return (
     <form className={styles.composer} onSubmit={handleSubmit}>
-      <label className={styles.composerLabel} htmlFor="ai-message">
-        MESSAGE / 输入消息
-      </label>
-      <button
-        className={`${styles.thinkingToggle} ${thinking ? styles.thinkingToggleActive : ""}`}
-        type="button"
-        aria-pressed={thinking}
-        disabled={isStreaming}
-        onClick={() => onThinkingChange(!thinking)}
-      >
-        <span aria-hidden="true">{thinking ? "●" : "○"}</span> 深度思考
-      </button>
+      <div className={styles.composerToolbar}>
+        <label className={styles.composerLabel} htmlFor="ai-message">
+          MESSAGE / 输入消息
+        </label>
+        <button
+          className={`${styles.thinkingToggle} ${thinking ? styles.thinkingToggleActive : ""}`}
+          type="button"
+          aria-pressed={thinking}
+          disabled={isStreaming}
+          onClick={() => onThinkingChange(!thinking)}
+        >
+          <span aria-hidden="true">◇</span> 深度思考
+        </button>
+      </div>
       <div className={styles.composerControls}>
         <textarea
           className={styles.composerInput}

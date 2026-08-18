@@ -349,25 +349,40 @@
   margin-top: 9px;
 }
 
+.composerToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .thinkingToggle {
   display: inline-flex;
+  height: 32px;
   align-items: center;
   gap: 7px;
-  margin-top: 10px;
-  padding: 7px 10px;
+  padding: 0 11px;
   border: 1px solid var(--ink);
-  background: transparent;
+  border-radius: 6px;
+  background: rgba(244, 241, 232, 0.56);
   color: var(--muted);
   cursor: pointer;
   font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 750;
   letter-spacing: 0.06em;
 }
 
 .thinkingToggleActive {
-  background: var(--lime);
-  color: var(--on-lime);
+  border-color: var(--blue);
+  background: rgba(36, 71, 255, 0.1);
+  color: var(--blue);
+}
+
+.thinkingToggle span {
+  color: var(--blue);
+  font-size: 14px;
+  line-height: 1;
 }
 
 .thinkingToggle:disabled {
