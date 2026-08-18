@@ -4,16 +4,17 @@ import { FormEvent, KeyboardEvent, useState } from "react";
 import styles from "./ai-chat.module.css";
 
 type ChatInputProps = {
-  disabled: boolean;
+  isStreaming: boolean;
   onSend: (content: string) => void;
+  onStop: () => void;
 };
 
-export default function ChatInput({ disabled, onSend }: ChatInputProps) {
+export default function ChatInput({ isStreaming, onSend, onStop }: ChatInputProps) {
   const [value, setValue] = useState("");
 
   function submit() {
     const content = value.trim();
-    if (!content || disabled) {
+    if (!content || isStreaming) {
       return;
     }
 
@@ -23,6 +24,10 @@ export default function ChatInput({ disabled, onSend }: ChatInputProps) {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isStreaming) {
+      onStop();
+      return;
+    }
     submit();
   }
 
@@ -48,10 +53,14 @@ export default function ChatInput({ disabled, onSend }: ChatInputProps) {
           placeholder="向 SNN AI 提问…"
           rows={1}
           maxLength={12000}
-          disabled={disabled}
+          disabled={isStreaming}
         />
-        <button className={styles.sendButton} type="submit" disabled={disabled || !value.trim()}>
-          {disabled ? "思考中" : "发送"} <span aria-hidden="true">↗</span>
+        <button
+          className={styles.sendButton}
+          type="submit"
+          disabled={!isStreaming && !value.trim()}
+        >
+          {isStreaming ? "停止生成" : "发送"} <span aria-hidden="true">↗</span>
         </button>
       </div>
       <p className={styles.composerHint}>Enter 发送 · Shift + Enter 换行</p>

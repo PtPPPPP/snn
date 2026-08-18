@@ -312,6 +312,14 @@
   animation-delay: 240ms;
 }
 
+.streamNotice {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
 .composer {
   padding: 16px clamp(20px, 3vw, 40px) 18px;
   border-top: 1px solid var(--ink);

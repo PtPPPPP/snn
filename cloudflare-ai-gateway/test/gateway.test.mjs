@@ -32,6 +32,19 @@ function chatRequest(body, headers = {}) {
   });
 }
 
+function sseResponse(chunks) {
+  const encoder = new TextEncoder();
+  return new Response(
+    new ReadableStream({
+      start(controller) {
+        chunks.forEach((chunk) => controller.enqueue(encoder.encode(chunk)));
+        controller.close();
+      },
+    }),
+    { headers: { "content-type": "text/event-stream" } },
+  );
+}
+
 test("status forwards a valid online contract", async () => {
   const response = await handleRequest(
     new Request("https://gateway.example.com/api/ai/status"),
@@ -170,4 +183,33 @@ test("gateway applies CORS allow list and chat rate limit", async () => {
     { logger: logger() },
   );
   assert.equal(statusLimited.status, 429);
+});
+
+test("gateway forwards SSE without buffering and preserves Access headers", async () => {
+  let headers;
+  const request = new Request("https://gateway.example.com/api/ai/chat/stream", {
+    method: "POST",
+    headers: {
+      origin: "https://www.example.com",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ messages: [{ role: "user", content: "你好" }] }),
+  });
+  const response = await handleRequest(request, environment(), {
+    fetchImpl: async (_url, init) => {
+      headers = new Headers(init.headers);
+      return sseResponse([
+        'event: delta\ndata: {"text":"你"}\n\n',
+        'event: done\ndata: {"model":"Qwen3-test","requestId":"node-1"}\n\n',
+      ]);
+    },
+    logger: logger(),
+  });
+
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type") ?? "", /^text\/event-stream/);
+  assert.equal(response.headers.get("access-control-allow-origin"), "https://www.example.com");
+  assert.equal(headers.get("CF-Access-Client-Id"), "test-client-id");
+  assert.equal(headers.get("CF-Access-Client-Secret"), "test-client-secret");
+  assert.match(await response.text(), /event: delta/);
 });

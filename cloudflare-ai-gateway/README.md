@@ -5,9 +5,12 @@
 ```text
 GET  /api/ai/status
 POST /api/ai/chat
+POST /api/ai/chat/stream
 ```
 
 它不会运行模型、保存聊天历史或代理任意路径。它将请求转发到受到 Cloudflare Access 保护的 AI Origin，再由同学电脑的 SNN AI Node 调用本机 Qwen Runtime。
+
+`/api/ai/chat/stream` 会透明转发 SSE，不缓存或合并模型输出。Gateway 保持原有 `/api/ai/chat` 的非流式 JSON 行为不变。
 
 ## 配置
 

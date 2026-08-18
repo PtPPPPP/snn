@@ -57,3 +57,39 @@ npm run test:ai-node
 ```
 
 测试使用 Mock Upstream，不会下载或加载任何模型。
+
+## 流式聊天
+
+保留原有的非流式接口：
+
+```text
+POST /api/ai/chat
+```
+
+新增的流式接口是：
+
+```text
+POST /api/ai/chat/stream
+```
+
+它使用 Server-Sent Events：
+
+```text
+event: delta
+data: {"text":"你好"}
+
+event: done
+data: {"model":"...","requestId":"..."}
+```
+
+在模型电脑上测试时，使用 `curl.exe -N` 保持输出不缓冲：
+
+```powershell
+$body = @{ messages = @(@{ role = "user"; content = "用一句话介绍 SNN AI。" }) } |
+  ConvertTo-Json -Compress
+curl.exe -N -X POST http://127.0.0.1:8787/api/ai/chat/stream `
+  -H "content-type: application/json" `
+  --data $body
+```
+
+浏览器取消生成时，AI Node 会尝试取消上游 llama.cpp 请求，避免继续占用 GPU。

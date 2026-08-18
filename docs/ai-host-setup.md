@@ -38,7 +38,13 @@ curl.exe http://127.0.0.1:8000/v1/models
 
 ## 2. 配置并启动 SNN AI Node
 
-Clone 网站项目后，在 `ai-node/` 内创建 `.env`：
+模型电脑先更新项目代码：
+
+```powershell
+git pull origin main
+```
+
+然后在 `ai-node/` 内创建 `.env`：
 
 ```powershell
 Copy-Item .env.example .env
@@ -66,6 +72,18 @@ curl.exe http://127.0.0.1:8787/api/ai/status
 ```
 
 状态必须是 `online: true` 后，才继续 Cloudflare 配置。
+
+流式聊天验证：
+
+```powershell
+$body = @{ messages = @(@{ role = "user"; content = "用一句话介绍 SNN AI。" }) } |
+  ConvertTo-Json -Compress
+curl.exe -N -X POST http://127.0.0.1:8787/api/ai/chat/stream `
+  -H "content-type: application/json" `
+  --data $body
+```
+
+终端应持续显示 `event: delta`，最后显示 `event: done`。更新后要重启 AI Node：先在旧进程按 `Ctrl + C`，再重新运行 `npm run ai:node`。
 
 ## 3. 在模型电脑安装 cloudflared
 

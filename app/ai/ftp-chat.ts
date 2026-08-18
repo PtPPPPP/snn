@@ -1,6 +1,6 @@
 import {
   getAiStatus,
-  sendChatMessage,
+  streamChatMessage,
   type AiChatMessage,
 } from "../../lib/ai-client";
 import {
@@ -13,6 +13,7 @@ import {
 
 const messages: AiChatMessage[] = [];
 let requestVersion = 0;
+let streamController: AbortController | null = null;
 
 const messageList = document.querySelector<HTMLElement>("#ai-messages");
 const statusLabel = document.querySelector<HTMLElement>("#ai-status-label");
@@ -55,6 +56,26 @@ function appendMessage(message: AiChatMessage) {
   row.append(label, bubble);
   messageList.append(row);
   messageList.scrollTop = messageList.scrollHeight;
+  return bubble;
+}
+
+function shouldFollowMessages() {
+  if (!messageList) {
+    return false;
+  }
+
+  return messageList.scrollHeight - messageList.scrollTop - messageList.clientHeight < 80;
+}
+
+function appendStreamNotice(message: string) {
+  if (!messageList) {
+    return;
+  }
+
+  const notice = document.createElement("p");
+  notice.className = "streamNotice";
+  notice.textContent = message;
+  messageList.append(notice);
 }
 
 function setStatus(state: "checking" | "offline" | "online", detail: string) {
@@ -87,13 +108,21 @@ async function refreshStatus() {
 
 async function handleSubmit(event: SubmitEvent) {
   event.preventDefault();
+  if (streamController) {
+    streamController.abort();
+    return;
+  }
+
   const content = input?.value.trim();
   if (!content || !input || !sendButton) {
     return;
   }
 
   const message: AiChatMessage = { role: "user", content };
+  const assistantMessage: AiChatMessage = { role: "assistant", content: "" };
+  const requestMessages = [...messages, message];
   const activeRequestVersion = requestVersion + 1;
+  const controller = new AbortController();
 
   requestVersion = activeRequestVersion;
   messages.push(message);
@@ -101,33 +130,51 @@ async function handleSubmit(event: SubmitEvent) {
     messageList?.replaceChildren();
   }
   appendMessage(message);
+  messages.push(assistantMessage);
+  const assistantBubble = appendMessage(assistantMessage);
   input.value = "";
   input.disabled = true;
-  sendButton.disabled = true;
-  sendButton.textContent = "思考中";
+  sendButton.textContent = "停止生成";
+  streamController = controller;
 
   try {
-    const response = await sendChatMessage({ messages });
-    if (requestVersion !== activeRequestVersion) {
-      return;
-    }
+    await streamChatMessage({
+      messages: requestMessages,
+      signal: controller.signal,
+      onDelta(text) {
+        if (requestVersion !== activeRequestVersion || !assistantBubble) {
+          return;
+        }
 
-    const reply: AiChatMessage = { role: "assistant", content: response.reply };
-    messages.push(reply);
-    appendMessage(reply);
+        const followStream = shouldFollowMessages();
+        assistantMessage.content += text;
+        assistantBubble.textContent = assistantMessage.content;
+        if (followStream && messageList) {
+          messageList.scrollTop = messageList.scrollHeight;
+        }
+      },
+      onDone() {},
+      onError(message) {
+        if (requestVersion === activeRequestVersion) {
+          appendStreamNotice(message);
+        }
+      },
+    });
   } catch {
     if (requestVersion !== activeRequestVersion) {
       return;
     }
 
-    const reply: AiChatMessage = { role: "assistant", content: UNAVAILABLE_REPLY };
-    messages.push(reply);
-    appendMessage(reply);
-    setStatus("offline", STATUS_DETAILS.offline);
+    if (controller.signal.aborted) {
+      appendStreamNotice("生成已停止。");
+    } else {
+      appendStreamNotice(UNAVAILABLE_REPLY);
+      setStatus("offline", STATUS_DETAILS.offline);
+    }
   } finally {
     input.disabled = false;
-    sendButton.disabled = false;
     sendButton.textContent = "发送 ↗";
+    streamController = null;
     input.focus();
   }
 }
@@ -140,6 +187,8 @@ input?.addEventListener("keydown", (event) => {
   }
 });
 newChatButton?.addEventListener("click", () => {
+  streamController?.abort();
+  streamController = null;
   requestVersion += 1;
   messages.splice(0, messages.length);
   renderWelcome();

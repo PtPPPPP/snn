@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { getAiStatus, sendChatMessage } from "../../lib/ai-client";
+import { AiClientError, getAiStatus, streamChatMessage } from "../../lib/ai-client";
 import {
   EMPTY_STATE,
   NODE_STATES,
@@ -30,12 +30,22 @@ export default function AiChat() {
   const [isResponding, setIsResponding] = useState(false);
   const [aiNodeState, setAiNodeState] = useState<AiNodeState>("checking");
   const [modelName, setModelName] = useState<string | null>(null);
-  const messageEndRef = useRef<HTMLDivElement>(null);
+  const [streamNotice, setStreamNotice] = useState<string | null>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
+  const shouldFollowStreamRef = useRef(true);
   const requestVersionRef = useRef(0);
+  const streamControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    messageEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const container = messagesRef.current;
+    if (container && shouldFollowStreamRef.current) {
+      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    }
   }, [messages, isResponding]);
+
+  useEffect(() => {
+    return () => streamControllerRef.current?.abort();
+  }, []);
 
   useEffect(() => {
     let isCurrent = true;
@@ -55,50 +65,85 @@ export default function AiChat() {
   }, []);
 
   function startNewConversation() {
+    streamControllerRef.current?.abort();
     requestVersionRef.current += 1;
     setMessages([]);
     setIsResponding(false);
+    setStreamNotice(null);
+  }
+
+  function stopGeneration() {
+    streamControllerRef.current?.abort();
+  }
+
+  function handleMessagesScroll() {
+    const container = messagesRef.current;
+    if (!container) {
+      return;
+    }
+
+    shouldFollowStreamRef.current =
+      container.scrollHeight - container.scrollTop - container.clientHeight < 80;
   }
 
   function sendMessage(content: string) {
-    const nextMessages = [...messages, createMessage("user", content)];
+    const assistantMessage = createMessage("assistant", "");
+    const requestMessages = [...messages, createMessage("user", content)];
+    const nextMessages = [...requestMessages, assistantMessage];
     const requestVersion = requestVersionRef.current + 1;
+    const controller = new AbortController();
 
     requestVersionRef.current = requestVersion;
+    streamControllerRef.current = controller;
+    shouldFollowStreamRef.current = true;
     setMessages(nextMessages);
     setIsResponding(true);
+    setStreamNotice(null);
 
-    void sendChatMessage({
-      messages: nextMessages.map(({ role, content: messageContent }) => ({
+    void streamChatMessage({
+      messages: requestMessages.map(({ role, content: messageContent }) => ({
         role,
         content: messageContent,
       })),
-    })
-      .then((response) => {
+      signal: controller.signal,
+      onDelta: (text) => {
         if (requestVersionRef.current !== requestVersion) {
           return;
         }
 
-        setMessages((currentMessages) => [
-          ...currentMessages,
-          createMessage("assistant", response.reply),
-        ]);
-      })
-      .catch(() => {
+        setMessages((currentMessages) =>
+          currentMessages.map((message) =>
+            message.id === assistantMessage.id
+              ? { ...message, content: `${message.content}${text}` }
+              : message,
+          ),
+        );
+      },
+      onDone: () => {},
+      onError: (message) => {
+        if (requestVersionRef.current === requestVersion) {
+          setStreamNotice(message);
+        }
+      },
+    })
+      .catch((error) => {
         if (requestVersionRef.current !== requestVersion) {
+          return;
+        }
+
+        if (error instanceof AiClientError && error.code === "aborted") {
+          setStreamNotice("生成已停止。");
           return;
         }
 
         setAiNodeState("offline");
         setModelName(null);
-        setMessages((currentMessages) => [
-          ...currentMessages,
-          createMessage("assistant", UNAVAILABLE_REPLY),
-        ]);
+        setStreamNotice((currentNotice) => currentNotice ?? UNAVAILABLE_REPLY);
       })
       .finally(() => {
         if (requestVersionRef.current === requestVersion) {
           setIsResponding(false);
+          streamControllerRef.current = null;
         }
       });
   }
@@ -169,7 +214,12 @@ export default function AiChat() {
             <span>CHAT / HTTP READY</span>
             <span>{aiNodeState === "online" ? NODE_STATES.ready : NODE_STATES.offline}</span>
           </div>
-          <div className={styles.messages} aria-live="polite">
+          <div
+            className={styles.messages}
+            ref={messagesRef}
+            onScroll={handleMessagesScroll}
+            aria-live="polite"
+          >
             {messages.length === 0 ? (
               <div className={styles.emptyState}>
                 <span className={styles.emptyMark}>{EMPTY_STATE.mark}</span>
@@ -187,9 +237,9 @@ export default function AiChat() {
                 <i />
               </div>
             ) : null}
-            <div ref={messageEndRef} />
+            {streamNotice ? <p className={styles.streamNotice}>{streamNotice}</p> : null}
           </div>
-          <ChatInput disabled={isResponding} onSend={sendMessage} />
+          <ChatInput isStreaming={isResponding} onSend={sendMessage} onStop={stopGeneration} />
         </div>
       </section>
     </main>

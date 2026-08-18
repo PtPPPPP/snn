@@ -53,6 +53,18 @@ function jsonResponse(status, body, origin) {
   });
 }
 
+function sseResponse(body, origin) {
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+      "x-accel-buffering": "no",
+      ...corsHeaders(origin),
+    },
+  });
+}
+
 function requestId() {
   return crypto.randomUUID();
 }
@@ -143,7 +155,8 @@ export async function handleRequest(request, environment, { fetchImpl = fetch, l
 
     const isStatus = url.pathname === "/api/ai/status";
     const isChat = url.pathname === "/api/ai/chat";
-    if (!isStatus && !isChat) {
+    const isChatStream = url.pathname === "/api/ai/chat/stream";
+    if (!isStatus && !isChat && !isChatStream) {
       responseStatus = 404;
       return jsonResponse(responseStatus, { error: "Not found", requestId: id }, origin);
     }
@@ -192,7 +205,7 @@ export async function handleRequest(request, environment, { fetchImpl = fetch, l
       }
     }
 
-    if (isChat && request.method === "POST") {
+    if ((isChat || isChatStream) && request.method === "POST") {
       const contentLength = Number.parseInt(request.headers.get("content-length") || "0", 10);
       const maxBytes = parsePositiveInteger(environment.MAX_CHAT_BODY_BYTES, 65_536);
       if (contentLength > maxBytes) {
@@ -225,6 +238,27 @@ export async function handleRequest(request, environment, { fetchImpl = fetch, l
         rateLimited = true;
         responseStatus = 429;
         return jsonResponse(responseStatus, { error: "Too many requests", requestId: id }, origin);
+      }
+
+      if (isChatStream) {
+        try {
+          const originResponse = await fetchOrigin(fetchImpl, environment, "/api/ai/chat/stream", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ messages }),
+          });
+          originStatus = originResponse.status;
+          responseStatus = 200;
+          return sseResponse(originResponse.body, origin);
+        } catch (error) {
+          originStatus = error.status ?? null;
+          responseStatus = error.kind === "timeout" ? 504 : 503;
+          return jsonResponse(
+            responseStatus,
+            { error: "SNN AI service is unavailable", requestId: id },
+            origin,
+          );
+        }
       }
 
       try {

@@ -34,6 +34,19 @@ async function withNode(fetchImpl, run, config = {}) {
   }
 }
 
+function sseResponse(chunks) {
+  const encoder = new TextEncoder();
+  return new Response(
+    new ReadableStream({
+      start(controller) {
+        chunks.forEach((chunk) => controller.enqueue(encoder.encode(chunk)));
+        controller.close();
+      },
+    }),
+    { headers: { "content-type": "text/event-stream" } },
+  );
+}
+
 test("status is offline when the runtime is unreachable", async () => {
   await withNode(
     async () => {
@@ -158,6 +171,53 @@ test("chat returns 502 when the upstream responds with an error", async () => {
       });
       assert.equal(response.status, 502);
       assert.equal((await response.json()).error, "SNN AI node is unavailable");
+    },
+  );
+});
+
+test("chat stream forwards split upstream SSE events as delta and done events", async () => {
+  let upstreamBody;
+  await withNode(
+    async (_url, init) => {
+      upstreamBody = JSON.parse(init.body);
+      return sseResponse([
+        'data: {"choices":[{"delta":{"content":"你',
+        '好"}}]}\n\n: keep-alive\n\ndata: {"choices":[{"delta":{"content":"，我是 SNN AI"}}]}\n\n',
+        'data: [DONE]',
+      ]);
+    },
+    async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/ai/chat/stream`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ messages: [{ role: "user", content: "你好" }] }),
+      });
+      const body = await response.text();
+
+      assert.equal(response.status, 200);
+      assert.match(response.headers.get("content-type") ?? "", /^text\/event-stream/);
+      assert.equal(upstreamBody.stream, true);
+      assert.match(body, /event: delta\ndata: {"text":"你好"}/);
+      assert.match(body, /event: delta\ndata: {"text":"，我是 SNN AI"}/);
+      assert.match(body, /event: done\ndata: {"model":"Qwen3-test","requestId":"[0-9a-f-]+"}/);
+    },
+  );
+});
+
+test("chat stream converts malformed upstream events into an SSE error", async () => {
+  await withNode(
+    async () => sseResponse(["data: not-json\n\n"]),
+    async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/ai/chat/stream`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ messages: [{ role: "user", content: "测试" }] }),
+      });
+      const body = await response.text();
+
+      assert.equal(response.status, 200);
+      assert.match(body, /event: error/);
+      assert.match(body, /SNN AI node is unavailable/);
     },
   );
 });
