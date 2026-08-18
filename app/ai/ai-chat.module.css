@@ -12,8 +12,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px clamp(20px, 4.5vw, 72px);
-  border-bottom: 1px solid rgba(17, 17, 15, 0.12);
-  background: rgba(244, 241, 232, 0.88);
+  border-bottom: 1px solid var(--ink-30);
+  background: var(--paper-soft);
 }
 
 .brand {
@@ -61,6 +61,7 @@
 .backLink:hover,
 .backLink:focus-visible {
   background: var(--lime);
+  color: var(--on-lime);
 }
 
 .chatShell {
@@ -98,13 +99,14 @@
 
 .sectionCode {
   margin: 0 0 30px;
-  color: var(--blue);
+  color: var(--on-lime-accent);
   font-size: 11px;
   font-weight: 800;
 }
 
 .sidebar h1 {
   margin: 0;
+  color: var(--on-lime);
   font-size: clamp(52px, 5.5vw, 88px);
   font-weight: 900;
   letter-spacing: -0.08em;
@@ -114,6 +116,8 @@
 .description {
   max-width: 320px;
   margin: 28px 0 0;
+  color: var(--on-lime);
+  opacity: 0.86;
   font-size: 16px;
   font-weight: 600;
   line-height: 1.7;
@@ -125,7 +129,7 @@
   gap: 12px;
   padding: 16px;
   border: 1px solid var(--ink);
-  background: rgba(244, 241, 232, 0.74);
+  background: var(--paper-soft);
 }
 
 .statusDot {
@@ -170,8 +174,8 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  background: var(--ink);
-  color: var(--paper);
+  background: #11110f;
+  color: #f4f1e8;
   cursor: pointer;
 }
 
@@ -279,6 +283,7 @@
 
 .userBubble {
   background: var(--lime);
+  color: var(--on-lime);
 }
 
 .typing {
@@ -350,7 +355,7 @@
   min-width: 112px;
   padding: 0 16px;
   background: var(--lime);
-  color: var(--ink);
+  color: var(--on-lime);
   cursor: pointer;
 }
 
