@@ -1421,38 +1421,6 @@ footer {
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #141412;
-    --paper-soft: rgba(20, 20, 18, 0.84);
-    --ink: #f0eee6;
-    --ink-100: #f7f5ed;
-    --ink-60: #b6b3a6;
-    --ink-30: rgba(240, 238, 230, 0.22);
-    --lime: #c8ff00;
-    --on-lime: #11110f;
-    --on-lime-accent: #2447ff;
-    --blue: #7d90ff;
-    --grid: #2a2a25;
-    --muted: #9a978a;
-    --white: #1c1c19;
-  }
-
-  .robot-arm {
-    mix-blend-mode: screen;
-    filter: saturate(0.6) contrast(1.04);
-  }
-
-  .button-ghost:hover,
-  .button-ghost:focus-visible {
-    background: rgba(240, 238, 230, 0.08);
-  }
-
-  .measure {
-    color: #a8d43a;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
