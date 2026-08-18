@@ -5,6 +5,13 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    rules: {
+      // 项目有意使用原生 <img>：静态导出(export-static.mjs)需原生 HTML，
+      // 且图片已走 Cloudflare Worker 的图片优化(worker/index.ts)。
+      "@next/next/no-img-element": "off",
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

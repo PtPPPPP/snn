@@ -1,10 +1,6 @@
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
-
-const VALID_ROLES = new Set(["assistant", "system", "user"]);
-const MAX_MESSAGES = 24;
-const MAX_MESSAGE_CHARACTERS = 12_000;
-const MAX_TOTAL_CHARACTERS = 48_000;
+import { validateMessages } from "../../shared/ai-validation.mjs";
 
 class UpstreamError extends Error {
   constructor(kind, status) {
@@ -92,40 +88,6 @@ async function readJsonBody(request, maxBytes) {
   } catch {
     throw new Error("invalid_json");
   }
-}
-
-function validateMessages(value) {
-  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_MESSAGES) {
-    return null;
-  }
-
-  let totalCharacters = 0;
-  const messages = [];
-
-  for (const message of value) {
-    if (
-      !message ||
-      typeof message !== "object" ||
-      !VALID_ROLES.has(message.role) ||
-      typeof message.content !== "string"
-    ) {
-      return null;
-    }
-
-    const content = message.content.trim();
-    if (!content || content.length > MAX_MESSAGE_CHARACTERS) {
-      return null;
-    }
-
-    totalCharacters += content.length;
-    if (totalCharacters > MAX_TOTAL_CHARACTERS) {
-      return null;
-    }
-
-    messages.push({ role: message.role, content });
-  }
-
-  return messages;
 }
 
 function upstreamHeaders(config) {

@@ -3,11 +3,17 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { getAiStatus, sendChatMessage } from "../../lib/ai-client";
+import {
+  EMPTY_STATE,
+  NODE_STATES,
+  SIDEBAR,
+  STATUS_DETAILS,
+  STATUS_LABELS,
+  UNAVAILABLE_REPLY,
+} from "../../lib/ai-copy";
 import ChatInput from "./chat-input";
 import ChatMessage, { ChatMessageModel } from "./chat-message";
 import styles from "./ai-chat.module.css";
-
-const unavailableReply = "SNN AI 节点当前未连接，请稍后再试。";
 
 type AiNodeState = "checking" | "offline" | "online";
 
@@ -87,7 +93,7 @@ export default function AiChat() {
         setModelName(null);
         setMessages((currentMessages) => [
           ...currentMessages,
-          createMessage("assistant", unavailableReply),
+          createMessage("assistant", UNAVAILABLE_REPLY),
         ]);
       })
       .finally(() => {
@@ -99,16 +105,16 @@ export default function AiChat() {
 
   const statusLabel =
     aiNodeState === "checking"
-      ? "Checking AI Node..."
+      ? STATUS_LABELS.checking
       : aiNodeState === "online"
-        ? "SNN AI · Online"
-        : "SNN AI · Offline";
+        ? STATUS_LABELS.online
+        : STATUS_LABELS.offline;
   const statusDetail =
     aiNodeState === "checking"
-      ? "正在检查本地 AI 节点"
+      ? STATUS_DETAILS.checking
       : aiNodeState === "online"
-        ? modelName ?? "AI 节点已就绪"
-        : "本地模型尚未连接";
+        ? modelName ?? STATUS_DETAILS.ready
+        : STATUS_DETAILS.offline;
 
   return (
     <main className={styles.page}>
@@ -133,9 +139,9 @@ export default function AiChat() {
       <section className={styles.chatShell} aria-label="SNN AI Chat">
         <aside className={styles.sidebar}>
           <div>
-            <p className={styles.sectionCode}>NODE / 01</p>
-            <h1>SNN AI</h1>
-            <p className={styles.description}>由 SNN 本地 AI 节点提供推理服务。</p>
+            <p className={styles.sectionCode}>{SIDEBAR.sectionCode}</p>
+            <h1>{SIDEBAR.title}</h1>
+            <p className={styles.description}>{SIDEBAR.description}</p>
           </div>
           <div className={styles.statusCard} aria-label="AI 服务状态">
             <span
@@ -161,16 +167,14 @@ export default function AiChat() {
         <div className={styles.chatPanel}>
           <div className={styles.panelHeader}>
             <span>CHAT / HTTP READY</span>
-            <span>{aiNodeState === "online" ? "NODE READY" : "NODE OFFLINE"}</span>
+            <span>{aiNodeState === "online" ? NODE_STATES.ready : NODE_STATES.offline}</span>
           </div>
           <div className={styles.messages} aria-live="polite">
             {messages.length === 0 ? (
               <div className={styles.emptyState}>
-                <span className={styles.emptyMark}>SNN / AI</span>
-                <h2>从一个问题开始。</h2>
-                <p>
-                  这里将连接 SNN 本地 AI 节点。节点离线时，页面会保留消息并提示服务暂不可用。
-                </p>
+                <span className={styles.emptyMark}>{EMPTY_STATE.mark}</span>
+                <h2>{EMPTY_STATE.title}</h2>
+                <p>{EMPTY_STATE.description}</p>
               </div>
             ) : (
               messages.map((message) => <ChatMessage key={message.id} message={message} />)

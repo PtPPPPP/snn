@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, rm, writeFile, access, readdir } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile, access, readdir } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 import React from "react";
@@ -60,7 +60,14 @@ await mkdir(sectionsOutDir, { recursive: true });
 for (const file of await readdir(sectionsDir)) {
   if (!/\.(tsx|ts)$/.test(file)) continue;
   let source = await readFile(path.join(sectionsDir, file), "utf8");
-  source = source.replace('import Link from "next/link";', LINK_SHIM);
+  if (source.includes("next/link")) {
+    source = source.replace('import Link from "next/link";', LINK_SHIM);
+    if (source.includes("next/link")) {
+      throw new Error(
+        `[export-static] ${file} 的 next/link import 未被替换，请检查导入写法`,
+      );
+    }
+  }
   const compiled = ts
     .transpileModule(source, {
       compilerOptions: {
@@ -116,6 +123,21 @@ const staticCss = cssSource.replace('@import "tailwindcss";', "").trimStart();
 const aiCss = await readFile(path.join(root, "app", "ai", "ai-chat.module.css"), "utf8");
 const aiClientSource = await readFile(path.join(root, "lib", "ai-client.ts"), "utf8");
 const ftpChatSource = await readFile(path.join(root, "app", "ai", "ftp-chat.ts"), "utf8");
+const aiCopySource = await readFile(path.join(root, "lib", "ai-copy.ts"), "utf8");
+const compiledAiCopy = ts
+  .transpileModule(aiCopySource, {
+    compilerOptions: {
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ES2022,
+    },
+    fileName: "ai-copy.ts",
+  })
+  .outputText;
+const aiCopyModulePath = path.join(tempDir, "ai-copy.mjs");
+await writeFile(aiCopyModulePath, compiledAiCopy, "utf8");
+const aiCopy = await import(
+  `${pathToFileURL(aiCopyModulePath).href}?t=${Date.now()}`
+);
 const compiledAiClient = ts
   .transpileModule(aiClientSource, {
     compilerOptions: {
@@ -128,6 +150,11 @@ const compiledAiClient = ts
     /const buildBaseUrl = typeof process === "undefined"\s*\? undefined\s*:\s*process\.env\.NEXT_PUBLIC_SNN_AI_API_BASE_URL;/,
     "const buildBaseUrl = undefined;",
   );
+if (compiledAiClient.includes("NEXT_PUBLIC_SNN_AI_API_BASE_URL")) {
+  throw new Error(
+    "[export-static] ai-client.ts 的 process.env 引用未替换，请检查 lib/ai-client.ts",
+  );
+}
 const compiledFtpChat = ts
   .transpileModule(ftpChatSource, {
     compilerOptions: {
@@ -136,7 +163,13 @@ const compiledFtpChat = ts
     },
     fileName: "ftp-chat.ts",
   })
-  .outputText.replace(/(["'])\.\.\/\.\.\/lib\/ai-client\1/g, '"./ai-client.js"');
+  .outputText.replace(/(["'])\.\.\/\.\.\/lib\/ai-client\1/g, '"./ai-client.js"')
+  .replace(/(["'])\.\.\/\.\.\/lib\/ai-copy\1/g, '"./ai-copy.js"');
+if (compiledFtpChat.includes("lib/ai-client") || compiledFtpChat.includes("lib/ai-copy")) {
+  throw new Error(
+    "[export-static] ftp-chat.ts 的 lib import 路径未替换，请检查 app/ai/ftp-chat.ts",
+  );
+}
 
 const aiHtml = `<!doctype html>
 <html lang="zh-CN">
@@ -160,18 +193,18 @@ const aiHtml = `<!doctype html>
       <section class="chatShell" aria-label="SNN AI Chat">
         <aside class="sidebar">
           <div>
-            <p class="sectionCode">NODE / 01</p>
-            <h1>SNN AI</h1>
-            <p class="description">由 SNN 本地 AI 节点提供推理服务。</p>
+            <p class="sectionCode">${aiCopy.SIDEBAR.sectionCode}</p>
+            <h1>${aiCopy.SIDEBAR.title}</h1>
+            <p class="description">${aiCopy.SIDEBAR.description}</p>
           </div>
           <div class="statusCard" aria-label="AI 服务状态">
             <span class="statusDot statusChecking" id="ai-status-dot" aria-hidden="true"></span>
-            <div><strong id="ai-status-label">Checking AI Node...</strong><span id="ai-status-detail">正在检查本地 AI 节点</span></div>
+            <div><strong id="ai-status-label">${aiCopy.STATUS_LABELS.checking}</strong><span id="ai-status-detail">${aiCopy.STATUS_DETAILS.checking}</span></div>
           </div>
           <button class="newChatButton" id="ai-new-chat" type="button"><span>＋</span> 新建对话</button>
         </aside>
         <div class="chatPanel">
-          <div class="panelHeader"><span>CHAT / HTTP READY</span><span id="ai-panel-state">NODE OFFLINE</span></div>
+          <div class="panelHeader"><span>CHAT / HTTP READY</span><span id="ai-panel-state">${aiCopy.NODE_STATES.offline}</span></div>
           <div class="messages" id="ai-messages" aria-live="polite"></div>
           <form class="composer" id="ai-composer">
             <label class="composerLabel" for="ai-message">MESSAGE / 输入消息</label>
@@ -197,6 +230,7 @@ await mkdir(path.join(outputDir, "ai"), { recursive: true });
 await writeFile(path.join(outputDir, "ai", "index.html"), aiHtml, "utf8");
 await writeFile(path.join(outputDir, "ai", "ai.css"), `${staticCss}\n\n${aiCss}`, "utf8");
 await writeFile(path.join(outputDir, "ai", "ai-client.js"), compiledAiClient, "utf8");
+await writeFile(path.join(outputDir, "ai", "ai-copy.js"), compiledAiCopy, "utf8");
 await writeFile(path.join(outputDir, "ai", "app.js"), compiledFtpChat, "utf8");
 
 const staticConfigPath = path.join(outputDir, "ai-config.js");

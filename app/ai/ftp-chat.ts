@@ -3,8 +3,14 @@ import {
   sendChatMessage,
   type AiChatMessage,
 } from "../../lib/ai-client";
+import {
+  EMPTY_STATE,
+  NODE_STATES,
+  STATUS_DETAILS,
+  STATUS_LABELS,
+  UNAVAILABLE_REPLY,
+} from "../../lib/ai-copy";
 
-const unavailableReply = "SNN AI 节点当前未连接，请稍后再试。";
 const messages: AiChatMessage[] = [];
 let requestVersion = 0;
 
@@ -27,7 +33,7 @@ function renderWelcome() {
   const emptyState = document.createElement("div");
   emptyState.className = "emptyState";
   emptyState.innerHTML =
-    '<span class="emptyMark">SNN / AI</span><h2>从一个问题开始。</h2><p>这里将连接 SNN 本地 AI 节点。节点离线时，页面会保留消息并提示服务暂不可用。</p>';
+    `<span class="emptyMark">${EMPTY_STATE.mark}</span><h2>${EMPTY_STATE.title}</h2><p>${EMPTY_STATE.description}</p>`;
   messageList.append(emptyState);
 }
 
@@ -58,24 +64,24 @@ function setStatus(state: "checking" | "offline" | "online", detail: string) {
 
   statusLabel.textContent =
     state === "checking"
-      ? "Checking AI Node..."
+      ? STATUS_LABELS.checking
       : state === "online"
-        ? "SNN AI · Online"
-        : "SNN AI · Offline";
+        ? STATUS_LABELS.online
+        : STATUS_LABELS.offline;
   statusDetail.textContent = detail;
   statusDot.className = `statusDot status${state[0].toUpperCase()}${state.slice(1)}`;
   if (panelState) {
-    panelState.textContent = state === "online" ? "NODE READY" : "NODE OFFLINE";
+    panelState.textContent = state === "online" ? NODE_STATES.ready : NODE_STATES.offline;
   }
 }
 
 async function refreshStatus() {
-  setStatus("checking", "正在检查本地 AI 节点");
+  setStatus("checking", STATUS_DETAILS.checking);
   const status = await getAiStatus();
 
   setStatus(
     status.online ? "online" : "offline",
-    status.online ? status.model ?? "AI 节点已就绪" : "本地模型尚未连接",
+    status.online ? status.model ?? STATUS_DETAILS.ready : STATUS_DETAILS.offline,
   );
 }
 
@@ -114,10 +120,10 @@ async function handleSubmit(event: SubmitEvent) {
       return;
     }
 
-    const reply: AiChatMessage = { role: "assistant", content: unavailableReply };
+    const reply: AiChatMessage = { role: "assistant", content: UNAVAILABLE_REPLY };
     messages.push(reply);
     appendMessage(reply);
-    setStatus("offline", "本地模型尚未连接");
+    setStatus("offline", STATUS_DETAILS.offline);
   } finally {
     input.disabled = false;
     sendButton.disabled = false;
