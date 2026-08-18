@@ -381,7 +381,6 @@ a {
   background: var(--paper);
 }
 
-.blueprint-label,
 .code-note,
 .measure {
   position: absolute;
@@ -390,11 +389,6 @@ a {
   font-family: var(--font-geist-mono), monospace;
   font-size: 10px;
   line-height: 1.55;
-}
-
-.blueprint-label {
-  top: 48%;
-  left: 6%;
 }
 
 .code-note {
@@ -1269,7 +1263,6 @@ footer {
     height: 200px;
   }
 
-  .blueprint-label,
   .measure,
   .code-note,
   .hero-stats {

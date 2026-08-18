@@ -37,13 +37,6 @@ export function Hero() {
           <span />
           <span />
         </div>
-        <div className="blueprint-label" aria-hidden="true">
-          MODEL: SNN_ARM_V2
-          <br />
-          AXIS: 06
-          <br />
-          STATUS: ACTIVE
-        </div>
         <div className="measure measure-x" aria-hidden="true">
           1024.36
         </div>

@@ -43,11 +43,11 @@ export function Footer() {
             <span className="footer-col-title">CONTACT</span>
             <a href="mailto:1074897559@qq.com">1074897559@qq.com</a>
             <a
-              href="https://github.com/PtPPPPPPPPPP"
+              href="https://github.com/PtPPPPP"
               target="_blank"
               rel="noreferrer"
             >
-              GitHub @PtPPPPPPPPPP
+              GitHub @PtPPPPP
             </a>
           </div>
         </div>
