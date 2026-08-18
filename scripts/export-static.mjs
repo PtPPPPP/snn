@@ -226,6 +226,7 @@ const aiHtml = `<!doctype html>
         <div class="chatPanel">
           <div class="panelHeader"><span>CHAT / HTTP READY</span><span id="ai-panel-state">${aiCopy.NODE_STATES.offline}</span></div>
           <div class="messages" id="ai-messages" aria-live="polite"></div>
+          <button class="scrollToBottom" id="ai-scroll-to-bottom" type="button" style="display:none" aria-label="回到底部">↓ 回到底部</button>
           <form class="composer" id="ai-composer">
             <div class="composerToolbar">
               <label class="composerLabel" for="ai-message">MESSAGE / 输入消息</label>

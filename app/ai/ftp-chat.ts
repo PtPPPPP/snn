@@ -52,6 +52,7 @@ const sidebarToggle = document.querySelector<HTMLButtonElement>("#ai-sidebar-tog
 const sidebarClose = document.querySelector<HTMLButtonElement>("#ai-sidebar-close");
 const sidebar = document.querySelector<HTMLElement>(".sidebar");
 const backdrop = document.querySelector<HTMLElement>("#ai-backdrop");
+const scrollToBottomBtn = document.querySelector<HTMLButtonElement>("#ai-scroll-to-bottom");
 
 function formatRelativeTime(ts: number): string {
   const diff = Date.now() - ts;
@@ -492,6 +493,19 @@ thinkingToggle?.addEventListener("click", () => {
 sidebarToggle?.addEventListener("click", openSidebar);
 sidebarClose?.addEventListener("click", closeSidebar);
 backdrop?.addEventListener("click", closeSidebar);
+
+function updateScrollButton() {
+  if (!messageList || !scrollToBottomBtn) return;
+  const isNearBottom = shouldFollowMessages();
+  scrollToBottomBtn.style.display = (!isNearBottom && messages.length > 0) ? "inline-flex" : "none";
+}
+
+messageList?.addEventListener("scroll", updateScrollButton);
+scrollToBottomBtn?.addEventListener("click", () => {
+  if (messageList) {
+    messageList.scrollTo({ top: messageList.scrollHeight, behavior: "smooth" });
+  }
+});
 
 // Initialize
 async function init() {

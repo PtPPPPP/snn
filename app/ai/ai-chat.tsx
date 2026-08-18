@@ -73,6 +73,7 @@ export default function AiChat() {
   const [aiNodeState, setAiNodeState] = useState<AiNodeState>("checking");
   const [modelName, setModelName] = useState<string | null>(null);
   const [streamNotice, setStreamNotice] = useState<string | null>(null);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [thinkingMode, setThinkingMode] = useState(() => {
@@ -130,7 +131,7 @@ export default function AiChat() {
   useEffect(() => {
     const container = messagesRef.current;
     if (container && shouldFollowStreamRef.current) {
-      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+      container.scrollTop = container.scrollHeight;
     }
   }, [messages, isResponding]);
 
@@ -217,8 +218,18 @@ export default function AiChat() {
   function handleMessagesScroll() {
     const container = messagesRef.current;
     if (!container) return;
-    shouldFollowStreamRef.current =
-      container.scrollHeight - container.scrollTop - container.clientHeight < 80;
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
+    shouldFollowStreamRef.current = isNearBottom;
+    setShowScrollToBottom(!isNearBottom && messages.length > 0);
+  }
+
+  function scrollToBottom() {
+    const container = messagesRef.current;
+    if (container) {
+      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+      shouldFollowStreamRef.current = true;
+      setShowScrollToBottom(false);
+    }
   }
 
   function handleThinkingChange(enabled: boolean) {
@@ -468,6 +479,11 @@ export default function AiChat() {
             ) : null}
             {streamNotice ? <p className={styles.streamNotice}>{streamNotice}</p> : null}
           </div>
+          {showScrollToBottom ? (
+            <button className={styles.scrollToBottom} type="button" onClick={scrollToBottom}>
+              ↓ 回到底部
+            </button>
+          ) : null}
           <ChatInput
             isStreaming={isResponding}
             thinking={thinkingMode}
