@@ -8,7 +8,7 @@ SNN（Smart Neural Network）学生科技社团的官方网站，面向人工智
 - **共创项目**：展示提示词工程、低空无人机和具身智能等项目方向
 - **活动机制**：介绍技术小课、项目冲刺与开放交流
 - **加入方式**：通过公众号二维码获取活动、项目和招募信息
-- **响应式页面**：适配桌面端与移动端浏览，含暗色模式（`prefers-color-scheme`）
+- **响应式页面**：适配桌面端与移动端浏览
 
 ## 技术栈
 
@@ -52,6 +52,7 @@ npm run build
 | `npm run lint` | 检查代码规范 |
 | `npm run export:static` | 生成静态站点到 `ftp-upload/`（用于 FTP 部署） |
 | `npm run build:ftp` | `export:static` 的别名 |
+| `npm run gen:og` | 重新生成 OG 图（需 Python + Pillow，见下） |
 
 ## 项目结构
 
@@ -64,7 +65,7 @@ npm run build
 │   ├── ai/                   # SNN AI 聊天页
 │   ├── page.tsx              # 首页（仅拼装各区块）
 │   ├── layout.tsx            # 根布局 + metadata（含 OG/Twitter）
-│   └── globals.css           # 全局样式 + 设计变量 + 暗色模式
+│   └── globals.css           # 全局样式 + 设计变量
 ├── public/assets/            # Logo、机械臂图片、公众号二维码、OG 图等静态资源
 ├── lib/                      # 共享 TS 模块（AI 客户端等）
 ├── build/                    # Vite 构建插件
@@ -79,8 +80,7 @@ npm run build
 
 ## 设计约定
 
-- **颜色体系**：`app/globals.css` 的 `:root` 定义了设计变量。色阶用 `--ink-100`（标题）、`--ink-60`（正文）、`--ink-30`（分隔线）；`--lime` 是品牌高亮色，其上的文字始终用 `--on-lime`（固定深色，不随暗色反转）。
-- **暗色模式**：通过 `@media (prefers-color-scheme: dark)` 覆盖变量实现，无需额外主题切换逻辑。
+- **颜色体系**：`app/globals.css` 的 `:root` 定义了设计变量。色阶用 `--ink-100`（标题）、`--ink-60`（正文）、`--ink-30`（分隔线）；`--lime` 是品牌高亮色，其上的文字始终用 `--on-lime`（固定深色）。
 - **图标**：统一使用 `app/_sections/icons.tsx` 里的内联 SVG 组件（`currentColor` 描边），不要直接写 emoji 字符。
 - **组件拆分**：首页按区块拆在 `app/_sections/`，新增区块请在 `page.tsx` 拼装，不要把逻辑堆回单文件。
 
@@ -104,6 +104,10 @@ npm run build
 
 `.openai/hosting.json` 预留了可选的 D1 与 R2 配置项；配置绑定后，`vite.config.ts` 会在本地开发时模拟对应资源。当前配置未启用 D1 或 R2，网站的展示功能无需这些资源。
 
+部署到正式域名时，设置环境变量 `NEXT_PUBLIC_SITE_URL`（例如 `https://snn.example.com`），用于把 OG 图等 metadata 解析为绝对地址，否则 Twitter / 微信分享卡片可能拿不到图。
+
+OG 图由 `scripts/gen-og.py` 生成，依赖 Python + Pillow；修改品牌信息后运行 `npm run gen:og` 重新生成 `public/assets/og.png`。
+
 ## 相关项目
 
 - [Intent2Prompt](https://github.com/PtPPPPP/intent2prompt)
@@ -112,4 +116,4 @@ npm run build
 
 ## License
 
-本项目暂未声明开源许可证。
+[MIT](./LICENSE) © 2026 SNN · Smart Neural Network

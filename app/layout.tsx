@@ -16,7 +16,11 @@ const TITLE = "SNN｜Smart Neural Network 学生科技社团";
 const DESCRIPTION =
   "面向人工智能与机器人方向的学生科技社团。一起学习、动手、参赛，把想法做成真正能跑的项目。";
 
+// 部署时通过 NEXT_PUBLIC_SITE_URL 注入正式域名，用于解析 OG 图的绝对地址。
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: TITLE,
   description: DESCRIPTION,
   icons: {
