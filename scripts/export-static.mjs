@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, rm, writeFile, access } from "node:fs/promises";
+import { cp, mkdir, readFile, rm, writeFile, access, readdir } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 import React from "react";
@@ -9,7 +9,16 @@ const root = process.cwd();
 const outputDir = path.join(root, "ftp-upload");
 const tempDir = path.join(root, ".static-export-temp");
 
-await rm(tempDir, { recursive: true, force: true });
+/** 尽力删除临时目录（safe-delete 回收站失败时忽略，残留无害） */
+async function rmQuiet(target) {
+  try {
+    await rm(target, { recursive: true, force: true });
+  } catch {
+    /* ignore */
+  }
+}
+
+await rmQuiet(tempDir);
 await mkdir(outputDir, { recursive: true });
 await mkdir(tempDir, { recursive: true });
 
@@ -22,10 +31,54 @@ async function exists(filePath) {
   }
 }
 
-const pageSource = (await readFile(path.join(root, "app", "page.tsx"), "utf8")).replace(
-  'import Link from "next/link";',
-  "const Link = ({ href, children, ...props }) => <a href={href} {...props}>{children}</a>;",
-);
+/** 手动逐文件复制（避免 fs.cp 覆盖时触发 safe-delete trash 失败） */
+async function copyDir(src, dest) {
+  await mkdir(dest, { recursive: true });
+  for (const entry of await readdir(src, { withFileTypes: true })) {
+    const sourcePath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      await copyDir(sourcePath, destPath);
+    } else {
+      await writeFile(destPath, await readFile(sourcePath));
+    }
+  }
+}
+
+const LINK_SHIM =
+  "const Link = ({ href, children, ...props }) => <a href={href} {...props}>{children}</a>;";
+
+/** 给相对 import 补 .js 扩展名（Node ESM 不自动补） */
+function addJsExtensions(code) {
+  return code.replace(/from "(\.[^".]+)"/g, 'from "$1.js"');
+}
+
+/** 把 _sections 子组件编译到 tempDir/_sections/*.js */
+const sectionsDir = path.join(root, "app", "_sections");
+const sectionsOutDir = path.join(tempDir, "_sections");
+await mkdir(sectionsOutDir, { recursive: true });
+for (const file of await readdir(sectionsDir)) {
+  if (!/\.(tsx|ts)$/.test(file)) continue;
+  let source = await readFile(path.join(sectionsDir, file), "utf8");
+  source = source.replace('import Link from "next/link";', LINK_SHIM);
+  const compiled = ts
+    .transpileModule(source, {
+      compilerOptions: {
+        jsx: ts.JsxEmit.ReactJSX,
+        module: ts.ModuleKind.ESNext,
+        target: ts.ScriptTarget.ES2022,
+      },
+      fileName: file,
+    })
+    .outputText;
+  await writeFile(
+    path.join(sectionsOutDir, file.replace(/\.(tsx|ts)$/, ".js")),
+    addJsExtensions(compiled),
+    "utf8",
+  );
+}
+
+const pageSource = await readFile(path.join(root, "app", "page.tsx"), "utf8");
 const compiledPage = ts.transpileModule(pageSource, {
   compilerOptions: {
     jsx: ts.JsxEmit.ReactJSX,
@@ -36,7 +89,7 @@ const compiledPage = ts.transpileModule(pageSource, {
 }).outputText;
 
 const compiledPath = path.join(tempDir, "page.mjs");
-await writeFile(compiledPath, compiledPage, "utf8");
+await writeFile(compiledPath, addJsExtensions(compiledPage), "utf8");
 
 const { default: Home } = await import(
   `${pathToFileURL(compiledPath).href}?t=${Date.now()}`
@@ -139,10 +192,7 @@ const aiHtml = `<!doctype html>
 
 await writeFile(path.join(outputDir, "index.html"), html, "utf8");
 await writeFile(path.join(outputDir, "styles.css"), staticCss, "utf8");
-await cp(path.join(root, "public", "assets"), path.join(outputDir, "assets"), {
-  recursive: true,
-  force: true,
-});
+await copyDir(path.join(root, "public", "assets"), path.join(outputDir, "assets"));
 await mkdir(path.join(outputDir, "ai"), { recursive: true });
 await writeFile(path.join(outputDir, "ai", "index.html"), aiHtml, "utf8");
 await writeFile(path.join(outputDir, "ai", "ai.css"), `${staticCss}\n\n${aiCss}`, "utf8");
@@ -157,6 +207,6 @@ if (!(await exists(staticConfigPath))) {
     "utf8",
   );
 }
-await rm(tempDir, { recursive: true, force: true });
+await rmQuiet(tempDir);
 
 console.log(`Static FTP package created: ${outputDir}`);
