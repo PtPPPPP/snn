@@ -26,7 +26,12 @@ export function JoinSection() {
           </span>
         </div>
         <div className="wechat-qr-wrap">
-          <img src="/assets/snn-wechat.jpg" alt="SNN 社团公众号二维码" />
+          <img
+            src="/assets/snn-wechat.jpg"
+            alt="SNN 社团公众号二维码"
+            width={430}
+            height={430}
+          />
           <span className="corner corner-a" aria-hidden="true" />
           <span className="corner corner-b" aria-hidden="true" />
         </div>

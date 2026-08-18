@@ -54,6 +54,8 @@ export function Hero() {
           className="robot-arm"
           src="/assets/snn-robot-arm.png"
           alt="银色工业机器人机械臂"
+          width={1586}
+          height={992}
         />
         <div className="hero-stats" aria-label="社团成绩数据">
           {stats.map((stat) => (

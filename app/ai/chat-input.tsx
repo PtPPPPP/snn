@@ -47,6 +47,7 @@ export default function ChatInput({ disabled, onSend }: ChatInputProps) {
           onKeyDown={handleKeyDown}
           placeholder="向 SNN AI 提问…"
           rows={1}
+          maxLength={12000}
           disabled={disabled}
         />
         <button className={styles.sendButton} type="submit" disabled={disabled || !value.trim()}>

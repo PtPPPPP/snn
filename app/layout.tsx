@@ -19,9 +19,6 @@ const DESCRIPTION =
 export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
-  other: {
-    "codex-preview": "development",
-  },
   icons: {
     icon: "/assets/favicon.svg",
     shortcut: "/assets/favicon.svg",

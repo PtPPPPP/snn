@@ -27,7 +27,7 @@ declare global {
 
 const DEFAULT_AI_API_BASE_URL = "/api/ai";
 const STATUS_TIMEOUT_MS = 4_000;
-const CHAT_TIMEOUT_MS = 30_000;
+const CHAT_TIMEOUT_MS = 45_000;
 
 export class AiClientError extends Error {
   constructor(readonly code: "http" | "network" | "response" | "timeout") {

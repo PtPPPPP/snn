@@ -10,6 +10,8 @@ export function Footer() {
             className="brand-logo"
             src="/assets/snn-logo-fixed.png"
             alt="SNN 社团 Logo"
+            width={1254}
+            height={1254}
           />
           <span className="brand-divider" aria-hidden="true" />
           <span className="brand-name">SMART NEURAL NETWORK</span>
