@@ -17,6 +17,7 @@ export type AiStatus = {
 
 type SendChatMessageOptions = {
   messages: AiChatMessage[];
+  thinking?: boolean;
 };
 
 export type AiStreamDone = {
@@ -106,13 +107,14 @@ async function requestJson<T>(
 
 export async function sendChatMessage({
   messages,
+  thinking = false,
 }: SendChatMessageOptions): Promise<AiChatResponse> {
   const response = await requestJson<AiChatResponse>(
     "/chat",
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ messages }),
+      body: JSON.stringify({ messages, thinking }),
     },
     CHAT_TIMEOUT_MS,
   );
@@ -178,6 +180,7 @@ function parseSseEvent(eventBlock: string) {
 
 export async function streamChatMessage({
   messages,
+  thinking = false,
   signal,
   onDelta,
   onDone,
@@ -189,7 +192,7 @@ export async function streamChatMessage({
     response = await fetch(`${getAiApiBaseUrl()}/chat/stream`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ messages }),
+      body: JSON.stringify({ messages, thinking }),
       signal,
     });
   } catch (error) {

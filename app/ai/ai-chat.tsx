@@ -9,6 +9,7 @@ import {
   SIDEBAR,
   STATUS_DETAILS,
   STATUS_LABELS,
+  THINKING_MODE,
   UNAVAILABLE_REPLY,
 } from "../../lib/ai-copy";
 import ChatInput from "./chat-input";
@@ -16,6 +17,7 @@ import ChatMessage, { ChatMessageModel } from "./chat-message";
 import styles from "./ai-chat.module.css";
 
 type AiNodeState = "checking" | "offline" | "online";
+const THINKING_STORAGE_KEY = "snn-ai-thinking-mode";
 
 function createMessage(role: ChatMessageModel["role"], content: string): ChatMessageModel {
   return {
@@ -31,10 +33,22 @@ export default function AiChat() {
   const [aiNodeState, setAiNodeState] = useState<AiNodeState>("checking");
   const [modelName, setModelName] = useState<string | null>(null);
   const [streamNotice, setStreamNotice] = useState<string | null>(null);
+  const [thinkingMode, setThinkingMode] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    try {
+      return window.localStorage.getItem(THINKING_STORAGE_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
   const messagesRef = useRef<HTMLDivElement>(null);
   const shouldFollowStreamRef = useRef(true);
   const requestVersionRef = useRef(0);
   const streamControllerRef = useRef<AbortController | null>(null);
+  const thinkingStartedAtRef = useRef<number | null>(null);
 
   useEffect(() => {
     const container = messagesRef.current;
@@ -70,6 +84,7 @@ export default function AiChat() {
     setMessages([]);
     setIsResponding(false);
     setStreamNotice(null);
+    thinkingStartedAtRef.current = null;
   }
 
   function stopGeneration() {
@@ -86,8 +101,21 @@ export default function AiChat() {
       container.scrollHeight - container.scrollTop - container.clientHeight < 80;
   }
 
+  function handleThinkingChange(enabled: boolean) {
+    setThinkingMode(enabled);
+    try {
+      window.localStorage.setItem(THINKING_STORAGE_KEY, String(enabled));
+    } catch {
+      // The current in-memory setting still applies to this conversation.
+    }
+  }
+
   function sendMessage(content: string) {
-    const assistantMessage = createMessage("assistant", "");
+    const activeThinking = thinkingMode;
+    const assistantMessage = {
+      ...createMessage("assistant", ""),
+      ...(activeThinking ? { isThinking: true } : {}),
+    };
     const requestMessages = [...messages, createMessage("user", content)];
     const nextMessages = [...requestMessages, assistantMessage];
     const requestVersion = requestVersionRef.current + 1;
@@ -95,6 +123,7 @@ export default function AiChat() {
 
     requestVersionRef.current = requestVersion;
     streamControllerRef.current = controller;
+    thinkingStartedAtRef.current = activeThinking ? performance.now() : null;
     shouldFollowStreamRef.current = true;
     setMessages(nextMessages);
     setIsResponding(true);
@@ -105,21 +134,49 @@ export default function AiChat() {
         role,
         content: messageContent,
       })),
+      thinking: activeThinking,
       signal: controller.signal,
       onDelta: (text) => {
         if (requestVersionRef.current !== requestVersion) {
           return;
         }
 
+        const startedAt = thinkingStartedAtRef.current;
+        const thinkingSeconds =
+          startedAt === null ? undefined : (performance.now() - startedAt) / 1_000;
+        thinkingStartedAtRef.current = null;
+        setMessages((currentMessages) =>
+          currentMessages.map((message) => {
+            if (message.id !== assistantMessage.id) {
+              return message;
+            }
+
+            return {
+              ...message,
+              content: `${message.content}${text}`,
+              isThinking: false,
+              ...(thinkingSeconds === undefined ? {} : { thinkingSeconds }),
+            };
+          }),
+        );
+      },
+      onDone: () => {
+        const startedAt = thinkingStartedAtRef.current;
+        const thinkingSeconds =
+          startedAt === null ? undefined : (performance.now() - startedAt) / 1_000;
+        thinkingStartedAtRef.current = null;
         setMessages((currentMessages) =>
           currentMessages.map((message) =>
             message.id === assistantMessage.id
-              ? { ...message, content: `${message.content}${text}` }
+              ? {
+                  ...message,
+                  isThinking: false,
+                  ...(thinkingSeconds === undefined ? {} : { thinkingSeconds }),
+                }
               : message,
           ),
         );
       },
-      onDone: () => {},
       onError: (message) => {
         if (requestVersionRef.current === requestVersion) {
           setStreamNotice(message);
@@ -132,7 +189,7 @@ export default function AiChat() {
         }
 
         if (error instanceof AiClientError && error.code === "aborted") {
-          setStreamNotice("生成已停止。");
+          setStreamNotice(activeThinking ? THINKING_MODE.stopped : "生成已停止。");
           return;
         }
 
@@ -144,6 +201,12 @@ export default function AiChat() {
         if (requestVersionRef.current === requestVersion) {
           setIsResponding(false);
           streamControllerRef.current = null;
+          thinkingStartedAtRef.current = null;
+          setMessages((currentMessages) =>
+            currentMessages.map((message) =>
+              message.id === assistantMessage.id ? { ...message, isThinking: false } : message,
+            ),
+          );
         }
       });
   }
@@ -231,7 +294,7 @@ export default function AiChat() {
             )}
             {isResponding ? (
               <div className={styles.typing}>
-                <span>SNN AI 正在准备回复</span>
+                <span>{thinkingMode ? THINKING_MODE.thinking : "SNN AI 正在准备回复"}</span>
                 <i />
                 <i />
                 <i />
@@ -239,7 +302,13 @@ export default function AiChat() {
             ) : null}
             {streamNotice ? <p className={styles.streamNotice}>{streamNotice}</p> : null}
           </div>
-          <ChatInput isStreaming={isResponding} onSend={sendMessage} onStop={stopGeneration} />
+          <ChatInput
+            isStreaming={isResponding}
+            thinking={thinkingMode}
+            onSend={sendMessage}
+            onStop={stopGeneration}
+            onThinkingChange={handleThinkingChange}
+          />
         </div>
       </section>
     </main>

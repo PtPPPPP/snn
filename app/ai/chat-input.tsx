@@ -5,11 +5,19 @@ import styles from "./ai-chat.module.css";
 
 type ChatInputProps = {
   isStreaming: boolean;
+  thinking: boolean;
   onSend: (content: string) => void;
   onStop: () => void;
+  onThinkingChange: (enabled: boolean) => void;
 };
 
-export default function ChatInput({ isStreaming, onSend, onStop }: ChatInputProps) {
+export default function ChatInput({
+  isStreaming,
+  thinking,
+  onSend,
+  onStop,
+  onThinkingChange,
+}: ChatInputProps) {
   const [value, setValue] = useState("");
 
   function submit() {
@@ -43,6 +51,15 @@ export default function ChatInput({ isStreaming, onSend, onStop }: ChatInputProp
       <label className={styles.composerLabel} htmlFor="ai-message">
         MESSAGE / 输入消息
       </label>
+      <button
+        className={`${styles.thinkingToggle} ${thinking ? styles.thinkingToggleActive : ""}`}
+        type="button"
+        aria-pressed={thinking}
+        disabled={isStreaming}
+        onClick={() => onThinkingChange(!thinking)}
+      >
+        <span aria-hidden="true">{thinking ? "●" : "○"}</span> 深度思考
+      </button>
       <div className={styles.composerControls}>
         <textarea
           className={styles.composerInput}

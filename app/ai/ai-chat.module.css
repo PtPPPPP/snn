@@ -269,6 +269,14 @@
   font-weight: 800;
 }
 
+.thinkingLine {
+  color: var(--muted);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+}
+
 .messageBubble {
   max-width: min(560px, 86%);
   margin: 0;
@@ -339,6 +347,32 @@
   align-items: stretch;
   gap: 10px;
   margin-top: 9px;
+}
+
+.thinkingToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+}
+
+.thinkingToggleActive {
+  background: var(--lime);
+  color: var(--on-lime);
+}
+
+.thinkingToggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .composerInput {

@@ -83,7 +83,11 @@ test("chat forwards only messages and adds Access service token headers", async 
   let requestHeaders;
   let requestBody;
   const response = await handleRequest(
-    chatRequest({ messages: [{ role: "user", content: "你好" }], model: "browser-choice" }),
+    chatRequest({
+      messages: [{ role: "user", content: "你好" }],
+      model: "browser-choice",
+      thinking: true,
+    }),
     environment(),
     {
       fetchImpl: async (_url, init) => {
@@ -102,8 +106,25 @@ test("chat forwards only messages and adds Access service token headers", async 
   assert.equal(body.reply, "你好，我是 SNN AI。");
   assert.equal(requestHeaders.get("CF-Access-Client-Id"), "test-client-id");
   assert.equal(requestHeaders.get("CF-Access-Client-Secret"), "test-client-secret");
-  assert.deepEqual(requestBody, { messages: [{ role: "user", content: "你好" }] });
+  assert.deepEqual(requestBody, { messages: [{ role: "user", content: "你好" }], thinking: true });
   assert.equal(JSON.stringify(body).includes("test-client-secret"), false);
+});
+
+test("gateway defaults invalid thinking values to false", async () => {
+  let requestBody;
+  await handleRequest(
+    chatRequest({ messages: [{ role: "user", content: "你好" }], thinking: "true" }),
+    environment(),
+    {
+      fetchImpl: async (_url, init) => {
+        requestBody = JSON.parse(init.body);
+        return new Response(JSON.stringify({ reply: "回答" }));
+      },
+      logger: logger(),
+    },
+  );
+
+  assert.equal(requestBody.thinking, false);
 });
 
 test("chat rejects invalid JSON and oversized payloads", async () => {

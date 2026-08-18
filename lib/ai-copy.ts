@@ -33,3 +33,10 @@ export const SIDEBAR = {
   title: "SNN AI",
   description: "由 SNN 本地 AI 节点提供推理服务。",
 } as const;
+
+export const THINKING_MODE = {
+  label: "深度思考",
+  enabled: "深度思考已开启",
+  thinking: "思考中…",
+  stopped: "思考已停止。",
+} as const;

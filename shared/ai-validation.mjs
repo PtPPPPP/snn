@@ -39,3 +39,7 @@ export function validateMessages(value) {
 
   return messages;
 }
+
+export function normalizeThinking(value) {
+  return value === true;
+}

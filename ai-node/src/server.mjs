@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
-import { validateMessages } from "../../shared/ai-validation.mjs";
+import { normalizeThinking, validateMessages } from "../../shared/ai-validation.mjs";
 import { parseSseEvent, takeSseEvents } from "./sse.mjs";
 
 class UpstreamError extends Error {
@@ -136,10 +136,22 @@ async function runtimeReady(config, fetchImpl) {
   return true;
 }
 
-function buildUpstreamBody(config, messages, stream) {
+function applyThinkingMode(config, messages, thinking) {
+  const modeInstruction = thinking
+    ? "/think\n允许更充分分析复杂问题后再回答。"
+    : "/no_think\n快速、直接、简洁回答。";
+
+  return [
+    { role: "system", content: config.systemPrompt },
+    { role: "system", content: modeInstruction },
+    ...messages,
+  ];
+}
+
+function buildUpstreamBody(config, messages, stream, thinking) {
   return JSON.stringify({
     model: config.model,
-    messages: [{ role: "system", content: config.systemPrompt }, ...messages],
+    messages: applyThinkingMode(config, messages, thinking),
     stream,
     max_tokens: config.maxOutputTokens,
   });
@@ -171,7 +183,14 @@ async function forwardSse(upstreamResponse, response, config, requestId, signal)
       throw new UpstreamError("response");
     }
 
-    const text = event.payload?.choices?.[0]?.delta?.content;
+    const delta = event.payload?.choices?.[0]?.delta;
+    const reasoning = delta?.reasoning_content;
+    if (typeof reasoning === "string" && reasoning.length > 0) {
+      // Keep model reasoning internal. The UI only shows a short thinking status.
+      return;
+    }
+
+    const text = delta?.content;
     if (typeof text === "string" && text.length > 0) {
       writeSse(response, "delta", { text });
     }
@@ -279,6 +298,8 @@ export function createAiNodeServer(config, { fetchImpl = fetch, logger = console
         return;
       }
 
+      const thinking = normalizeThinking(body?.thinking);
+
       if (!config.model) {
         if (isChatStream) {
           beginSse(response, origin);
@@ -298,7 +319,7 @@ export function createAiNodeServer(config, { fetchImpl = fetch, logger = console
             {
               method: "POST",
               headers: upstreamHeaders(config),
-              body: buildUpstreamBody(config, messages, false),
+              body: buildUpstreamBody(config, messages, false, thinking),
             },
             config.chatTimeoutMs,
           );
@@ -344,7 +365,7 @@ export function createAiNodeServer(config, { fetchImpl = fetch, logger = console
           {
             method: "POST",
             headers: upstreamHeaders(config),
-            body: buildUpstreamBody(config, messages, true),
+            body: buildUpstreamBody(config, messages, true, thinking),
           },
           config.chatTimeoutMs,
           upstreamAbortController.signal,

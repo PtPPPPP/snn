@@ -104,6 +104,7 @@ test("chat forwards only validated messages and returns the website contract", a
       assert.equal(upstreamBody.stream, false);
       assert.equal(upstreamBody.max_tokens, 128);
       assert.equal(upstreamBody.messages[0].role, "system");
+      assert.match(upstreamBody.messages[1].content, /\/no_think/);
     },
   );
 });
@@ -181,6 +182,7 @@ test("chat stream forwards split upstream SSE events as delta and done events", 
     async (_url, init) => {
       upstreamBody = JSON.parse(init.body);
       return sseResponse([
+        'data: {"choices":[{"delta":{"reasoning_content":"内部推理"}}]}\n\n',
         'data: {"choices":[{"delta":{"content":"你',
         '好"}}]}\n\n: keep-alive\n\ndata: {"choices":[{"delta":{"content":"，我是 SNN AI"}}]}\n\n',
         'data: [DONE]',
@@ -197,9 +199,37 @@ test("chat stream forwards split upstream SSE events as delta and done events", 
       assert.equal(response.status, 200);
       assert.match(response.headers.get("content-type") ?? "", /^text\/event-stream/);
       assert.equal(upstreamBody.stream, true);
+      assert.match(upstreamBody.messages[1].content, /\/no_think/);
       assert.match(body, /event: delta\ndata: {"text":"你好"}/);
+      assert.doesNotMatch(body, /内部推理/);
       assert.match(body, /event: delta\ndata: {"text":"，我是 SNN AI"}/);
       assert.match(body, /event: done\ndata: {"model":"Qwen3-test","requestId":"[0-9a-f-]+"}/);
+    },
+  );
+});
+
+test("thinking mode adds an internal think instruction without changing user content", async () => {
+  let upstreamBody;
+  await withNode(
+    async (_url, init) => {
+      upstreamBody = JSON.parse(init.body);
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: "经过分析后的回答。" } }] }),
+      );
+    },
+    async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/ai/chat`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: "解释 Transformer" }],
+          thinking: true,
+        }),
+      });
+      assert.equal(response.status, 200);
+      await response.json();
+      assert.match(upstreamBody.messages[1].content, /\/think/);
+      assert.equal(upstreamBody.messages.at(-1).content, "解释 Transformer");
     },
   );
 });

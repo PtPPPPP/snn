@@ -1,4 +1,4 @@
-import { validateMessages } from "../../shared/ai-validation.mjs";
+import { normalizeThinking, validateMessages } from "../../shared/ai-validation.mjs";
 
 class OriginError extends Error {
   constructor(kind, status = null) {
@@ -232,6 +232,7 @@ export async function handleRequest(request, environment, { fetchImpl = fetch, l
         responseStatus = 400;
         return jsonResponse(responseStatus, { error: "Invalid chat request", requestId: id }, origin);
       }
+      const thinking = normalizeThinking(body?.thinking);
 
       const withinLimit = await enforceRateLimit(environment.AI_CHAT_RATE_LIMIT, request);
       if (!withinLimit) {
@@ -245,7 +246,7 @@ export async function handleRequest(request, environment, { fetchImpl = fetch, l
           const originResponse = await fetchOrigin(fetchImpl, environment, "/api/ai/chat/stream", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ messages }),
+            body: JSON.stringify({ messages, thinking }),
           });
           originStatus = originResponse.status;
           responseStatus = 200;
@@ -265,7 +266,7 @@ export async function handleRequest(request, environment, { fetchImpl = fetch, l
         const originResponse = await fetchOrigin(fetchImpl, environment, "/api/ai/chat", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ messages }),
+          body: JSON.stringify({ messages, thinking }),
         });
         originStatus = originResponse.status;
         const responseBody = await originResponse.json();

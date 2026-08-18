@@ -208,6 +208,7 @@ const aiHtml = `<!doctype html>
           <div class="messages" id="ai-messages" aria-live="polite"></div>
           <form class="composer" id="ai-composer">
             <label class="composerLabel" for="ai-message">MESSAGE / 输入消息</label>
+            <button class="thinkingToggle" id="ai-thinking-toggle" type="button" aria-pressed="false"><span aria-hidden="true">○</span> ${aiCopy.THINKING_MODE.label}</button>
             <div class="composerControls">
               <textarea class="composerInput" id="ai-message" placeholder="向 SNN AI 提问…" rows="1"></textarea>
               <button class="sendButton" id="ai-send" type="submit">发送 <span aria-hidden="true">↗</span></button>

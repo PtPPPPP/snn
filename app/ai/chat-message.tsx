@@ -6,6 +6,8 @@ export type ChatMessageModel = {
   id: string;
   role: ChatRole;
   content: string;
+  isThinking?: boolean;
+  thinkingSeconds?: number;
 };
 
 type ChatMessageProps = {
@@ -22,6 +24,14 @@ export default function ChatMessage({ message }: ChatMessageProps) {
       }`}
     >
       <span className={styles.messageLabel}>{isUser ? "YOU" : "SNN AI"}</span>
+      {!isUser && message.isThinking ? (
+        <span className={styles.thinkingLine}>思考中…</span>
+      ) : null}
+      {!isUser && message.thinkingSeconds !== undefined ? (
+        <span className={styles.thinkingLine}>
+          已思考 {message.thinkingSeconds.toFixed(1)} 秒
+        </span>
+      ) : null}
       <p className={`${styles.messageBubble} ${isUser ? styles.userBubble : ""}`}>
         {message.content}
       </p>
