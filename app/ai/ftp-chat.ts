@@ -11,13 +11,31 @@ import {
   THINKING_MODE,
   UNAVAILABLE_REPLY,
 } from "../../lib/ai-copy";
+import {
+  createConversation,
+  deleteConversation as deleteConv,
+  generateTitle,
+  getActiveConversationId,
+  getConversation,
+  listConversations,
+  saveConversation,
+  setActiveConversationId,
+  type Conversation,
+} from "../../lib/ai-conversation-store";
 
-const messages: AiChatMessage[] = [];
+const THINKING_STORAGE_KEY = "snn-ai-thinking-mode";
+
+// Runtime state for the currently active conversation
+let activeId: string | null = null;
+let conversations: Conversation[] = [];
+let messages: AiChatMessage[] = [];
 let requestVersion = 0;
+let requestConversationId: string | null = null;
 let streamController: AbortController | null = null;
 let thinkingMode = false;
 let thinkingStartedAt: number | null = null;
-const THINKING_STORAGE_KEY = "snn-ai-thinking-mode";
+let currentAssistantBubble: HTMLParagraphElement | null = null;
+let currentAssistantContent = "";
 
 const messageList = document.querySelector<HTMLElement>("#ai-messages");
 const statusLabel = document.querySelector<HTMLElement>("#ai-status-label");
@@ -29,29 +47,43 @@ const input = document.querySelector<HTMLTextAreaElement>("#ai-message");
 const sendButton = document.querySelector<HTMLButtonElement>("#ai-send");
 const newChatButton = document.querySelector<HTMLButtonElement>("#ai-new-chat");
 const thinkingToggle = document.querySelector<HTMLButtonElement>("#ai-thinking-toggle");
+const historyList = document.querySelector<HTMLElement>("#ai-history-list");
+const sidebarToggle = document.querySelector<HTMLButtonElement>("#ai-sidebar-toggle");
+const sidebarClose = document.querySelector<HTMLButtonElement>("#ai-sidebar-close");
+const sidebar = document.querySelector<HTMLElement>(".sidebar");
+const backdrop = document.querySelector<HTMLElement>("#ai-backdrop");
+
+function formatRelativeTime(ts: number): string {
+  const diff = Date.now() - ts;
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return "刚刚";
+  if (min < 60) return `${min} 分钟前`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr} 小时前`;
+  const day = Math.floor(hr / 24);
+  if (day === 1) return "昨天";
+  if (day < 30) return `${day} 天前`;
+  return new Date(ts).toLocaleDateString("zh-CN", { month: "long", day: "numeric" });
+}
+
+function shouldFollowMessages() {
+  if (!messageList) return false;
+  return messageList.scrollHeight - messageList.scrollTop - messageList.clientHeight < 80;
+}
 
 function renderWelcome() {
-  if (!messageList) {
-    return;
-  }
-
+  if (!messageList) return;
   messageList.replaceChildren();
-  const emptyState = document.createElement("div");
-  emptyState.className = "emptyState";
-  emptyState.innerHTML =
-    `<span class="emptyMark">${EMPTY_STATE.mark}</span><h2>${EMPTY_STATE.title}</h2><p>${EMPTY_STATE.description}</p>`;
-  messageList.append(emptyState);
+  const el = document.createElement("div");
+  el.className = "emptyState";
+  el.innerHTML = `<span class="emptyMark">${EMPTY_STATE.mark}</span><h2>${EMPTY_STATE.title}</h2><p>${EMPTY_STATE.description}</p>`;
+  messageList.append(el);
 }
 
 function appendMessage(message: AiChatMessage, isThinking = false) {
-  if (!messageList) {
-    return { bubble: undefined, row: undefined, thinkingLine: undefined };
-  }
-
-  const followStream = shouldFollowMessages();
+  if (!messageList) return null;
   const row = document.createElement("article");
   const isUser = message.role === "user";
-
   row.className = `messageRow ${isUser ? "userMessageRow" : "assistantMessageRow"}`;
   const label = document.createElement("span");
   label.className = "messageLabel";
@@ -67,42 +99,82 @@ function appendMessage(message: AiChatMessage, isThinking = false) {
   bubble.textContent = message.content;
   row.append(label, ...(thinkingLine ? [thinkingLine] : []), bubble);
   messageList.append(row);
-  if (followStream) {
+  if (shouldFollowMessages()) {
     messageList.scrollTop = messageList.scrollHeight;
   }
   return { bubble, row, thinkingLine };
 }
 
-function shouldFollowMessages() {
-  if (!messageList) {
-    return false;
-  }
-
-  return messageList.scrollHeight - messageList.scrollTop - messageList.clientHeight < 80;
-}
-
 function appendStreamNotice(message: string) {
-  if (!messageList) {
-    return;
-  }
-
+  if (!messageList) return;
   const notice = document.createElement("p");
   notice.className = "streamNotice";
   notice.textContent = message;
   messageList.append(notice);
 }
 
-function setStatus(state: "checking" | "offline" | "online", detail: string) {
-  if (!statusLabel || !statusDetail || !statusDot) {
+function renderMessages(msgs: AiChatMessage[]) {
+  if (!messageList) return;
+  messageList.replaceChildren();
+  if (msgs.length === 0) {
+    renderWelcome();
     return;
   }
+  for (const m of msgs) {
+    appendMessage(m);
+  }
+}
 
+function renderHistoryList() {
+  if (!historyList) return;
+  historyList.replaceChildren();
+  if (conversations.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "historyEmpty";
+    empty.textContent = "暂无历史对话";
+    historyList.append(empty);
+    return;
+  }
+  for (const conv of conversations) {
+    const item = document.createElement("div");
+    item.className = `historyItem${conv.id === activeId ? " historyItemActive" : ""}`;
+    item.setAttribute("aria-current", conv.id === activeId ? "true" : "");
+
+    const main = document.createElement("button");
+    main.className = "historyItemMain";
+    main.type = "button";
+    main.addEventListener("click", () => switchConversation(conv.id));
+
+    const title = document.createElement("span");
+    title.className = "historyItemTitle";
+    title.textContent = conv.title;
+
+    const time = document.createElement("span");
+    time.className = "historyItemTime";
+    time.textContent = formatRelativeTime(conv.updatedAt);
+
+    main.append(title, time);
+
+    const del = document.createElement("button");
+    del.className = "historyItemDelete";
+    del.type = "button";
+    del.setAttribute("aria-label", "删除对话");
+    del.textContent = "⋯";
+    del.addEventListener("click", (e) => {
+      e.stopPropagation();
+      showDeleteModal(conv.id, conv.title);
+    });
+
+    item.append(main, del);
+    historyList.append(item);
+  }
+}
+
+function setStatus(state: "checking" | "offline" | "online", detail: string) {
+  if (!statusLabel || !statusDetail || !statusDot) return;
   statusLabel.textContent =
-    state === "checking"
-      ? STATUS_LABELS.checking
-      : state === "online"
-        ? STATUS_LABELS.online
-        : STATUS_LABELS.offline;
+    state === "checking" ? STATUS_LABELS.checking
+      : state === "online" ? STATUS_LABELS.online : STATUS_LABELS.offline;
   statusDetail.textContent = detail;
   statusDot.className = `statusDot status${state[0].toUpperCase()}${state.slice(1)}`;
   if (panelState) {
@@ -112,28 +184,181 @@ function setStatus(state: "checking" | "offline" | "online", detail: string) {
 
 function setThinkingMode(enabled: boolean) {
   thinkingMode = enabled;
-  if (!thinkingToggle) {
-    return;
-  }
-
+  if (!thinkingToggle) return;
   thinkingToggle.setAttribute("aria-pressed", String(enabled));
   thinkingToggle.classList.toggle("thinkingToggleActive", enabled);
-  thinkingToggle.innerHTML = `<span aria-hidden="true">◇</span> ${THINKING_MODE.label}`;
+  thinkingToggle.innerHTML = `<span aria-hidden="true">◇</span> 深度思考`;
   try {
     window.localStorage.setItem(THINKING_STORAGE_KEY, String(enabled));
   } catch {
-    // The current page still keeps the in-memory setting.
+    // keep in-memory
   }
 }
 
 async function refreshStatus() {
   setStatus("checking", STATUS_DETAILS.checking);
   const status = await getAiStatus();
-
   setStatus(
     status.online ? "online" : "offline",
     status.online ? status.model ?? STATUS_DETAILS.ready : STATUS_DETAILS.offline,
   );
+}
+
+function persistCurrentMessages(convId: string) {
+  const conv = conversations.find((c) => c.id === convId);
+  if (!conv) return;
+  const stored = messages.filter((m) => m.content.trim() !== "");
+  const updated: Conversation = {
+    id: convId,
+    title: conv.title,
+    createdAt: conv.createdAt,
+    updatedAt: Date.now(),
+    messages: stored,
+    version: 1,
+  };
+  saveConversation(updated).then(refreshConversationList);
+}
+
+async function refreshConversationList() {
+  conversations = await listConversations();
+  renderHistoryList();
+}
+
+function openSidebar() {
+  sidebar?.classList.add("sidebarOpen");
+  backdrop?.classList.add("backdropVisible");
+}
+function closeSidebar() {
+  sidebar?.classList.remove("sidebarOpen");
+  backdrop?.classList.remove("backdropVisible");
+}
+
+async function switchConversation(id: string) {
+  if (id === activeId) {
+    closeSidebar();
+    return;
+  }
+  streamController?.abort();
+  streamController = null;
+  requestConversationId = null;
+  if (activeId) {
+    persistCurrentMessages(activeId);
+  }
+  const conv = await getConversation(id);
+  if (!conv) {
+    closeSidebar();
+    return;
+  }
+  activeId = id;
+  setActiveConversationId(id);
+  messages = [...conv.messages];
+  renderMessages(messages);
+  setIsResponding(false);
+  setStreamNotice(null);
+  thinkingStartedAt = null;
+  currentAssistantBubble = null;
+  currentAssistantContent = "";
+  closeSidebar();
+  await refreshConversationList();
+}
+
+function startNewConversation() {
+  streamController?.abort();
+  streamController = null;
+  requestConversationId = null;
+  if (activeId) {
+    persistCurrentMessages(activeId);
+  }
+  const fresh = createConversation();
+  activeId = fresh.id;
+  setActiveConversationId(fresh.id);
+  messages = [];
+  renderWelcome();
+  setIsResponding(false);
+  setStreamNotice(null);
+  thinkingStartedAt = null;
+  currentAssistantBubble = null;
+  currentAssistantContent = "";
+  closeSidebar();
+  refreshConversationList();
+}
+
+function setIsResponding(v: boolean) {
+  if (!sendButton || !input) return;
+  if (v) {
+    sendButton.textContent = "停止生成";
+    input.disabled = true;
+    thinkingToggle?.setAttribute("disabled", "");
+  } else {
+    sendButton.textContent = "发送 ↗";
+    input.disabled = false;
+    thinkingToggle?.removeAttribute("disabled");
+    input.focus();
+  }
+}
+
+function setStreamNotice(msg: string | null) {
+  const existing = messageList?.querySelector(".streamNotice");
+  if (existing) existing.remove();
+  if (msg) appendStreamNotice(msg);
+}
+
+function showDeleteModal(id: string, title: string) {
+  const existing = document.querySelector("#ai-delete-modal");
+  if (existing) existing.remove();
+
+  const backdropEl = document.createElement("div");
+  backdropEl.id = "ai-delete-modal";
+  backdropEl.className = "modalBackdrop";
+  backdropEl.setAttribute("role", "dialog");
+  backdropEl.setAttribute("aria-modal", "true");
+
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  modal.innerHTML = `
+    <p class="modalTitle">确定删除这个对话吗？</p>
+    <p class="modalDesc">「${title.replace(/</g, "&lt;")}」此操作无法恢复。</p>
+    <div class="modalActions">
+      <button class="modalCancel" type="button">取消</button>
+      <button class="modalConfirm" type="button">删除</button>
+    </div>`;
+
+  const cancelBtn = modal.querySelector(".modalCancel") as HTMLButtonElement;
+  const confirmBtn = modal.querySelector(".modalConfirm") as HTMLButtonElement;
+
+  function close() {
+    backdropEl.remove();
+    document.removeEventListener("keydown", onKey);
+  }
+  function onKey(e: KeyboardEvent) {
+    if (e.key === "Escape") close();
+  }
+
+  backdropEl.addEventListener("click", (e) => {
+    if (e.target === backdropEl) close();
+  });
+  cancelBtn.addEventListener("click", close);
+  confirmBtn.addEventListener("click", async () => {
+    close();
+    await deleteConv(id);
+    conversations = await listConversations();
+    renderHistoryList();
+    if (id === activeId) {
+      if (conversations.length > 0) {
+        await switchConversation(conversations[0].id);
+      } else {
+        const fresh = createConversation();
+        activeId = fresh.id;
+        setActiveConversationId(fresh.id);
+        messages = [];
+        renderWelcome();
+      }
+    }
+  });
+  document.addEventListener("keydown", onKey);
+  backdropEl.append(modal);
+  document.body.append(backdropEl);
+  confirmBtn.focus();
 }
 
 async function handleSubmit(event: SubmitEvent) {
@@ -142,34 +367,45 @@ async function handleSubmit(event: SubmitEvent) {
     streamController.abort();
     return;
   }
-
   const content = input?.value.trim();
-  if (!content || !input || !sendButton) {
-    return;
-  }
+  if (!content || !input || !sendButton || !activeId) return;
 
-  const message: AiChatMessage = { role: "user", content };
+  const convId = activeId;
+  const userMessage: AiChatMessage = { role: "user", content };
   const assistantMessage: AiChatMessage = { role: "assistant", content: "" };
-  const requestMessages = [...messages, message];
+  const requestMessages = [...messages, userMessage];
   const activeThinking = thinkingMode;
   const activeRequestVersion = requestVersion + 1;
   const controller = new AbortController();
 
   requestVersion = activeRequestVersion;
-  messages.push(message);
+  requestConversationId = convId;
+  messages.push(userMessage);
   if (messages.length === 1) {
     messageList?.replaceChildren();
   }
-  appendMessage(message);
+  appendMessage(userMessage);
   messages.push(assistantMessage);
-  const { bubble: assistantBubble, row: assistantRow } = appendMessage(assistantMessage);
-  let thinkingLine: HTMLSpanElement | undefined;
+  const result = appendMessage(assistantMessage);
+  currentAssistantBubble = result?.bubble ?? null;
+  currentAssistantContent = "";
+  let thinkingLine: HTMLSpanElement | undefined = result?.thinkingLine;
   input.value = "";
-  input.disabled = true;
-  sendButton.textContent = "停止生成";
+  setIsResponding(true);
   streamController = controller;
   thinkingStartedAt = null;
-  thinkingToggle?.setAttribute("disabled", "");
+
+  // Save user message + auto title
+  const conv = conversations.find((c) => c.id === convId);
+  const isFirstMessage = messages.length <= 2; // user + empty assistant
+  saveConversation({
+    id: convId,
+    title: isFirstMessage ? generateTitle(content) : conv?.title ?? "新对话",
+    createdAt: conv?.createdAt ?? Date.now(),
+    updatedAt: Date.now(),
+    messages: requestMessages,
+    version: 1,
+  }).then(refreshConversationList);
 
   try {
     await streamChatMessage({
@@ -177,26 +413,23 @@ async function handleSubmit(event: SubmitEvent) {
       thinking: activeThinking,
       signal: controller.signal,
       onReasoningStart() {
-        if (requestVersion !== activeRequestVersion || !activeThinking || !assistantRow || !assistantBubble) {
-          return;
-        }
-
+        if (requestConversationId !== convId || !activeThinking) return;
         thinkingStartedAt = performance.now();
-        thinkingLine = document.createElement("span");
-        thinkingLine.className = "thinkingLine";
-        thinkingLine.textContent = THINKING_MODE.thinking;
-        assistantRow.insertBefore(thinkingLine, assistantBubble);
+        if (currentAssistantBubble && result?.row && !thinkingLine) {
+          thinkingLine = document.createElement("span");
+          thinkingLine.className = "thinkingLine";
+          thinkingLine.textContent = THINKING_MODE.thinking;
+          result.row.insertBefore(thinkingLine, currentAssistantBubble);
+        }
       },
       onDelta(text) {
-        if (requestVersion !== activeRequestVersion || !assistantBubble) {
-          return;
-        }
-
+        if (requestConversationId !== convId || !currentAssistantBubble) return;
         const followStream = shouldFollowMessages();
-        assistantMessage.content += text;
-        assistantBubble.textContent = assistantMessage.content;
+        currentAssistantContent += text;
+        assistantMessage.content = currentAssistantContent;
+        currentAssistantBubble.textContent = currentAssistantContent;
         if (thinkingStartedAt !== null && thinkingLine) {
-          thinkingLine.textContent = `已思考 ${((performance.now() - thinkingStartedAt) / 1_000).toFixed(1)} 秒`;
+          thinkingLine.textContent = `已思考 ${((performance.now() - thinkingStartedAt) / 1000).toFixed(1)} 秒`;
           thinkingStartedAt = null;
         }
         if (followStream && messageList) {
@@ -204,26 +437,19 @@ async function handleSubmit(event: SubmitEvent) {
         }
       },
       onDone(metadata) {
-        if (
-          metadata.reasoningObserved &&
-          typeof metadata.thinkingMs === "number" &&
-          thinkingLine
-        ) {
-          thinkingLine.textContent = "已思考 " + (metadata.thinkingMs / 1_000).toFixed(1) + " 秒";
+        if (metadata.reasoningObserved && typeof metadata.thinkingMs === "number" && thinkingLine) {
+          thinkingLine.textContent = "已思考 " + (metadata.thinkingMs / 1000).toFixed(1) + " 秒";
         }
         thinkingStartedAt = null;
       },
       onError(message) {
-        if (requestVersion === activeRequestVersion) {
+        if (requestConversationId === convId) {
           appendStreamNotice(message);
         }
       },
     });
   } catch {
-    if (requestVersion !== activeRequestVersion) {
-      return;
-    }
-
+    if (requestConversationId !== convId) return;
     if (controller.signal.aborted) {
       appendStreamNotice(activeThinking ? THINKING_MODE.stopped : "生成已停止。");
     } else {
@@ -231,15 +457,25 @@ async function handleSubmit(event: SubmitEvent) {
       setStatus("offline", STATUS_DETAILS.offline);
     }
   } finally {
-    input.disabled = false;
-    sendButton.textContent = "发送 ↗";
-    streamController = null;
-    thinkingStartedAt = null;
-    thinkingToggle?.removeAttribute("disabled");
-    input.focus();
+    if (requestConversationId === convId) {
+      // Update the assistant message content in memory (may be partial)
+      const idx = messages.indexOf(assistantMessage);
+      if (idx >= 0) {
+        messages[idx] = { role: "assistant", content: currentAssistantContent };
+      }
+      setIsResponding(false);
+      streamController = null;
+      thinkingStartedAt = null;
+      currentAssistantBubble = null;
+      currentAssistantContent = "";
+      // Persist final state
+      persistCurrentMessages(convId);
+      requestConversationId = null;
+    }
   }
 }
 
+// Event listeners
 form?.addEventListener("submit", handleSubmit);
 input?.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) {
@@ -247,24 +483,43 @@ input?.addEventListener("keydown", (event) => {
     form?.requestSubmit();
   }
 });
-newChatButton?.addEventListener("click", () => {
-  streamController?.abort();
-  streamController = null;
-  requestVersion += 1;
-  messages.splice(0, messages.length);
-  renderWelcome();
-  input?.focus();
-});
+newChatButton?.addEventListener("click", startNewConversation);
 thinkingToggle?.addEventListener("click", () => {
   if (!streamController) {
     setThinkingMode(!thinkingMode);
   }
 });
+sidebarToggle?.addEventListener("click", openSidebar);
+sidebarClose?.addEventListener("click", closeSidebar);
+backdrop?.addEventListener("click", closeSidebar);
 
-renderWelcome();
-try {
-  setThinkingMode(window.localStorage.getItem(THINKING_STORAGE_KEY) === "true");
-} catch {
-  setThinkingMode(false);
+// Initialize
+async function init() {
+  try {
+    setThinkingMode(window.localStorage.getItem(THINKING_STORAGE_KEY) === "true");
+  } catch {
+    setThinkingMode(false);
+  }
+  conversations = await listConversations();
+  renderHistoryList();
+  const storedActiveId = getActiveConversationId();
+  const target =
+    (storedActiveId && conversations.find((c) => c.id === storedActiveId)) ||
+    conversations[0] ||
+    null;
+  if (target) {
+    activeId = target.id;
+    setActiveConversationId(target.id);
+    messages = [...target.messages];
+    renderMessages(messages);
+  } else {
+    const fresh = createConversation();
+    activeId = fresh.id;
+    setActiveConversationId(fresh.id);
+    messages = [];
+    renderWelcome();
+  }
+  void refreshStatus();
 }
-void refreshStatus();
+
+void init();

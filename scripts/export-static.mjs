@@ -138,6 +138,16 @@ await writeFile(aiCopyModulePath, compiledAiCopy, "utf8");
 const aiCopy = await import(
   `${pathToFileURL(aiCopyModulePath).href}?t=${Date.now()}`
 );
+const aiConvStoreSource = await readFile(path.join(root, "lib", "ai-conversation-store.ts"), "utf8");
+const compiledAiConvStore = ts
+  .transpileModule(aiConvStoreSource, {
+    compilerOptions: {
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ES2022,
+    },
+    fileName: "ai-conversation-store.ts",
+  })
+  .outputText;
 const compiledAiClient = ts
   .transpileModule(aiClientSource, {
     compilerOptions: {
@@ -164,8 +174,9 @@ const compiledFtpChat = ts
     fileName: "ftp-chat.ts",
   })
   .outputText.replace(/(["'])\.\.\/\.\.\/lib\/ai-client\1/g, '"./ai-client.js"')
-  .replace(/(["'])\.\.\/\.\.\/lib\/ai-copy\1/g, '"./ai-copy.js"');
-if (compiledFtpChat.includes("lib/ai-client") || compiledFtpChat.includes("lib/ai-copy")) {
+  .replace(/(["'])\.\.\/\.\.\/lib\/ai-copy\1/g, '"./ai-copy.js"')
+  .replace(/(["'])\.\.\/\.\.\/lib\/ai-conversation-store\1/g, '"./ai-conversation-store.js"');
+if (compiledFtpChat.includes("lib/ai-client") || compiledFtpChat.includes("lib/ai-copy") || compiledFtpChat.includes("lib/ai-conversation-store")) {
   throw new Error(
     "[export-static] ftp-chat.ts 的 lib import 路径未替换，请检查 app/ai/ftp-chat.ts",
   );
@@ -185,24 +196,33 @@ const aiHtml = `<!doctype html>
     <main class="page">
       <header class="header">
         <a class="brand" href="/" aria-label="返回 SNN 首页">
-          <img src="/assets/snn-logo-fixed.png" alt="SNN 社团 Logo">
+          <img src="/assets/snn-logo-fixed.png" alt="SNN 社团 Logo" width="1254" height="1254">
           <span>SNN AI<small>SMART NEURAL NETWORK</small></span>
         </a>
-        <a class="backLink" href="/">返回官网 <span aria-hidden="true">↗</span></a>
+        <div class="headerRight">
+          <button class="sidebarToggle" id="ai-sidebar-toggle" type="button" aria-label="打开历史对话">☰</button>
+          <a class="backLink" href="/">返回官网 <span aria-hidden="true">↗</span></a>
+        </div>
       </header>
       <section class="chatShell" aria-label="SNN AI Chat">
         <aside class="sidebar">
-          <div>
-            <p class="sectionCode">${aiCopy.SIDEBAR.sectionCode}</p>
-            <h1>${aiCopy.SIDEBAR.title}</h1>
-            <p class="description">${aiCopy.SIDEBAR.description}</p>
+          <div class="sidebarHeader">
+            <div>
+              <p class="sectionCode">${aiCopy.SIDEBAR.sectionCode}</p>
+              <h1>${aiCopy.SIDEBAR.title}</h1>
+              <p class="description">${aiCopy.SIDEBAR.description}</p>
+            </div>
+            <button class="sidebarClose" id="ai-sidebar-close" type="button" aria-label="关闭历史">✕</button>
           </div>
           <div class="statusCard" aria-label="AI 服务状态">
             <span class="statusDot statusChecking" id="ai-status-dot" aria-hidden="true"></span>
             <div><strong id="ai-status-label">${aiCopy.STATUS_LABELS.checking}</strong><span id="ai-status-detail">${aiCopy.STATUS_DETAILS.checking}</span></div>
           </div>
           <button class="newChatButton" id="ai-new-chat" type="button"><span>＋</span> 新建对话</button>
+          <div class="historyLabel">最近对话</div>
+          <nav class="historyList" id="ai-history-list" aria-label="历史对话"></nav>
         </aside>
+        <div class="backdrop" id="ai-backdrop" aria-hidden="true"></div>
         <div class="chatPanel">
           <div class="panelHeader"><span>CHAT / HTTP READY</span><span id="ai-panel-state">${aiCopy.NODE_STATES.offline}</span></div>
           <div class="messages" id="ai-messages" aria-live="polite"></div>
@@ -234,6 +254,7 @@ await writeFile(path.join(outputDir, "ai", "index.html"), aiHtml, "utf8");
 await writeFile(path.join(outputDir, "ai", "ai.css"), `${staticCss}\n\n${aiCss}`, "utf8");
 await writeFile(path.join(outputDir, "ai", "ai-client.js"), compiledAiClient, "utf8");
 await writeFile(path.join(outputDir, "ai", "ai-copy.js"), compiledAiCopy, "utf8");
+await writeFile(path.join(outputDir, "ai", "ai-conversation-store.js"), compiledAiConvStore, "utf8");
 await writeFile(path.join(outputDir, "ai", "app.js"), compiledFtpChat, "utf8");
 
 const staticConfigPath = path.join(outputDir, "ai-config.js");

@@ -79,11 +79,13 @@
   display: flex;
   min-height: 100%;
   flex-direction: column;
-  justify-content: space-between;
-  gap: 42px;
-  padding: clamp(24px, 3vw, 48px);
+  gap: 20px;
+  padding: clamp(20px, 2.5vw, 40px);
   border-right: 1px solid var(--ink);
   background: var(--lime);
+  width: 268px;
+  flex-shrink: 0;
+  overflow: hidden;
 }
 
 .sectionCode,
@@ -187,6 +189,204 @@
 .newChatButton:hover,
 .newChatButton:focus-visible {
   background: var(--blue);
+}
+
+.sidebarHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sidebarClose {
+  display: none;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--on-lime);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sidebarToggle {
+  display: none;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.historyLabel {
+  color: var(--on-lime);
+  opacity: 0.6;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 4px 4px 2px;
+}
+
+.historyList {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  min-height: 0;
+  padding-bottom: 8px;
+}
+
+.historyEmpty {
+  color: var(--on-lime);
+  opacity: 0.5;
+  font-size: 12px;
+  padding: 8px 4px;
+}
+
+.historyItem {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  transition: background 150ms ease;
+}
+
+.historyItem:hover {
+  background: rgba(17, 17, 15, 0.08);
+}
+
+.historyItemActive {
+  background: rgba(17, 17, 15, 0.14);
+}
+
+.historyItemMain {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px 8px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.historyItemTitle {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--on-lime);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.historyItemTime {
+  color: var(--on-lime);
+  opacity: 0.5;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.historyItemDelete {
+  display: none;
+  flex: 0 0 auto;
+  padding: 9px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--on-lime);
+  opacity: 0.5;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.historyItem:hover .historyItemDelete {
+  display: block;
+}
+
+.historyItemDelete:hover {
+  opacity: 1;
+}
+
+.backdrop {
+  display: none;
+}
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(17, 17, 15, 0.5);
+}
+
+.modal {
+  width: min(360px, calc(100% - 48px));
+  padding: 28px 24px 20px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  box-shadow: 8px 8px 0 var(--blue);
+}
+
+.modalTitle {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.modalDesc {
+  margin: 0 0 24px;
+  color: var(--ink-60);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.modalCancel {
+  padding: 10px 16px;
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.modalConfirm {
+  padding: 10px 16px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.modalConfirm:hover {
+  background: var(--blue);
+  color: var(--paper);
 }
 
 .chatPanel {
@@ -455,28 +655,46 @@
   }
 
   .sidebar {
-    min-height: auto;
-    flex-direction: row;
-    align-items: center;
-    gap: 18px;
-    padding: 22px;
-    border-right: 0;
-    border-bottom: 1px solid var(--ink);
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 30;
+    width: min(280px, 80vw);
+    transform: translateX(-100%);
+    transition: transform 220ms ease;
+    border-right: 1px solid var(--ink);
+    border-bottom: 0;
   }
 
-  .sectionCode,
-  .sidebar h1,
-  .description {
-    display: none;
+  .sidebarOpen,
+  .chatShellShifted .sidebar {
+    transform: translateX(0);
   }
 
-  .statusCard {
-    flex: 1;
+  .sidebarClose {
+    display: flex;
   }
 
-  .newChatButton {
-    min-height: 46px;
-    padding: 0 14px;
+  .sidebarToggle {
+    display: flex;
+  }
+
+  .backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    background: rgba(17, 17, 15, 0.4);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 220ms ease;
+  }
+
+  .backdropVisible,
+  .chatShellShifted .backdrop {
+    opacity: 1;
+    pointer-events: auto;
   }
 }
 
@@ -514,9 +732,7 @@
   }
 
   .sidebar {
-    display: flex;
-    justify-content: space-between;
-    padding: 12px 16px;
+    width: min(260px, 82vw);
   }
 
   .statusCard {
