@@ -309,37 +309,10 @@ a {
   animation: robot-enter 900ms cubic-bezier(0.2, 0.72, 0, 1) both;
 }
 
-/* SNN hero art — light, opacity-only motion (auto-disabled under prefers-reduced-motion) */
-.art-orbit {
-  animation: art-orbit-scan 9s linear infinite;
-}
-.art-breathe {
-  animation: art-breathe 4.5s ease-in-out infinite;
-}
-.art-pulse {
-  animation: art-pulse 3.2s ease-in-out infinite;
-}
-@keyframes art-orbit-scan {
-  to {
-    stroke-dashoffset: -14;
-  }
-}
-@keyframes art-breathe {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.6;
-  }
-}
-@keyframes art-pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.35;
-  }
-}
+/* SNN hero art — DIGITAL PLOTTER / NEURAL BLUEPRINT
+   All motion is driven by a single 10s master timeline injected by
+   SnnHeroArt.tsx (absolute keyframes, one shared period). Only the
+   static-state / responsive / accessibility rules live here. */
 
 .blueprint {
   position: absolute;
@@ -1177,6 +1150,14 @@ footer {
     width: min(100%, 420px);
   }
 
+  /* plotter art: drop fine blueprint marks/annotations and the two S→N1
+     curves so the SNN drawing itself stays the focus on small screens */
+  .plot-marks,
+  .plot-ann,
+  .plot-conn-extra {
+    display: none;
+  }
+
   .blueprint {
     top: 0;
     left: 8%;
@@ -1370,5 +1351,28 @@ footer {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  /* SNN hero art: show the complete static blueprint instead of a blank
+     canvas — the "final" state of every layer, no looping plot. */
+  .plot-marks {
+    opacity: 1 !important;
+  }
+  .plot-s,
+  .plot-n1,
+  .plot-n2,
+  .plot-conn {
+    stroke-dashoffset: 0 !important;
+  }
+  .plot-node,
+  .plot-lime {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .plot-ann {
+    opacity: 1 !important;
+  }
+  .plot-cursor {
+    opacity: 0 !important;
   }
 }
