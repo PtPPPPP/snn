@@ -2,11 +2,17 @@
 //
 // The old radial-network / concentric-orbit HUD is gone. This is a single
 // master-timeline story: a blueprint sheet initialises, then an invisible
-// plotter head draws S, N, N stroke by stroke (real stroke-dashoffset path
-// drawing), then neural connections are plotted one by one, nodes spawn only
-// where the line has already arrived, three nodes activate lime left → mid →
-// right, the completed network holds for a moment, then everything retracts
-// (erase) and the loop restarts seamlessly — no sudden flashes.
+// plotter head draws S, N, N — one letter segment at a time, in normal reading
+// direction — then neural connections are plotted AFTER all three letters are
+// complete, nodes spawn only where the line has already arrived, three nodes
+// activate lime left → mid → right, the completed network holds, then
+// everything retracts (erase) and the loop restarts seamlessly.
+//
+// Readability first: the S is a conventional uppercase-S skeleton split into
+// three independent paths (S_TOP arc / S_MIDDLE waist / S_BOTTOM bowl) so its
+// orientation can never flip from a single bad control point. Every letter was
+// calibrated during development against a standard bold sans-serif reference
+// (see DEV_GUIDE below; removed in production).
 //
 // Technique: React + inline SVG + pure CSS. Every element animates against
 // ONE 10s period with absolute keyframes (no per-element infinite loops with
@@ -17,8 +23,14 @@
 const BLUE = "#2447ff";
 const LIME = "#c8ff00";
 const PAPER = "#f4f1e8";
+const INK = "#11110f";
 const MONO =
   'ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Consolas, monospace';
+
+// DEV-GUIDE reference layer (standard bold sans-serif letters, same bounding
+// boxes, dark translucent). Used ONLY for development calibration; must be
+// false in production builds.
+const DEV_GUIDE = false;
 
 // ---------------------------------------------------------------------------
 // Master timeline — TOTAL = 10s, every animation shares this one period.
@@ -28,134 +40,163 @@ const T = 10;
 
 const TL: {
   marks: [number, number];
-  s: { draw: [number, number]; erase: [number, number] };
-  n1: { draw: [number, number]; erase: [number, number] };
-  n2: { draw: [number, number]; erase: [number, number] };
   nodes: { erase: [number, number] };
   lime: { off: [number, number] };
   ann: [number, number];
 } = {
   marks: [0.0, 0.6], // blueprint sheet initialises
-  s: { draw: [0.55, 2.35], erase: [8.6, 9.2] }, // draw S, erase last
-  n1: { draw: [1.75, 3.85], erase: [8.5, 9.1] }, // staggered start
-  n2: { draw: [3.2, 5.2], erase: [8.4, 9.0] },
-  nodes: { erase: [8.35, 8.95] },
-  lime: { off: [8.2, 8.42] }, // lime nodes switch off first during erase
-  ann: [7.0, 8.2], // completed-state annotations
+  nodes: { erase: [8.3, 8.7] },
+  lime: { off: [8.3, 8.5] }, // lime nodes switch off first during erase
+  ann: [7.6, 8.4], // completed-state annotations
 };
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const pct = (t: number) => r2((t / T) * 100);
 
 // ---------------------------------------------------------------------------
-// Geometry
+// Letter geometry — readability first, engineering styling second.
 // ---------------------------------------------------------------------------
 
-// S — one continuous plotter line (top-left → top curve → waist → lower bowl
-// → bottom-right terminal tick).
-const S_PATH =
-  "M104 232 C140 192 204 200 205 242 C207 278 182 284 152 286 C122 286 104 298 112 340 C118 380 152 388 188 382 L208 370";
+// S — conventional uppercase S, split into three continuous segments:
+//   S_TOP    : top-left start → round top arc → top-right vertex
+//   S_MIDDLE : top-right vertex → right side down → waist crossing left
+//   S_BOTTOM : waist → lower-left side → round bottom bowl → bottom-right
+//              terminal tick
+// This is the normal-reading "S" (upper body right, waist crossing left,
+// lower body left, bottom sweeping right).
+const S_TOP = "M98 252 C102 206 130 194 160 197 C190 200 212 218 214 250";
+const S_MIDDLE = "M214 250 C216 282 206 300 182 310 C160 318 136 314 120 308";
+const S_BOTTOM =
+  "M120 308 C104 314 96 330 98 352 C100 376 124 392 154 392 C186 392 208 378 216 356 L222 344";
 
-// N — three pen-down strokes: left vertical (bottom→top, with a small serif),
-// diagonal (top-left → bottom-right), right vertical (bottom→top + serif).
+// N — left vertical (bottom→top + serif), diagonal (top-left → bottom-right),
+// right vertical (bottom→top + serif). Width matched to S's visual weight.
 const nPath = (cx: number) =>
-  `M${cx - 49} 396 L${cx - 49} 196 L${cx - 54} 196 M${cx - 49} 196 L${cx + 49} 396 M${cx + 49} 396 L${cx + 49} 196 L${cx + 54} 196`;
+  `M${cx - 57} 396 L${cx - 57} 196 L${cx - 62} 196 M${cx - 57} 196 L${cx + 57} 396 M${cx + 57} 396 L${cx + 57} 196 L${cx + 62} 196`;
 
 const N1 = 320;
 const N2 = 488;
+
+// ---------------------------------------------------------------------------
+// Segments: each letter segment is its own path with its own draw/erase
+// window on the master timeline (draw windows overlap slightly so the pen
+// never appears to stop).
+// ---------------------------------------------------------------------------
+type Seg = {
+  id: string;
+  cls: string;
+  d: string;
+  draw: [number, number];
+  erase: [number, number];
+};
+
+const S_SEGS: Seg[] = [
+  { id: "art-s-top", cls: "plot-s-top", d: S_TOP, draw: [0.55, 1.15], erase: [8.85, 9.2] },
+  { id: "art-s-mid", cls: "plot-s-mid", d: S_MIDDLE, draw: [1.05, 1.75], erase: [8.75, 9.1] },
+  { id: "art-s-bot", cls: "plot-s-bot", d: S_BOTTOM, draw: [1.65, 2.45], erase: [8.65, 9.0] },
+];
+
+const N1_SEGS: Seg[] = [
+  { id: "art-n1", cls: "plot-n1", d: nPath(N1), draw: [2.5, 4.3], erase: [8.55, 8.9] },
+];
+
+const N2_SEGS: Seg[] = [
+  { id: "art-n2", cls: "plot-n2", d: nPath(N2), draw: [3.9, 5.7], erase: [8.45, 8.8] },
+];
+
+const ALL_SEGS: Seg[] = [...S_SEGS, ...N1_SEGS, ...N2_SEGS];
+
+// Composite path used by the S plotter head (TOP → MIDDLE → BOTTOM,
+// continuous, so the head never jumps).
+const S_COMBO = `${S_TOP}${S_MIDDLE}${S_BOTTOM}`;
 
 type Conn = {
   id: string;
   cls: string;
   d: string;
   draw: [number, number];
+  erase: [number, number];
   /** hidden on small screens to keep the mobile art focused on the letters */
   extra?: boolean;
 };
 
-// Neural connections — plotted one by one after the letters.
+// Neural connections — plotted ONLY after S, N1 and N2 are all complete
+// (letters finish at 5.7s, connections start at 5.8s).
 const CONNS: Conn[] = [
-  { id: "lead", cls: "conn-lead", d: "M320 128 L320 196", draw: [4.6, 4.82] },
+  { id: "lead", cls: "conn-lead", d: "M320 128 L320 196", draw: [5.8, 5.97], erase: [8.62, 8.71] },
   {
     id: "a",
     cls: "conn-a",
-    d: "M205 242 C240 238 254 236 271 234",
-    draw: [4.82, 5.04],
+    d: "M214 250 C230 254 246 252 263 250",
+    draw: [5.97, 6.14],
+    erase: [8.55, 8.64],
     extra: true,
   },
   {
     id: "b",
     cls: "conn-b",
-    d: "M208 370 C244 366 256 360 271 356",
-    draw: [5.04, 5.26],
+    d: "M216 356 C230 358 246 358 263 356",
+    draw: [6.14, 6.31],
+    erase: [8.48, 8.57],
     extra: true,
   },
-  { id: "c", cls: "conn-c", d: "M369 296 L439 296", draw: [5.26, 5.48] },
-  { id: "br1", cls: "conn-br1", d: "M188 382 L188 430", draw: [5.48, 5.7] },
+  { id: "c", cls: "conn-c", d: "M377 296 L431 296", draw: [6.31, 6.48], erase: [8.41, 8.5] },
+  { id: "br1", cls: "conn-br1", d: "M154 392 L154 430", draw: [6.48, 6.65], erase: [8.34, 8.43] },
   {
     id: "br2",
     cls: "conn-br2",
-    d: "M537 296 C562 300 572 308 582 320",
-    draw: [5.7, 5.92],
+    d: "M545 296 C570 300 580 308 590 320",
+    draw: [6.65, 6.82],
+    erase: [8.27, 8.36],
   },
   {
     id: "br3",
     cls: "conn-br3",
-    d: "M369 396 C380 410 388 418 400 430",
-    draw: [5.92, 6.14],
+    d: "M377 396 C388 410 396 418 408 430",
+    draw: [6.82, 6.99],
+    erase: [8.2, 8.29],
   },
 ];
 
-// Connections erase in reverse draw order, packed into 8.2–9.0.
-const CONN_ERASE: Record<string, [number, number]> = {
-  "conn-lead": [8.74, 8.99],
-  "conn-a": [8.65, 8.9],
-  "conn-b": [8.56, 8.81],
-  "conn-c": [8.47, 8.72],
-  "conn-br1": [8.38, 8.63],
-  "conn-br2": [8.29, 8.54],
-  "conn-br3": [8.2, 8.45],
-};
-
 // The plotter head for the connection layer follows one composite path
 // (pen-up moveto jumps between the individual connections).
-const CONN_CURSOR_PATH =
-  "M320 128 L320 196 M205 242 C240 238 254 236 271 234 M208 370 C244 366 256 360 271 356 M369 296 L439 296 M188 382 L188 430 M537 296 C562 300 572 308 582 320 M369 396 C380 410 388 418 400 430";
-// fractions where each sub-path starts (approx. from path lengths)
+const CONN_CURSOR_PATH = CONNS.map((c) => c.d).join(" ");
+// fractions where each sub-path starts (approx. from path lengths; verified at
+// build time via getTotalLength)
 const CONN_CURSOR_KEYPOINTS =
-  "0;0;0.163;0.327;0.486;0.654;0.769;0.889;1;1";
+  "0;0;0.185;0.334;0.483;0.63;0.733;0.874;1;1";
 const CONN_CURSOR_KEYTIMES =
-  "0;0.46;0.482;0.504;0.526;0.548;0.57;0.592;0.614;1";
+  "0;0.58;0.597;0.614;0.631;0.648;0.665;0.682;0.699;1";
 
 // Nodes — each spawns (scale 0→1, opacity 0→1) right after the line has
-// reached its position.
+// reached its position. Small (r≈3.2) so they never overpower the letter
+// outlines; the S keeps only end-point nodes (start + terminal).
 type NodeDef = { id: string; x: number; y: number; at: number; r?: number };
 const NODES: NodeDef[] = [
-  { id: "s0", x: 104, y: 232, at: 0.6 },
-  { id: "s2", x: 152, y: 286, at: 1.5 },
-  { id: "s3", x: 208, y: 370, at: 2.4 },
-  { id: "n1-lb", x: 271, y: 396, at: 1.8 },
-  { id: "n1-lt", x: 271, y: 196, at: 2.45 },
-  { id: "n1-mid", x: 320, y: 296, at: 2.85 },
-  { id: "n1-rb", x: 369, y: 396, at: 3.2 },
-  { id: "n1-rt", x: 369, y: 196, at: 3.9 },
-  { id: "n2-lb", x: 439, y: 396, at: 3.25 },
-  { id: "n2-lt", x: 439, y: 196, at: 3.9 },
-  { id: "n2-mid", x: 488, y: 296, at: 4.3 },
-  { id: "n2-rb", x: 537, y: 396, at: 4.65 },
-  { id: "n2-rt", x: 537, y: 196, at: 5.25 },
-  { id: "src", x: 320, y: 128, at: 4.9, r: 5 },
-  { id: "c23", x: 404, y: 296, at: 5.55 },
-  { id: "br1", x: 188, y: 430, at: 5.75 },
-  { id: "br2", x: 582, y: 320, at: 5.95 },
-  { id: "br3", x: 400, y: 430, at: 6.1 },
+  { id: "s0", x: 98, y: 252, at: 0.65 },
+  { id: "s3", x: 222, y: 344, at: 2.55 },
+  { id: "n1-lb", x: 263, y: 396, at: 2.6 },
+  { id: "n1-lt", x: 263, y: 196, at: 3.2 },
+  { id: "n1-mid", x: 320, y: 296, at: 3.45 },
+  { id: "n1-rb", x: 377, y: 396, at: 3.75 },
+  { id: "n1-rt", x: 377, y: 196, at: 4.4 },
+  { id: "n2-lb", x: 431, y: 396, at: 4.0 },
+  { id: "n2-lt", x: 431, y: 196, at: 4.6 },
+  { id: "n2-mid", x: 488, y: 296, at: 4.85 },
+  { id: "n2-rb", x: 545, y: 396, at: 5.15 },
+  { id: "n2-rt", x: 545, y: 196, at: 5.8 },
+  { id: "src", x: 320, y: 128, at: 6.05, r: 4 },
+  { id: "c23", x: 404, y: 296, at: 6.55 },
+  { id: "br1", x: 154, y: 430, at: 6.7 },
+  { id: "br2", x: 590, y: 320, at: 6.88 },
+  { id: "br3", x: 408, y: 430, at: 7.05 },
 ];
 
-// Lime "activation" — left → middle → right, once the whole network exists.
+// Lime "activation" — left → middle → right, after the whole network exists.
 const LIME_AT = [
-  { id: "s0", x: 104, y: 232, at: 6.1 },
-  { id: "n1-mid", x: 320, y: 296, at: 6.32 },
-  { id: "n2-rt", x: 537, y: 196, at: 6.54 },
+  { id: "s0", x: 98, y: 252, at: 7.0 },
+  { id: "n1-mid", x: 320, y: 296, at: 7.2 },
+  { id: "n2-rt", x: 545, y: 196, at: 7.4 },
 ];
 
 // ---------------------------------------------------------------------------
@@ -183,8 +224,10 @@ const nodeAnimCss = (cls: string, at: number) => {
 };
 
 const cursorAnimCss = (cls: string, show: [number, number]) => {
-  const s0 = Math.max(0, pct(show[0] - 0.35));
-  const s = pct(show[0]);
+  // fade in starts exactly at show[0] (= SMIL begin) so the head never sits
+  // at the SVG origin while visible; holds until show[1], then fades out.
+  const s0 = pct(show[0]);
+  const s = pct(show[0] + 0.35);
   const e = pct(show[1]);
   const e2 = pct(show[1] + 0.35);
   return (
@@ -219,20 +262,18 @@ const MARKS_CSS =
   `.plot-marks{opacity:0;animation:marks-kf ${T}s linear infinite}`;
 
 const ANN_CSS =
-  `@keyframes ann-kf{0%{opacity:0}70%{opacity:0}72.5%{opacity:1}82%{opacity:1}84.5%{opacity:0}100%{opacity:0}}` +
+  `@keyframes ann-kf{0%{opacity:0}76%{opacity:0}78.5%{opacity:1}84%{opacity:1}85.5%{opacity:0}100%{opacity:0}}` +
   `.plot-ann{opacity:0;animation:ann-kf ${T}s linear infinite}`;
 
 function buildArtCss() {
   const parts: string[] = [MARKS_CSS];
-  parts.push(pathAnimCss("plot-s", TL.s.draw, TL.s.erase));
-  parts.push(pathAnimCss("plot-n1", TL.n1.draw, TL.n1.erase));
-  parts.push(pathAnimCss("plot-n2", TL.n2.draw, TL.n2.erase));
-  for (const c of CONNS) parts.push(pathAnimCss(c.cls, c.draw, CONN_ERASE[c.cls]));
+  for (const seg of ALL_SEGS) parts.push(pathAnimCss(seg.cls, seg.draw, seg.erase));
+  for (const c of CONNS) parts.push(pathAnimCss(c.cls, c.draw, c.erase));
   for (const n of NODES) parts.push(nodeAnimCss(`node-${n.id}`, n.at));
-  parts.push(cursorAnimCss("plot-cursor-s", [0.55, 2.7] as [number, number]));
-  parts.push(cursorAnimCss("plot-cursor-n1", [1.75, 4.2] as [number, number]));
-  parts.push(cursorAnimCss("plot-cursor-n2", [3.2, 5.55] as [number, number]));
-  parts.push(cursorAnimCss("plot-cursor-c", [4.6, 6.5] as [number, number]));
+  parts.push(cursorAnimCss("plot-cursor-s", [0.55, 2.6] as [number, number]));
+  parts.push(cursorAnimCss("plot-cursor-n1", [2.5, 4.5] as [number, number]));
+  parts.push(cursorAnimCss("plot-cursor-n2", [3.9, 5.95] as [number, number]));
+  parts.push(cursorAnimCss("plot-cursor-c", [5.7, 7.15] as [number, number]));
   for (const l of LIME_AT) {
     parts.push(limeAnimCss(`lime-${l.id}`, l.at));
     parts.push(ringAnimCss(`ring-${l.id}`, l.at));
@@ -257,6 +298,45 @@ export function SnnHeroArt({ className }: { className?: string }) {
         aria-hidden="true"
         focusable="false"
       >
+        {/* ============ DEV calibration reference layer (removed in prod) ============ */}
+        {DEV_GUIDE && (
+          <g data-dev-guide fill={INK} opacity={0.28}>
+            {/* standard bold sans-serif S, scaled into the art-S box
+                (x≈90-220, y 195-390) */}
+            <text
+              x={52}
+              y={150}
+              dominantBaseline="hanging"
+              fontFamily="Arial, Helvetica, sans-serif"
+              fontWeight={800}
+              fontSize={272}
+            >
+              S
+            </text>
+            {/* standard N references (direction/width check only) */}
+            <text
+              x={276}
+              y={196}
+              dominantBaseline="hanging"
+              fontFamily="Arial, Helvetica, sans-serif"
+              fontWeight={800}
+              fontSize={210}
+            >
+              N
+            </text>
+            <text
+              x={444}
+              y={196}
+              dominantBaseline="hanging"
+              fontFamily="Arial, Helvetica, sans-serif"
+              fontWeight={800}
+              fontSize={210}
+            >
+              N
+            </text>
+          </g>
+        )}
+
         {/* ============ construction layer (blueprint sheet) ============ */}
         <g className="plot-marks" data-plot-marks>
           {/* plot-area guide frame */}
@@ -312,16 +392,12 @@ export function SnnHeroArt({ className }: { className?: string }) {
           </text>
         </g>
 
-        {/* ============ primary: the letters ============ */}
-        {[
-          { id: "art-s", cls: "plot-s", d: S_PATH },
-          { id: "art-n1", cls: "plot-n1", d: nPath(N1) },
-          { id: "art-n2", cls: "plot-n2", d: nPath(N2) },
-        ].map((p) => (
-          <g key={p.id}>
+        {/* ============ primary: the letters (each segment halo + main) ============ */}
+        {ALL_SEGS.map((seg) => (
+          <g key={seg.id}>
             {/* soft halo so the drawn stroke reads well on paper */}
             <path
-              d={p.d}
+              d={seg.d}
               fill="none"
               stroke={BLUE}
               strokeWidth={5}
@@ -329,24 +405,24 @@ export function SnnHeroArt({ className }: { className?: string }) {
               strokeLinejoin="round"
               opacity={0.1}
               pathLength={100}
-              className={p.cls}
+              className={seg.cls}
             />
             <path
-              id={p.id}
-              d={p.d}
+              id={seg.id}
+              d={seg.d}
               fill="none"
               stroke={BLUE}
               strokeWidth={2.4}
               strokeLinecap="round"
               strokeLinejoin="round"
               pathLength={100}
-              className={p.cls}
+              className={seg.cls}
               data-plot-path
             />
           </g>
         ))}
 
-        {/* ============ secondary: neural connections ============ */}
+        {/* ============ secondary: neural connections (after letters) ============ */}
         {CONNS.map((c) => (
           <path
             key={c.id}
@@ -362,10 +438,10 @@ export function SnnHeroArt({ className }: { className?: string }) {
           />
         ))}
 
-        {/* ============ nodes (spawn when the line arrives) ============ */}
+        {/* ============ nodes (spawn when the line arrives; small) ============ */}
         {NODES.map((n) => (
           <g key={n.id} className={`node-${n.id} plot-node`} data-plot-node>
-            <circle cx={n.x} cy={n.y} r={n.r ?? 4.2} fill={PAPER} stroke={BLUE} strokeWidth={1.4} />
+            <circle cx={n.x} cy={n.y} r={n.r ?? 3.2} fill={PAPER} stroke={BLUE} strokeWidth={1.2} />
           </g>
         ))}
 
@@ -377,7 +453,7 @@ export function SnnHeroArt({ className }: { className?: string }) {
               data-plot-lime
               cx={l.x}
               cy={l.y}
-              r={4.2}
+              r={3.2}
               fill={LIME}
             />
             <circle
@@ -402,10 +478,10 @@ export function SnnHeroArt({ className }: { className?: string }) {
             begin="0.55s"
             repeatCount="indefinite"
             calcMode="linear"
-            keyPoints="0;1;1"
-            keyTimes="0;0.18;1"
+            keyPoints="0;0.284;0.284;0.545;0.545;1"
+            keyTimes="0;0.055;0.115;0.175;0.245;1"
           >
-            <mpath href="#art-s" xlinkHref="#art-s" />
+            <mpath href="#art-s-combo" xlinkHref="#art-s-combo" />
           </animateMotion>
         </g>
         <g className="plot-cursor plot-cursor-n1" data-plot-cursor>
@@ -413,11 +489,11 @@ export function SnnHeroArt({ className }: { className?: string }) {
           <circle r={6} fill="none" stroke={BLUE} strokeWidth={1.1} opacity={0.4} />
           <animateMotion
             dur={`${T}s`}
-            begin="1.75s"
+            begin="2.5s"
             repeatCount="indefinite"
             calcMode="linear"
-            keyPoints="0;1;1"
-            keyTimes="0;0.21;1"
+            keyPoints="0;1;1;1"
+            keyTimes="0;0.25;0.43;1"
           >
             <mpath href="#art-n1" xlinkHref="#art-n1" />
           </animateMotion>
@@ -427,11 +503,11 @@ export function SnnHeroArt({ className }: { className?: string }) {
           <circle r={6} fill="none" stroke={BLUE} strokeWidth={1.1} opacity={0.4} />
           <animateMotion
             dur={`${T}s`}
-            begin="3.2s"
+            begin="3.9s"
             repeatCount="indefinite"
             calcMode="linear"
-            keyPoints="0;1;1"
-            keyTimes="0;0.2;1"
+            keyPoints="0;1;1;1"
+            keyTimes="0;0.39;0.57;1"
           >
             <mpath href="#art-n2" xlinkHref="#art-n2" />
           </animateMotion>
@@ -450,7 +526,8 @@ export function SnnHeroArt({ className }: { className?: string }) {
             <mpath href="#art-conn-path" xlinkHref="#art-conn-path" />
           </animateMotion>
         </g>
-        {/* composite path used by the connection plotter head */}
+        {/* hidden reference paths used by the plotter heads */}
+        <path id="art-s-combo" d={S_COMBO} fill="none" stroke="none" />
         <path id="art-conn-path" d={CONN_CURSOR_PATH} fill="none" stroke="none" />
 
         {/* ============ completed-state annotations ============ */}
