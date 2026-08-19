@@ -742,7 +742,7 @@ a {
   width: 100%;
   aspect-ratio: 1;
   border: 1px solid var(--ink-100);
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .wechat-qr-wrap .corner {
@@ -1266,13 +1266,43 @@ footer {
   }
 
   .section-join {
-    gap: 70px;
+    /* 桌面用 min-height:760px + 居中构图；移动端取消强制高度，消除上下大块绿色空白 */
+    min-height: 0;
+    gap: 48px;
   }
 
   .wechat-card {
     width: 100%;
-    justify-self: stretch;
+    max-width: 420px;
+    justify-self: center;
+    box-sizing: border-box;
     box-shadow: 8px 8px 0 var(--blue);
+  }
+
+  .wechat-qr-wrap {
+    padding: 18px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .wechat-qr-wrap img {
+    /* 移动端二维码收窄到合理尺寸并保持完整正方形，object-fit 用 contain 不裁切 */
+    width: 100%;
+    max-width: 280px;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    object-fit: contain;
+    margin: 0 auto;
+  }
+
+  .wechat-card-head,
+  .wechat-card-foot {
+    padding: 12px 14px;
+    font-size: 10px;
+  }
+
+  .wechat-card-foot strong {
+    font-size: 16px;
   }
 
   .join-intro {
