@@ -250,7 +250,6 @@ export default function AiChat() {
     const assistantMessage = createUiMessage("assistant", "");
     const requestMessages = [...messages, userMessage];
     const nextMessages = [...requestMessages, assistantMessage];
-    const requestVersion = (requestConversationIdRef.current ?? "") + "|" + Date.now();
     const controller = new AbortController();
 
     requestConversationIdRef.current = convId;
