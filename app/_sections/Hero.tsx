@@ -1,4 +1,5 @@
 import { ArrowRight, ArrowDownRight } from "./icons";
+import { SnnHeroArt } from "./SnnHeroArt";
 
 export function Hero() {
   return (
@@ -24,18 +25,12 @@ export function Hero() {
         <p className="hero-microcopy">无论你写过几行代码，都能在这里开始。</p>
       </div>
 
-      <div className="hero-visual" aria-label="工业机器人机械臂主视觉">
+      <div className="hero-visual" aria-label="SNN 神经网络主视觉">
         <div className="blueprint blueprint-a" aria-hidden="true">
           <span />
           <span />
         </div>
-        <img
-          className="robot-arm"
-          src="/assets/snn-robot-arm.png"
-          alt="银色工业机器人机械臂"
-          width={1586}
-          height={992}
-        />
+        <SnnHeroArt className="hero-art" />
       </div>
 
       <div className="hero-proof" aria-label="社团特点">

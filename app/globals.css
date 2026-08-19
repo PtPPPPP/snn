@@ -296,7 +296,7 @@ a {
   overflow: hidden;
 }
 
-.robot-arm {
+.hero-art {
   position: relative;
   z-index: 2;
   display: block;
@@ -305,12 +305,40 @@ a {
   max-width: 640px;
   max-height: 560px;
   margin: 0 auto;
-  object-fit: contain;
-  object-position: center;
-  mix-blend-mode: normal;
-  filter: contrast(1.02);
   pointer-events: none;
   animation: robot-enter 900ms cubic-bezier(0.2, 0.72, 0, 1) both;
+}
+
+/* SNN hero art — light, opacity-only motion (auto-disabled under prefers-reduced-motion) */
+.art-orbit {
+  animation: art-orbit-scan 9s linear infinite;
+}
+.art-breathe {
+  animation: art-breathe 4.5s ease-in-out infinite;
+}
+.art-pulse {
+  animation: art-pulse 3.2s ease-in-out infinite;
+}
+@keyframes art-orbit-scan {
+  to {
+    stroke-dashoffset: -14;
+  }
+}
+@keyframes art-breathe {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+@keyframes art-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
 }
 
 .blueprint {
@@ -981,7 +1009,7 @@ footer {
     opacity: 0.88;
   }
 
-  .robot-arm {
+  .hero-art {
     width: min(100%, 560px);
     max-height: 100%;
   }
@@ -1145,7 +1173,7 @@ footer {
     opacity: 0.78;
   }
 
-  .robot-arm {
+  .hero-art {
     width: min(100%, 420px);
   }
 
