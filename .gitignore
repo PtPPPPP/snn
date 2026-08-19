@@ -43,6 +43,7 @@ next-env.d.ts
 /ftp-upload/
 /.static-export-temp/
 /.vinext/
+.preview/
 *.tsbuildinfo
 
 # local AI node data and model weights

@@ -1,15 +1,8 @@
-import { ArrowRight, ArrowDownRight, PlusIcon } from "./icons";
-
-const stats = [
-  { value: "12", unit: "", label: "DEMOS", note: "累计 Demo" },
-  { value: "06", unit: "", label: "AXIS", note: "轴臂协作" },
-  { value: "03", unit: "", label: "AWARDS", note: "比赛获奖" },
-];
+import { ArrowRight, ArrowDownRight } from "./icons";
 
 export function Hero() {
   return (
     <section className="hero" id="top">
-      <div className="coordinate coordinate-top">X:064 / Y:108</div>
       <span className="corner-mark corner-tl" aria-hidden="true" />
       <span className="corner-mark corner-br" aria-hidden="true" />
 
@@ -31,17 +24,10 @@ export function Hero() {
         <p className="hero-microcopy">无论你写过几行代码，都能在这里开始。</p>
       </div>
 
-      <div className="hero-visual" aria-label="工业机器人机械臂与工程标注">
+      <div className="hero-visual" aria-label="工业机器人机械臂主视觉">
         <div className="blueprint blueprint-a" aria-hidden="true">
           <span />
           <span />
-          <span />
-        </div>
-        <div className="measure measure-x" aria-hidden="true">
-          1024.36
-        </div>
-        <div className="measure measure-y" aria-hidden="true">
-          248.72
         </div>
         <img
           className="robot-arm"
@@ -50,29 +36,9 @@ export function Hero() {
           width={1586}
           height={992}
         />
-        <div className="hero-stats" aria-label="社团成绩数据">
-          {stats.map((stat) => (
-            <div className="hero-stat" key={stat.label}>
-              <span className="hero-stat-value">{stat.value}</span>
-              <span className="hero-stat-meta">
-                <span className="hero-stat-label">{stat.label}</span>
-                <span className="hero-stat-note">{stat.note}</span>
-              </span>
-            </div>
-          ))}
-        </div>
-        <div className="code-note" aria-hidden="true">
-          <span>def forward_kinematics(q):</span>
-          <span>&nbsp;&nbsp;T = eye(4)</span>
-          <span>&nbsp;&nbsp;return T</span>
-        </div>
       </div>
 
       <div className="hero-proof" aria-label="社团特点">
-        <span className="system-ok">
-          <PlusIcon className="hero-proof-plus" />
-          SYS_OK
-        </span>
         <span>PROJECT-DRIVEN</span>
         <span>OPEN TO BEGINNERS</span>
         <span>BUILD IN PUBLIC</span>

@@ -159,17 +159,16 @@ a {
 .hero {
   position: relative;
   display: grid;
-  min-height: min(900px, 100vh);
-  grid-template-columns: minmax(0, 52%) minmax(420px, 48%);
+  min-height: calc(100dvh - 104px);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-rows: 1fr auto;
   overflow: hidden;
-  padding: 104px clamp(24px, 4.45vw, 72px) 0;
+  padding: 0 clamp(24px, 4.45vw, 72px);
   background-color: var(--paper);
   background-image: linear-gradient(rgba(36, 71, 255, 0.08) 1px, transparent 1px),
     linear-gradient(90deg, rgba(36, 71, 255, 0.08) 1px, transparent 1px);
   background-size: 128px 128px;
 }
-
 .corner-mark {
   position: absolute;
   z-index: 2;
@@ -190,19 +189,6 @@ a {
   transform: rotate(180deg);
 }
 
-.coordinate {
-  position: absolute;
-  z-index: 3;
-  color: var(--blue);
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 11px;
-}
-
-.coordinate-top {
-  top: 20px;
-  left: clamp(58px, 4.5vw, 74px);
-}
-
 .hero-copy {
   position: relative;
   z-index: 5;
@@ -210,7 +196,7 @@ a {
   align-self: center;
   flex-direction: column;
   align-items: flex-start;
-  padding: 72px 0 48px;
+  padding: clamp(48px, 6vw, 96px) 0;
 }
 
 .eyebrow {
@@ -218,60 +204,60 @@ a {
   color: var(--blue);
   font-family: var(--font-geist-mono), monospace;
   font-size: clamp(13px, 1.2vw, 18px);
-  font-weight:600;
+  font-weight: 600;
   letter-spacing: 0.11em;
 }
 
 .hero h1 {
-  max-width: 760px;
+  max-width: 920px;
   margin: 0;
   color: var(--ink-100);
-  font-size: clamp(64px, 7.6vw, 122px);
+  font-size: clamp(46px, 4.8vw, 84px);
   font-weight: 900;
-  letter-spacing: -0.075em;
-  line-height: 0.94;
+  letter-spacing: -0.06em;
+  line-height: 1;
 }
 
 .hero-intro {
-  max-width: 700px;
-  margin: 30px 0 0;
+  max-width: 560px;
+  margin: 28px 0 0;
   color: var(--ink-60);
-  font-size: clamp(16px, 1.45vw, 22px);
+  font-size: clamp(16px, 1.4vw, 21px);
   font-weight: 520;
-  line-height: 1.85;
+  line-height: 1.8;
 }
 
 .hero-actions {
   display: flex;
-  gap: 28px;
-  margin-top: 34px;
+  gap: 22px;
+  margin-top: 36px;
 }
 
 .hero-microcopy {
-  margin: 18px 0 0;
+  margin: 16px 0 0;
   color: var(--ink-60);
-  font-size: 14px;
+  font-size: 13px;
   letter-spacing: 0.02em;
 }
 
 .button {
   display: inline-flex;
-  min-width: 206px;
-  height: 62px;
+  min-width: 196px;
+  height: 58px;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 0 24px;
+  gap: 14px;
+  padding: 0 22px;
   border: 1px solid var(--ink-100);
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 800;
   letter-spacing: 0.03em;
   transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
 }
 
 .button-icon {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
 }
 
 .button:hover,
@@ -302,38 +288,44 @@ a {
 .hero-visual {
   position: relative;
   z-index: 3;
-  min-height: 640px;
+  min-height: 0;
   align-self: stretch;
+  width: 100%;
+  height: 100%;
+  padding: 24px 0;
+  overflow: hidden;
 }
 
 .robot-arm {
-  position: absolute;
+  position: relative;
   z-index: 2;
-  inset: 0;
+  display: block;
   width: 100%;
   height: 100%;
-  max-width: none;
+  max-width: 640px;
+  max-height: 560px;
+  margin: 0 auto;
   object-fit: contain;
   object-position: center;
-  mix-blend-mode: multiply;
-  filter: saturate(0.72) contrast(1.03);
+  mix-blend-mode: normal;
+  filter: contrast(1.02);
   pointer-events: none;
-  transform-origin: 70% 70%;
   animation: robot-enter 900ms cubic-bezier(0.2, 0.72, 0, 1) both;
 }
 
 .blueprint {
   position: absolute;
-  z-index: 3;
-  top: 17%;
-  left: -4%;
-  width: 220px;
+  z-index: 1;
+  bottom: 18%;
+  right: 4%;
+  width: 180px;
   aspect-ratio: 1;
   border: 1px dashed var(--blue);
   border-radius: 50%;
   color: var(--blue);
-  opacity: 0.72;
+  opacity: 0.35;
   animation: rotate-blueprint 26s linear infinite;
+  pointer-events: none;
 }
 
 .blueprint::before,
@@ -355,8 +347,8 @@ a {
 
 .blueprint span:nth-child(1) {
   top: 50%;
-  right: -34px;
-  width: 68px;
+  right: -28px;
+  width: 56px;
   height: 1px;
   border: 0;
   border-top: 1px solid currentColor;
@@ -364,113 +356,22 @@ a {
 }
 
 .blueprint span:nth-child(2) {
-  top: -28px;
+  top: -24px;
   left: 50%;
   width: 1px;
-  height: 276px;
+  height: 220px;
   border: 0;
   border-left: 1px solid currentColor;
   border-radius: 0;
-}
-
-.blueprint span:nth-child(3) {
-  right: -12px;
-  bottom: 22px;
-  width: 18px;
-  height: 18px;
-  background: var(--paper);
-}
-
-.code-note,
-.measure {
-  position: absolute;
-  z-index: 4;
-  color: var(--blue);
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
-  line-height: 1.55;
-}
-
-.code-note {
-  right: 4%;
-  bottom: 10%;
-  display: flex;
-  flex-direction: column;
-  padding: 14px;
-  border-right: 2px solid var(--blue);
-  border-bottom: 2px solid var(--blue);
-  background: var(--paper-soft);
-}
-
-.hero-stats {
-  position: absolute;
-  z-index: 5;
-  top: 10%;
-  right: 5%;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.hero-stat {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 156px;
-  padding: 10px 14px;
-  border-left: 3px solid var(--blue);
-  background: var(--paper-soft);
-  font-family: var(--font-geist-mono), monospace;
-}
-
-.hero-stat-value {
-  font-size: 26px;
-  font-weight: 800;
-  line-height: 1;
-  color: var(--ink-100);
-}
-
-.hero-stat-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.hero-stat-label {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: var(--blue);
-}
-
-.hero-stat-note {
-  font-size: 10px;
-  color: var(--ink-60);
-}
-
-.measure {
-  z-index: 5;
-  color: #78a800;
-}
-
-.measure-x {
-  top: 26%;
-  right: 15%;
-}
-
-.measure-y {
-  right: 4%;
-  bottom: 38%;
-  writing-mode: vertical-rl;
 }
 
 .hero-proof {
   position: relative;
   z-index: 8;
   display: grid;
-  min-height: 82px;
+  min-height: 72px;
   grid-column: 1 / -1;
-  grid-template-columns: 1.15fr repeat(3, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   align-items: center;
   border-top: 1px solid var(--ink-30);
   background: var(--paper-soft);
@@ -484,18 +385,9 @@ a {
   padding-left: 32px;
 }
 
-.hero-proof .system-ok {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 0;
-  padding-left: 0;
-  color: var(--blue);
-}
-
-.hero-proof-plus {
-  width: 12px;
-  height: 12px;
+.hero-proof span:first-child {
+  border-left: 0;
+  padding-left: 32px;
 }
 
 .section {
@@ -1066,34 +958,42 @@ footer {
   }
 
   .hero {
-    min-height: 900px;
+    min-height: auto;
     grid-template-columns: 1fr;
-    grid-template-rows: 1fr auto;
+    grid-template-rows: auto auto auto;
     padding-top: 88px;
   }
 
   .hero-copy {
-    width: 68%;
-    padding-top: 92px;
+    width: 80%;
+    padding: 56px 0 24px;
   }
 
   .hero h1 {
-    font-size: clamp(64px, 10vw, 100px);
+    font-size: clamp(56px, 9vw, 96px);
   }
 
   .hero-visual {
-    position: absolute;
-    right: 0;
-    bottom: 82px;
-    width: 65%;
-    height: 70%;
-    opacity: 0.76;
+    position: relative;
+    width: 100%;
+    height: min(420px, 50vh);
+    min-height: 280px;
+    opacity: 0.88;
   }
 
   .robot-arm {
-    inset: 0;
-    width: 100%;
-    height: 100%;
+    width: min(100%, 560px);
+    max-height: 100%;
+  }
+
+  .blueprint {
+    top: 4%;
+    left: 6%;
+    width: 160px;
+  }
+
+  .blueprint span:nth-child(2) {
+    height: 200px;
   }
 
   .projects-heading,
@@ -1192,7 +1092,7 @@ footer {
   }
 
   .hero {
-    min-height: 820px;
+    min-height: auto;
     padding-right: 20px;
     padding-left: 20px;
     background-size: 72px 72px;
@@ -1201,7 +1101,7 @@ footer {
   .hero-copy {
     width: 100%;
     justify-content: flex-start;
-    padding-top: 96px;
+    padding: 48px 0 16px;
   }
 
   .eyebrow {
@@ -1209,13 +1109,13 @@ footer {
   }
 
   .hero h1 {
-    font-size: clamp(54px, 18vw, 82px);
-    line-height: 0.98;
+    font-size: clamp(44px, 13vw, 72px);
+    line-height: 1;
   }
 
   .hero-intro {
     max-width: 88%;
-    margin-top: 24px;
+    margin-top: 22px;
     font-size: 15px;
     line-height: 1.7;
   }
@@ -1228,7 +1128,7 @@ footer {
 
   .button {
     min-width: 0;
-    height: 54px;
+    height: 52px;
     flex: 1;
     padding: 0 16px;
     font-size: 15px;
@@ -1240,44 +1140,30 @@ footer {
   }
 
   .hero-visual {
-    right: 0;
-    bottom: 58px;
-    width: 100%;
-    height: 49%;
-    opacity: 0.68;
+    height: min(320px, 42vh);
+    min-height: 240px;
+    opacity: 0.78;
   }
 
   .robot-arm {
-    inset: 0;
-    width: 100%;
-    height: 100%;
+    width: min(100%, 420px);
   }
 
   .blueprint {
-    top: -6%;
-    left: 12%;
-    width: 150px;
+    top: 0;
+    left: 8%;
+    width: 130px;
   }
 
   .blueprint span:nth-child(2) {
-    height: 200px;
-  }
-
-  .measure,
-  .code-note,
-  .hero-stats {
-    display: none;
+    height: 160px;
   }
 
   .hero-proof {
-    min-height: 58px;
+    min-height: 54px;
     grid-template-columns: repeat(3, 1fr);
-    font-size: 8px;
+    font-size: 9px;
     text-align: center;
-  }
-
-  .hero-proof .system-ok {
-    display: none;
   }
 
   .hero-proof span {
