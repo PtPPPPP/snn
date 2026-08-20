@@ -458,7 +458,7 @@ export function SnnHeroArt({ className }: { className?: string }) {
             repeatCount="indefinite"
             calcMode="linear"
             keyPoints="0;1;1"
-            keyTimes="0.055;0.245;1"
+            keyTimes="0;0.245;1"
           >
             <mpath href="#art-s-path" xlinkHref="#art-s-path" />
           </animateMotion>

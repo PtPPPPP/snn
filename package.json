@@ -20,6 +20,7 @@
     "test:production-readiness": "node --test tests/production-readiness.test.mjs",
     "test:artifact": "bash scripts/validate-artifact.sh",
     "test:pages": "node --test tests/rendered-html.test.mjs",
+    "test:browser-smoke": "playwright test",
     "preflight:production": "node scripts/check-production-readiness.mjs",
     "verify": "npm run lint && npm run test:ai-state && npm run test:production-readiness && npm run test:ai-node && npm run test:ai-gateway && npm run build && npm run test:artifact && npm run test:pages",
     "test": "npm run verify",
@@ -33,6 +34,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.37.1",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",

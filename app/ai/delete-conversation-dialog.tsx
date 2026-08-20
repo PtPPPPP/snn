@@ -1,13 +1,20 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import styles from "./ai-chat.module.css";
 
 export default function DeleteConversationDialog({ onCancel, onConfirm, returnFocusId }: { onCancel: () => void; onConfirm: () => void; returnFocusId: string | null }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => {
+    const target = document.getElementById(returnFocusId ?? "");
+    target?.focus();
+    onCancel();
+    setTimeout(() => target?.focus(), 0);
+  }, [onCancel, returnFocusId]);
+
   useEffect(() => {
     cancelRef.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.preventDefault(); onCancel(); document.getElementById(returnFocusId ?? "")?.focus(); return; }
+      if (event.key === "Escape") { event.preventDefault(); close(); return; }
       if (event.key !== "Tab" || !dialogRef.current) return;
       const focusable = [...dialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), [href], textarea, input, select')];
       if (focusable.length === 0) return;
@@ -17,8 +24,7 @@ export default function DeleteConversationDialog({ onCancel, onConfirm, returnFo
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onCancel, returnFocusId]);
-  const close = () => { onCancel(); document.getElementById(returnFocusId ?? "")?.focus(); };
+  }, [close]);
   return <div className={styles.modalBackdrop} onClick={close} role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title">
     <div className={styles.modal} ref={dialogRef} onClick={(event) => event.stopPropagation()}>
       <p className={styles.modalTitle} id="delete-dialog-title">确定删除这个对话吗？</p>

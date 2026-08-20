@@ -93,6 +93,7 @@ export default function AiChat() {
   const generationSequenceRef = useRef(0);
   const activeGenerationRef = useRef(0);
   const navigationSequenceRef = useRef(0);
+  const deleteFocusReturnIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     messagesRefLatest.current = messages;
@@ -144,6 +145,13 @@ export default function AiChat() {
   useEffect(() => {
     return () => streamControllerRef.current?.abort();
   }, []);
+
+  useEffect(() => {
+    if (confirmDeleteId !== null || !deleteFocusReturnIdRef.current) return;
+    const targetId = deleteFocusReturnIdRef.current;
+    deleteFocusReturnIdRef.current = null;
+    requestAnimationFrame(() => document.getElementById(targetId)?.focus());
+  }, [confirmDeleteId]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -368,6 +376,7 @@ export default function AiChat() {
   }
 
   function handleDelete(id: string) {
+    deleteFocusReturnIdRef.current = `conversation-delete-${id}`;
     setConfirmDeleteId(id);
   }
 

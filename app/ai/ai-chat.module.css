@@ -303,7 +303,7 @@
 }
 
 .historyItemDelete {
-  display: none;
+  display: block;
   flex: 0 0 auto;
   padding: 9px 10px;
   border: 0;
@@ -312,10 +312,18 @@
   opacity: 0.5;
   font-size: 16px;
   cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .historyItem:hover .historyItemDelete {
-  display: block;
+  opacity: 0.5;
+  pointer-events: auto;
+}
+
+.historyItem:focus-within .historyItemDelete {
+  opacity: 0.5;
+  pointer-events: auto;
 }
 
 .historyItemDelete:hover {
