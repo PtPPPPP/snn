@@ -123,7 +123,8 @@ type Conn = {
 // Neural connections — plotted ONLY after S, N1 and N2 are all complete
 // (letters finish at 5.7s, connections start at 5.8s).
 const CONNS: Conn[] = [
-  { id: "lead", cls: "conn-lead", d: "M320 128 L320 196", draw: [5.8, 5.97], erase: [8.62, 8.71] },
+  // Draw upward so the plotter arrives at the source node when it appears.
+  { id: "lead", cls: "conn-lead", d: "M320 196 L320 128", draw: [5.8, 5.97], erase: [8.62, 8.71] },
   {
     id: "a",
     cls: "conn-a",
