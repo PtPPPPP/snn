@@ -1,19 +1,34 @@
 @import "tailwindcss";
 
 :root {
-  --paper: #f7f7f4;
-  --paper-soft: rgba(247, 247, 244, 0.9);
-  --ink: #20251f;
-  --ink-100: #20251f;
-  --ink-60: #647066;
-  --ink-30: rgba(32, 37, 31, 0.16);
-  --lime: #dce5d5;
-  --on-lime: #20251f;
-  --on-lime-accent: #405448;
-  --blue: #405448;
-  --grid: #dce1da;
-  --muted: #718076;
+  --paper: #ffffff;
+  --paper-soft: rgba(255, 255, 255, 0.88);
+  --ink: #111111;
+  --ink-100: #111111;
+  --ink-60: rgba(0, 0, 0, 0.55);
+  --ink-30: rgba(0, 0, 0, 0.12);
+  --lime: #f4f4f6;
+  --on-lime: #111111;
+  --on-lime-accent: rgba(0, 0, 0, 0.68);
+  --blue: #111111;
+  --grid: rgba(0, 0, 0, 0.07);
+  --muted: rgba(0, 0, 0, 0.38);
   --white: #ffffff;
+
+  --snn-bg: #ffffff;
+  --snn-bg-soft: #fafafa;
+  --snn-surface: #f4f4f6;
+  --snn-surface-muted: #f7f7f8;
+  --snn-surface-active: #ececee;
+  --snn-text: #111111;
+  --snn-text-secondary: rgba(0, 0, 0, 0.55);
+  --snn-text-muted: rgba(0, 0, 0, 0.38);
+  --snn-border: rgba(0, 0, 0, 0.12);
+  --snn-border-soft: rgba(0, 0, 0, 0.07);
+  --snn-border-strong: rgba(0, 0, 0, 0.35);
+  --snn-control: #111111;
+  --snn-control-hover: #242424;
+  --snn-control-text: #ffffff;
 }
 
 /* Quiet, editorial finish: one neutral palette, consistent rhythm, and no
@@ -83,7 +98,7 @@ a {
 }
 
 ::selection {
-  background: var(--blue);
+  background: var(--snn-control);
   color: white;
 }
 
@@ -210,8 +225,8 @@ a {
   overflow: hidden;
   padding: 0 clamp(24px, 4.45vw, 72px);
   background-color: var(--paper);
-  background-image: linear-gradient(rgba(36, 71, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(36, 71, 255, 0.08) 1px, transparent 1px);
+  background-image: linear-gradient(rgba(0, 0, 0, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.07) 1px, transparent 1px);
   background-size: 128px 128px;
 }
 .corner-mark {
@@ -778,8 +793,8 @@ a {
 .wechat-qr-wrap {
   position: relative;
   padding: 30px;
-  background-image: linear-gradient(rgba(36, 71, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(36, 71, 255, 0.08) 1px, transparent 1px);
+  background-image: linear-gradient(rgba(0, 0, 0, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.07) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 

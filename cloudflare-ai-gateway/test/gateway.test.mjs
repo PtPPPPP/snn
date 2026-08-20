@@ -11,7 +11,8 @@ function environment(overrides = {}) {
     AI_ORIGIN_URL: "https://ai-origin.example.com",
     ALLOWED_ORIGINS: "https://www.example.com,http://localhost:5173",
     MAX_CHAT_BODY_BYTES: "1024",
-    AI_ORIGIN_TIMEOUT_MS: "20",
+    AI_ORIGIN_CONNECT_TIMEOUT_MS: "20",
+    AI_ORIGIN_STREAM_IDLE_TIMEOUT_MS: "20",
     CF_ACCESS_CLIENT_ID: "test-client-id",
     CF_ACCESS_CLIENT_SECRET: "test-client-secret",
     AI_CHAT_RATE_LIMIT: rateLimiter(),
@@ -43,6 +44,25 @@ function sseResponse(chunks) {
     }),
     { headers: { "content-type": "text/event-stream" } },
   );
+}
+
+function delayedSseResponse(chunks, intervalMs) {
+  const encoder = new TextEncoder();
+  let timer;
+  return new Response(new ReadableStream({
+    start(controller) {
+      let index = 0;
+      timer = setInterval(() => {
+        if (index === chunks.length) {
+          clearInterval(timer);
+          controller.close();
+          return;
+        }
+        controller.enqueue(encoder.encode(chunks[index++]));
+      }, intervalMs);
+    },
+    cancel() { clearInterval(timer); },
+  }), { headers: { "content-type": "text/event-stream" } });
 }
 
 test("status forwards a valid online contract", async () => {
@@ -150,7 +170,7 @@ test("chat rejects invalid JSON and oversized payloads", async () => {
 test("chat maps origin timeout and origin errors without leaking details", async () => {
   const timeout = await handleRequest(
     chatRequest({ messages: [{ role: "user", content: "测试" }] }),
-    environment({ AI_ORIGIN_TIMEOUT_MS: "1" }),
+    environment({ AI_ORIGIN_CONNECT_TIMEOUT_MS: "1" }),
     {
       fetchImpl: async (_url, init) =>
         new Promise((_resolve, reject) =>
@@ -233,4 +253,60 @@ test("gateway forwards SSE without buffering and preserves Access headers", asyn
   assert.equal(headers.get("CF-Access-Client-Id"), "test-client-id");
   assert.equal(headers.get("CF-Access-Client-Secret"), "test-client-secret");
   assert.match(await response.text(), /event: delta/);
+});
+
+test("gateway aborts an idle origin stream and emits one error without done", async () => {
+  let originSignal;
+  const response = await handleRequest(
+    new Request("https://gateway.example.com/api/ai/chat/stream", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages: [{ role: "user", content: "测试" }] }),
+    }),
+    environment({ AI_ORIGIN_STREAM_IDLE_TIMEOUT_MS: "5" }),
+    { fetchImpl: async (_url, init) => {
+      originSignal = init.signal;
+      return new Response(new ReadableStream({ start() {} }), { headers: { "content-type": "text/event-stream" } });
+    }, logger: logger() },
+  );
+  const body = await response.text();
+  assert.equal(originSignal.aborted, true);
+  assert.equal((body.match(/event: error/g) ?? []).length, 1);
+  assert.equal((body.match(/event: done/g) ?? []).length, 0);
+  assert.match(body, /"code":"stream_timeout"/);
+});
+
+test("gateway resets idle timeout for active origin chunks", async () => {
+  const response = await handleRequest(
+    new Request("https://gateway.example.com/api/ai/chat/stream", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages: [{ role: "user", content: "测试" }] }),
+    }),
+    environment({ AI_ORIGIN_STREAM_IDLE_TIMEOUT_MS: "20" }),
+    { fetchImpl: async () => delayedSseResponse(["data: A\\n\\n", "data: B\\n\\n", "data: [DONE]\\n\\n"], 5), logger: logger() },
+  );
+  const body = await response.text();
+  assert.match(body, /data: A/);
+  assert.match(body, /data: B/);
+  assert.match(body, /data: \[DONE\]/);
+  assert.doesNotMatch(body, /event: error/);
+});
+
+test("gateway propagates browser cancellation to the origin request", async () => {
+  const abortController = new AbortController();
+  let originSignal;
+  const response = await handleRequest(
+    new Request("https://gateway.example.com/api/ai/chat/stream", {
+      method: "POST", signal: abortController.signal, headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages: [{ role: "user", content: "测试" }] }),
+    }),
+    environment(),
+    { fetchImpl: async (_url, init) => {
+      originSignal = init.signal;
+      return new Response(new ReadableStream({ start() {} }), { headers: { "content-type": "text/event-stream" } });
+    }, logger: logger() },
+  );
+  abortController.abort();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(originSignal.aborted, true);
+  await response.body.cancel();
 });

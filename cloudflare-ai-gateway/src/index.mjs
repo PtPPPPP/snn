@@ -101,10 +101,17 @@ function originHeaders(environment) {
   };
 }
 
-async function fetchOrigin(fetchImpl, environment, path, init) {
+async function fetchOrigin(fetchImpl, environment, path, init, externalSignal) {
   const controller = new AbortController();
-  const timeoutMs = parsePositiveInteger(environment.AI_ORIGIN_TIMEOUT_MS, 45_000);
+  const timeoutMs = parsePositiveInteger(environment.AI_ORIGIN_CONNECT_TIMEOUT_MS, 45_000);
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const abortFromExternalSignal = () => controller.abort();
+  externalSignal?.addEventListener("abort", abortFromExternalSignal, { once: true });
+
+  function cleanup() {
+    clearTimeout(timeoutId);
+    externalSignal?.removeEventListener("abort", abortFromExternalSignal);
+  }
 
   try {
     const response = await fetchImpl(originUrl(environment, path), {
@@ -120,18 +127,92 @@ async function fetchOrigin(fetchImpl, environment, path, init) {
       throw new OriginError("http", response.status);
     }
 
-    return response;
+    clearTimeout(timeoutId);
+    return { response, controller, cleanup, externalSignal };
   } catch (error) {
+    cleanup();
     if (error instanceof OriginError) {
       throw error;
+    }
+    if (externalSignal?.aborted) {
+      throw new OriginError("aborted");
     }
     if (error?.name === "AbortError") {
       throw new OriginError("timeout");
     }
     throw new OriginError("network");
-  } finally {
-    clearTimeout(timeoutId);
   }
+}
+
+function streamWithIdleTimeout(origin, timeoutMs, requestId) {
+  if (!origin.response.body) {
+    origin.cleanup();
+    throw new OriginError("response");
+  }
+
+  const reader = origin.response.body.getReader();
+  const encoder = new TextEncoder();
+  let settled = false;
+  let idleTimeoutId;
+  let resetIdleTimeout;
+
+  function cleanup() {
+    clearTimeout(idleTimeoutId);
+    origin.cleanup();
+    reader.releaseLock();
+  }
+
+  return new ReadableStream({
+    start(controller) {
+      const failIdle = () => {
+        if (settled) return;
+        settled = true;
+        origin.controller.abort();
+        controller.enqueue(encoder.encode(`event: error\ndata: ${JSON.stringify({ error: "SNN AI service stream timed out", code: "stream_timeout", requestId })}\n\n`));
+        controller.close();
+        cleanup();
+      };
+      resetIdleTimeout = () => {
+        clearTimeout(idleTimeoutId);
+        idleTimeoutId = setTimeout(failIdle, timeoutMs);
+      };
+      resetIdleTimeout();
+    },
+    async pull(controller) {
+      if (settled) return;
+      try {
+        const { done, value } = await reader.read();
+        if (settled) return;
+        if (done) {
+          settled = true;
+          controller.close();
+          cleanup();
+          return;
+        }
+        resetIdleTimeout();
+        controller.enqueue(value);
+      } catch {
+        if (!settled) {
+          settled = true;
+          if (!origin.externalSignal?.aborted) {
+            controller.enqueue(encoder.encode(`event: error\ndata: ${JSON.stringify({ error: "SNN AI service stream failed", code: "upstream_unavailable", requestId })}\n\n`));
+          }
+          controller.close();
+          cleanup();
+        }
+      }
+    },
+    async cancel() {
+      if (settled) return;
+      settled = true;
+      origin.controller.abort();
+      try {
+        await reader.cancel();
+      } finally {
+        cleanup();
+      }
+    },
+  });
 }
 
 function safeLog(logger, data) {
@@ -175,11 +256,16 @@ export async function handleRequest(request, environment, { fetchImpl = fetch, l
       }
 
       try {
-        const originResponse = await fetchOrigin(fetchImpl, environment, "/api/ai/status", {
+        const originRequest = await fetchOrigin(fetchImpl, environment, "/api/ai/status", {
           method: "GET",
-        });
-        originStatus = originResponse.status;
-        const body = await originResponse.json();
+        }, request.signal);
+        originStatus = originRequest.response.status;
+        let body;
+        try {
+          body = await originRequest.response.json();
+        } finally {
+          originRequest.cleanup();
+        }
         const validStatus =
           typeof body?.online === "boolean" && typeof body?.status === "string";
         responseStatus = 200;
@@ -243,14 +329,21 @@ export async function handleRequest(request, environment, { fetchImpl = fetch, l
 
       if (isChatStream) {
         try {
-          const originResponse = await fetchOrigin(fetchImpl, environment, "/api/ai/chat/stream", {
+          const originRequest = await fetchOrigin(fetchImpl, environment, "/api/ai/chat/stream", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ messages, thinking }),
-          });
-          originStatus = originResponse.status;
+          }, request.signal);
+          originStatus = originRequest.response.status;
           responseStatus = 200;
-          return sseResponse(originResponse.body, origin);
+          return sseResponse(
+            streamWithIdleTimeout(
+              originRequest,
+              parsePositiveInteger(environment.AI_ORIGIN_STREAM_IDLE_TIMEOUT_MS, 60_000),
+              id,
+            ),
+            origin,
+          );
         } catch (error) {
           originStatus = error.status ?? null;
           responseStatus = error.kind === "timeout" ? 504 : 503;
@@ -263,13 +356,18 @@ export async function handleRequest(request, environment, { fetchImpl = fetch, l
       }
 
       try {
-        const originResponse = await fetchOrigin(fetchImpl, environment, "/api/ai/chat", {
+        const originRequest = await fetchOrigin(fetchImpl, environment, "/api/ai/chat", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ messages, thinking }),
-        });
-        originStatus = originResponse.status;
-        const responseBody = await originResponse.json();
+        }, request.signal);
+        originStatus = originRequest.response.status;
+        let responseBody;
+        try {
+          responseBody = await originRequest.response.json();
+        } finally {
+          originRequest.cleanup();
+        }
         if (typeof responseBody?.reply !== "string" || !responseBody.reply.trim()) {
           responseStatus = 503;
           return jsonResponse(

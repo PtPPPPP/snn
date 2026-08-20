@@ -64,11 +64,12 @@ function upstreamUrl(config, path) {
 async function fetchUpstream(fetchImpl, url, init, timeoutMs, externalSignal) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  const onExternalAbort = () => controller.abort();
-  externalSignal?.addEventListener("abort", onExternalAbort, { once: true });
+  const signal = externalSignal
+    ? AbortSignal.any([controller.signal, externalSignal])
+    : controller.signal;
 
   try {
-    const response = await fetchImpl(url, { ...init, signal: controller.signal });
+    const response = await fetchImpl(url, { ...init, signal });
     if (!response.ok) {
       throw new UpstreamError("http", response.status);
     }
@@ -86,7 +87,6 @@ async function fetchUpstream(fetchImpl, url, init, timeoutMs, externalSignal) {
     throw new UpstreamError("network");
   } finally {
     clearTimeout(timeoutId);
-    externalSignal?.removeEventListener("abort", onExternalAbort);
   }
 }
 
@@ -171,7 +171,7 @@ function buildUpstreamBody(config, messages, stream, thinking) {
   });
 }
 
-async function forwardSse(upstreamResponse, response, config, requestId, signal, thinking) {
+async function forwardSse(upstreamResponse, response, config, requestId, upstreamController, thinking) {
   if (!upstreamResponse.body) {
     throw new UpstreamError("response");
   }
@@ -183,6 +183,22 @@ async function forwardSse(upstreamResponse, response, config, requestId, signal,
   let reasoningObserved = false;
   let reasoningStartedAt = null;
   let thinkingMs = null;
+
+  function readWithIdleTimeout() {
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => reject(new UpstreamError("idle_timeout")), config.streamIdleTimeoutMs);
+      reader.read().then(
+        (result) => {
+          clearTimeout(timeoutId);
+          resolve(result);
+        },
+        (error) => {
+          clearTimeout(timeoutId);
+          reject(error);
+        },
+      );
+    });
+  }
 
   function handleEvent(eventBlock) {
     const event = parseSseEvent(eventBlock);
@@ -231,7 +247,7 @@ async function forwardSse(upstreamResponse, response, config, requestId, signal,
 
   try {
     while (!done) {
-      const { done: streamDone, value } = await reader.read();
+      const { done: streamDone, value } = await readWithIdleTimeout();
       if (streamDone) {
         break;
       }
@@ -253,7 +269,14 @@ async function forwardSse(upstreamResponse, response, config, requestId, signal,
       throw new UpstreamError("response");
     }
   } catch (error) {
-    if (signal.aborted) {
+    if (error instanceof UpstreamError) {
+      if (error.kind === "idle_timeout") {
+        upstreamController.abort();
+        await reader.cancel().catch(() => {});
+      }
+      throw error;
+    }
+    if (upstreamController.signal.aborted) {
       throw new UpstreamError("aborted");
     }
     throw error instanceof UpstreamError ? error : new UpstreamError("network");
@@ -354,7 +377,7 @@ export function createAiNodeServer(config, { fetchImpl = fetch, logger = console
               headers: upstreamHeaders(config),
               body: buildUpstreamBody(config, messages, false, thinking),
             },
-            config.chatTimeoutMs,
+            config.chatConnectTimeoutMs,
           );
           upstreamStatus = upstreamResponse.status;
           const upstreamBody = await upstreamResponse.json();
@@ -400,8 +423,8 @@ export function createAiNodeServer(config, { fetchImpl = fetch, logger = console
             headers: upstreamHeaders(config),
             body: buildUpstreamBody(config, messages, true, thinking),
           },
-          config.chatTimeoutMs,
-          upstreamAbortController.signal,
+            config.chatConnectTimeoutMs,
+            upstreamAbortController.signal,
         );
         upstreamStatus = upstreamResponse.status;
         await forwardSse(
@@ -409,7 +432,7 @@ export function createAiNodeServer(config, { fetchImpl = fetch, logger = console
           response,
           config,
           requestId,
-          upstreamAbortController.signal,
+          upstreamAbortController,
           thinking,
         );
       } catch (error) {
@@ -417,6 +440,7 @@ export function createAiNodeServer(config, { fetchImpl = fetch, logger = console
         if (!clientDisconnected && !response.writableEnded) {
           writeSse(response, "error", {
             error: "SNN AI node is unavailable",
+            code: error.kind === "idle_timeout" ? "stream_timeout" : "upstream_unavailable",
             requestId,
           });
         }

@@ -41,14 +41,23 @@ npm run dev
 npm run build
 ```
 
+该命令只生成生产构建产物。完整验收请运行：
+
+```bash
+npm run verify
+```
+
 ## 常用命令
 
 | 命令 | 用途 |
 | --- | --- |
 | `npm run dev` | 启动本地开发服务器 |
-| `npm run build` | 构建并验证部署产物 |
+| `npm run build` | 生成生产构建产物 |
 | `npm run start` | 启动已构建的网站 |
-| `npm test` | 执行构建验证与页面元数据测试 |
+| `npm run test:artifact` | 验证已有构建产物 |
+| `npm run test:pages` | 测试已有构建产物的页面渲染 |
+| `npm run verify` | 执行 lint、AI 测试、构建、产物验证与页面测试 |
+| `npm test` | `npm run verify` 的兼容别名 |
 | `npm run lint` | 检查代码规范 |
 | `npm run export:static` | 生成静态站点到 `ftp-upload/`（用于 FTP 部署） |
 | `npm run build:ftp` | `export:static` 的别名 |

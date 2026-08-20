@@ -3,6 +3,7 @@
 // 不保存敏感运行数据（API key / reasoning 原始内容 / 服务端日志）。
 
 import type { AiChatMessage } from "./ai-client";
+import { createPerConversationQueue } from "./ai-conversation-queue.mjs";
 
 export type Conversation = {
   id: string;
@@ -20,13 +21,13 @@ const ACTIVE_KEY = "snn-ai-active-conversation-id";
 const TITLE_LIMIT = 28;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
-let dbAvailable = true;
+const enqueueConversation = createPerConversationQueue();
+const deletedConversationIds = new Set<string>();
 
 function openDb(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
     if (typeof indexedDB === "undefined") {
-      dbAvailable = false;
       reject(new Error("IndexedDB unavailable"));
       return;
     }
@@ -40,7 +41,6 @@ function openDb(): Promise<IDBDatabase> {
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => {
-      dbAvailable = false;
       reject(req.error ?? new Error("IndexedDB open failed"));
     };
   });
@@ -60,11 +60,8 @@ function tx<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequ
   );
 }
 
-function safe<T>(promise: Promise<T>, fallback: T): Promise<T> {
-  return promise.catch((error) => {
-    console.warn("[snn-ai] conversation store error:", error);
-    return fallback;
-  });
+function cloneConversation(conversation: Conversation): Conversation {
+  return { ...conversation, messages: conversation.messages.map((message) => ({ ...message })) };
 }
 
 export function generateTitle(firstUserMessage: string): string {
@@ -87,32 +84,28 @@ export function createConversation(): Conversation {
 }
 
 export function listConversations(): Promise<Conversation[]> {
-  return safe(
-    tx<Conversation[]>("readonly", (store) => store.getAll()).then((items) =>
-      (items ?? []).sort((a, b) => b.updatedAt - a.updatedAt),
-    ),
-    [],
+  return tx<Conversation[]>("readonly", (store) => store.getAll()).then((items) =>
+    (items ?? []).sort((a, b) => b.updatedAt - a.updatedAt),
   );
 }
 
 export function getConversation(id: string): Promise<Conversation | null> {
-  return safe(tx<Conversation | undefined>("readonly", (store) => store.get(id)).then((item) => item ?? null), null);
+  return tx<Conversation | undefined>("readonly", (store) => store.get(id)).then((item) => item ?? null);
 }
 
 export function saveConversation(conversation: Conversation): Promise<void> {
-  if (!dbAvailable) return Promise.resolve();
-  return safe(
-    tx("readwrite", (store) => store.put(conversation)).then(() => undefined),
-    undefined,
+  const snapshot = cloneConversation(conversation);
+  if (deletedConversationIds.has(snapshot.id)) {
+    return Promise.reject(new Error("Conversation has been deleted"));
+  }
+  return enqueueConversation(snapshot.id, () =>
+    tx("readwrite", (store) => store.put(snapshot)).then(() => undefined),
   );
 }
 
 export function deleteConversation(id: string): Promise<void> {
-  if (!dbAvailable) return Promise.resolve();
-  return safe(
-    tx("readwrite", (store) => store.delete(id)).then(() => undefined),
-    undefined,
-  );
+  deletedConversationIds.add(id);
+  return enqueueConversation(id, () => tx("readwrite", (store) => store.delete(id)).then(() => undefined));
 }
 
 export function renameConversation(id: string, title: string): Promise<void> {
@@ -145,5 +138,5 @@ export function setActiveConversationId(id: string | null): void {
 }
 
 export function isStoreAvailable(): boolean {
-  return dbAvailable;
+  return typeof indexedDB !== "undefined";
 }

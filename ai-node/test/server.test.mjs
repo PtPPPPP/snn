@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { request as nodeRequest } from "node:http";
 import test from "node:test";
 import { createAiNodeServer } from "../src/server.mjs";
 
@@ -10,7 +11,8 @@ const baseConfig = {
   upstreamApiKey: "",
   model: "Qwen3-test",
   statusTimeoutMs: 40,
-  chatTimeoutMs: 40,
+  chatConnectTimeoutMs: 40,
+  streamIdleTimeoutMs: 40,
   maxOutputTokens: 128,
   maxBodyBytes: 1024,
   systemPrompt: "你是 SNN AI，由 SNN 社团提供的 AI 助手。",
@@ -45,6 +47,25 @@ function sseResponse(chunks) {
     }),
     { headers: { "content-type": "text/event-stream" } },
   );
+}
+
+function delayedSseResponse(chunks, intervalMs) {
+  const encoder = new TextEncoder();
+  let timer;
+  return new Response(new ReadableStream({
+    start(controller) {
+      let index = 0;
+      timer = setInterval(() => {
+        if (index === chunks.length) {
+          clearInterval(timer);
+          controller.close();
+          return;
+        }
+        controller.enqueue(encoder.encode(chunks[index++]));
+      }, intervalMs);
+    },
+    cancel() { clearInterval(timer); },
+  }), { headers: { "content-type": "text/event-stream" } });
 }
 
 test("status is offline when the runtime is unreachable", async () => {
@@ -167,7 +188,7 @@ test("chat returns 504 when the upstream request times out", async () => {
       assert.equal(response.status, 504);
       assert.equal((await response.json()).error, "SNN AI node is unavailable");
     },
-    { chatTimeoutMs: 5 },
+    { chatConnectTimeoutMs: 5 },
   );
 });
 
@@ -285,7 +306,7 @@ test("thinking stream emits reasoning_start before delta and reports observed re
   );
 });
 
-test("chat stream converts malformed upstream events into an SSE error", async () => {
+test("malformed upstream stream terminates once with error and never sends done", async () => {
   await withNode(
     async () => sseResponse(["data: not-json\n\n"]),
     async (baseUrl) => {
@@ -297,8 +318,80 @@ test("chat stream converts malformed upstream events into an SSE error", async (
       const body = await response.text();
 
       assert.equal(response.status, 200);
-      assert.match(body, /event: error/);
+      assert.equal((body.match(/event: error/g) ?? []).length, 1);
+      assert.equal((body.match(/event: done/g) ?? []).length, 0);
       assert.match(body, /SNN AI node is unavailable/);
     },
+  );
+});
+
+test("chat stream aborts an idle model stream and emits error without done", async () => {
+  let upstreamSignal;
+  await withNode(
+    async (_url, init) => {
+      upstreamSignal = init.signal;
+      return new Response(new ReadableStream({ start() {} }), { headers: { "content-type": "text/event-stream" } });
+    },
+    async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/ai/chat/stream`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ messages: [{ role: "user", content: "测试" }] }),
+      });
+      const body = await response.text();
+      assert.equal(upstreamSignal.aborted, true);
+      assert.equal((body.match(/event: error/g) ?? []).length, 1);
+      assert.equal((body.match(/event: done/g) ?? []).length, 0);
+      assert.match(body, /"code":"stream_timeout"/);
+    },
+    { streamIdleTimeoutMs: 5 },
+  );
+});
+
+test("chat stream remains active while model chunks arrive before idle timeout", async () => {
+  await withNode(
+    async () => delayedSseResponse([
+      'data: {"choices":[{"delta":{"content":"A"}}]}\n\n',
+      'data: {"choices":[{"delta":{"content":"B"}}]}\n\n',
+      "data: [DONE]\n\n",
+    ], 5),
+    async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/ai/chat/stream`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ messages: [{ role: "user", content: "测试" }] }),
+      });
+      const body = await response.text();
+      assert.match(body, /"text":"A"/);
+      assert.match(body, /"text":"B"/);
+      assert.match(body, /event: done/);
+      assert.doesNotMatch(body, /event: error/);
+    },
+    { streamIdleTimeoutMs: 20 },
+  );
+});
+
+test("downstream disconnect aborts the active model request", async () => {
+  let upstreamSignal;
+  await withNode(
+    async (_url, init) => {
+      upstreamSignal = init.signal;
+      return new Response(new ReadableStream({ start() {} }), { headers: { "content-type": "text/event-stream" } });
+    },
+    async (baseUrl) => {
+      await new Promise((resolve, reject) => {
+        const client = nodeRequest(`${baseUrl}/api/ai/chat/stream`, {
+          method: "POST", headers: { "content-type": "application/json" },
+        });
+        client.once("response", () => {
+          client.destroy();
+          setTimeout(resolve, 10);
+        });
+        client.once("error", (error) => {
+          if (error.code !== "ECONNRESET") reject(error);
+        });
+        client.end(JSON.stringify({ messages: [{ role: "user", content: "测试" }] }));
+      });
+      assert.equal(upstreamSignal.aborted, true);
+    },
+    { streamIdleTimeoutMs: 100 },
   );
 });

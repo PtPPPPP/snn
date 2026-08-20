@@ -27,6 +27,7 @@ import {
 import ChatInput from "./chat-input";
 import ChatMessage, { type ChatMessageModel } from "./chat-message";
 import styles from "./ai-chat.module.css";
+import { buildConversationSnapshot, canApplyGeneration, canApplyNavigation } from "../../lib/ai-conversation-state.mjs";
 
 type AiNodeState = "checking" | "offline" | "online";
 const THINKING_STORAGE_KEY = "snn-ai-thinking-mode";
@@ -79,6 +80,7 @@ export default function AiChat() {
   const [aiNodeState, setAiNodeState] = useState<AiNodeState>("checking");
   const [modelName, setModelName] = useState<string | null>(null);
   const [streamNotice, setStreamNotice] = useState<string | null>(null);
+  const [storageNotice, setStorageNotice] = useState<string | null>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -99,6 +101,9 @@ export default function AiChat() {
   const streamControllerRef = useRef<AbortController | null>(null);
   const thinkingStartedAtRef = useRef<number | null>(null);
   const messagesRefLatest = useRef<ChatMessageModel[]>([]);
+  const generationSequenceRef = useRef(0);
+  const activeGenerationRef = useRef(0);
+  const navigationSequenceRef = useRef(0);
 
   useEffect(() => {
     messagesRefLatest.current = messages;
@@ -108,7 +113,13 @@ export default function AiChat() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const list = await listConversations();
+      let list: Conversation[];
+      try {
+        list = await listConversations();
+      } catch {
+        list = [];
+        setStorageNotice("本次对话未保存");
+      }
       if (cancelled) return;
       setConversations(list);
       const storedActiveId = getActiveConversationId();
@@ -159,18 +170,18 @@ export default function AiChat() {
 
   function persistCurrentMessages(convId: string, uiMessages: ChatMessageModel[]) {
     const stored = toStoredMessages(uiMessages.filter((m) => m.content.trim() !== ""));
-    saveConversation({
+    void saveConversation({
       id: convId,
       title: conversations.find((c) => c.id === convId)?.title ?? "新对话",
       createdAt: conversations.find((c) => c.id === convId)?.createdAt ?? now(),
       updatedAt: now(),
       messages: stored,
       version: 1,
-    }).then(() => refreshConversationList());
+    }).then(() => { setStorageNotice(null); return refreshConversationList(); }).catch(() => setStorageNotice("本次对话未保存"));
   }
 
   function refreshConversationList() {
-    listConversations().then(setConversations);
+    void listConversations().then(setConversations).catch(() => setStorageNotice("本次对话未保存"));
   }
 
   function switchConversation(id: string) {
@@ -178,13 +189,14 @@ export default function AiChat() {
     // Abort current stream and save partial
     streamControllerRef.current?.abort();
     streamControllerRef.current = null;
-    requestConversationIdRef.current = null;
+    activeGenerationRef.current = ++generationSequenceRef.current;
+    const navigationToken = ++navigationSequenceRef.current;
     const currentId = activeIdRef.current;
     if (currentId) {
       persistCurrentMessages(currentId, messagesRefLatest.current);
     }
     getConversation(id).then((conv) => {
-      if (!conv) return;
+      if (!conv || !canApplyNavigation(navigationToken, navigationSequenceRef.current, id, conv.id)) return;
       setActiveId(id);
       activeIdRef.current = id;
       setActiveConversationId(id);
@@ -200,7 +212,8 @@ export default function AiChat() {
   function startNewConversation() {
     streamControllerRef.current?.abort();
     streamControllerRef.current = null;
-    requestConversationIdRef.current = null;
+    activeGenerationRef.current = ++generationSequenceRef.current;
+    ++navigationSequenceRef.current;
     const currentId = activeIdRef.current;
     if (currentId) {
       persistCurrentMessages(currentId, messagesRefLatest.current);
@@ -257,8 +270,11 @@ export default function AiChat() {
     const requestMessages = [...messages, userMessage];
     const nextMessages = [...requestMessages, assistantMessage];
     const controller = new AbortController();
+    let assistantContent = "";
+    const generationToken = ++generationSequenceRef.current;
 
     requestConversationIdRef.current = convId;
+    activeGenerationRef.current = generationToken;
     streamControllerRef.current = controller;
     thinkingStartedAtRef.current = null;
     shouldFollowStreamRef.current = true;
@@ -278,7 +294,7 @@ export default function AiChat() {
       messages: toStoredMessages(requestMessages),
       version: 1,
     };
-    saveConversation(updatedConv).then(refreshConversationList);
+    void saveConversation(updatedConv).then(() => { setStorageNotice(null); return refreshConversationList(); }).catch(() => setStorageNotice("本次对话未保存"));
 
     const sentConvId = convId;
 
@@ -287,7 +303,7 @@ export default function AiChat() {
       thinking: activeThinking,
       signal: controller.signal,
       onReasoningStart: () => {
-        if (requestConversationIdRef.current !== sentConvId || !activeThinking) return;
+        if (!canApplyGeneration(activeGenerationRef.current, generationToken, activeIdRef.current, sentConvId) || !activeThinking) return;
         thinkingStartedAtRef.current = performance.now();
         setMessages((cur) =>
           cur.map((m) =>
@@ -296,7 +312,8 @@ export default function AiChat() {
         );
       },
       onDelta: (text) => {
-        if (requestConversationIdRef.current !== sentConvId) return;
+        if (!canApplyGeneration(activeGenerationRef.current, generationToken, activeIdRef.current, sentConvId)) return;
+        assistantContent += text;
         const startedAt = thinkingStartedAtRef.current;
         const thinkingSeconds =
           startedAt === null ? undefined : (performance.now() - startedAt) / 1000;
@@ -306,7 +323,7 @@ export default function AiChat() {
             m.id === assistantMessage.id
               ? {
                   ...m,
-                  content: m.content + text,
+                  content: assistantContent,
                   isThinking: false,
                   ...(thinkingSeconds === undefined ? {} : { thinkingSeconds }),
                 }
@@ -329,13 +346,13 @@ export default function AiChat() {
         );
       },
       onError: (message) => {
-        if (requestConversationIdRef.current === sentConvId) {
+        if (activeGenerationRef.current === generationToken && activeIdRef.current === sentConvId) {
           setStreamNotice(message);
         }
       },
     })
       .catch((error) => {
-        if (requestConversationIdRef.current !== sentConvId) return;
+        if (activeGenerationRef.current !== generationToken) return;
         if (error instanceof AiClientError && error.code === "aborted") {
           setStreamNotice(activeThinking ? THINKING_MODE.stopped : "生成已停止。");
           return;
@@ -345,7 +362,8 @@ export default function AiChat() {
         setStreamNotice((cur) => cur ?? UNAVAILABLE_REPLY);
       })
       .finally(() => {
-        if (requestConversationIdRef.current === sentConvId) {
+        persistCurrentMessages(sentConvId, buildConversationSnapshot(updatedConv, requestMessages, assistantMessage, assistantContent).messages);
+        if (activeGenerationRef.current === generationToken) {
           setIsResponding(false);
           setIsThinkingRequest(false);
           streamControllerRef.current = null;
@@ -355,8 +373,6 @@ export default function AiChat() {
               m.id === assistantMessage.id ? { ...m, isThinking: false } : m,
             ),
           );
-          // Persist final state of this conversation
-          persistCurrentMessages(sentConvId, messagesRefLatest.current);
           requestConversationIdRef.current = null;
         }
       });
@@ -370,6 +386,12 @@ export default function AiChat() {
     const id = confirmDeleteId;
     if (!id) return;
     setConfirmDeleteId(null);
+    if (id === activeIdRef.current) {
+      streamControllerRef.current?.abort();
+      streamControllerRef.current = null;
+      activeGenerationRef.current = ++generationSequenceRef.current;
+      ++navigationSequenceRef.current;
+    }
     deleteConv(id).then(async () => {
       const list = await listConversations();
       setConversations(list);
@@ -384,7 +406,7 @@ export default function AiChat() {
           setMessages([]);
         }
       }
-    });
+    }).catch(() => setStorageNotice("本次对话未保存"));
   }
 
   const statusLabel =
@@ -482,7 +504,8 @@ export default function AiChat() {
             {isResponding && !isThinkingRequest ? (
               <div className={styles.typing}><span>SNN AI 正在准备回复</span><i /><i /><i /></div>
             ) : null}
-            {streamNotice ? <p className={styles.streamNotice}>{streamNotice}</p> : null}
+          {streamNotice ? <p className={styles.streamNotice}>{streamNotice}</p> : null}
+          {storageNotice ? <p className={styles.streamNotice}>{storageNotice}</p> : null}
           </div>
           {showScrollToBottom ? (
             <button className={styles.scrollToBottom} type="button" onClick={scrollToBottom}>

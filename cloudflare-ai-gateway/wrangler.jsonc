@@ -9,7 +9,8 @@
     // TODO(上线前): 替换为网站真实域名；保留 localhost 供本地开发调试
     "ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:8765",
     "MAX_CHAT_BODY_BYTES": "65536",
-    "AI_ORIGIN_TIMEOUT_MS": "45000"
+    "AI_ORIGIN_CONNECT_TIMEOUT_MS": "45000",
+    "AI_ORIGIN_STREAM_IDLE_TIMEOUT_MS": "60000"
   },
   "ratelimits": [
     {

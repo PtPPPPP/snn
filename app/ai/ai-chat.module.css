@@ -4,8 +4,7 @@
   flex-direction: column;
   overflow: hidden;
   background-color: var(--paper);
-  background-image: linear-gradient(rgba(36, 71, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(36, 71, 255, 0.08) 1px, transparent 1px);
+  background-image: none;
   background-size: 96px 96px;
 }
 
@@ -15,8 +14,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px clamp(20px, 4.5vw, 72px);
-  border-bottom: 1px solid var(--ink-30);
-  background: var(--paper-soft);
+  border-bottom: 1px solid rgba(17, 17, 15, 0.12);
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .brand {
@@ -63,8 +62,7 @@
 
 .backLink:hover,
 .backLink:focus-visible {
-  background: var(--lime);
-  color: var(--on-lime);
+  background: var(--snn-surface);
 }
 
 .chatShell {
@@ -86,7 +84,7 @@
   gap: 20px;
   padding: clamp(20px, 2.5vw, 40px);
   border-right: 1px solid var(--ink);
-  background: var(--lime);
+  background: var(--snn-surface-muted);
   width: 268px;
   flex-shrink: 0;
   overflow: hidden;
@@ -105,14 +103,13 @@
 
 .sectionCode {
   margin: 0 0 30px;
-  color: var(--on-lime-accent);
+  color: var(--blue);
   font-size: 11px;
   font-weight: 800;
 }
 
 .sidebar h1 {
   margin: 0;
-  color: var(--on-lime);
   font-size: clamp(52px, 5.5vw, 88px);
   font-weight: 900;
   letter-spacing: -0.08em;
@@ -122,8 +119,6 @@
 .description {
   max-width: 320px;
   margin: 28px 0 0;
-  color: var(--on-lime);
-  opacity: 0.86;
   font-size: 16px;
   font-weight: 600;
   line-height: 1.7;
@@ -135,7 +130,7 @@
   gap: 12px;
   padding: 16px;
   border: 1px solid var(--ink);
-  background: var(--paper-soft);
+  background: var(--snn-surface-muted);
 }
 
 .statusDot {
@@ -180,8 +175,8 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  background: #11110f;
-  color: #f4f1e8;
+  background: var(--ink);
+  color: var(--paper);
   cursor: pointer;
 }
 
@@ -269,11 +264,11 @@
 }
 
 .historyItem:hover {
-  background: rgba(17, 17, 15, 0.08);
+  background: var(--snn-surface);
 }
 
 .historyItemActive {
-  background: rgba(17, 17, 15, 0.14);
+  background: var(--snn-surface-active);
 }
 
 .historyItemMain {
@@ -338,7 +333,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(17, 17, 15, 0.5);
+  background: rgba(0, 0, 0, 0.24);
 }
 
 .modal {
@@ -346,7 +341,7 @@
   padding: 28px 24px 20px;
   border: 1px solid var(--ink);
   background: var(--paper);
-  box-shadow: 8px 8px 0 var(--blue);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
 }
 
 .modalTitle {
@@ -509,8 +504,7 @@
 }
 
 .userBubble {
-  background: var(--lime);
-  color: var(--on-lime);
+  background: var(--snn-surface);
 }
 
 .typing {
@@ -583,7 +577,7 @@
   padding: 0 11px;
   border: 1px solid var(--ink);
   border-radius: 6px;
-  background: rgba(244, 241, 232, 0.56);
+  background: var(--snn-surface-muted);
   color: var(--muted);
   cursor: pointer;
   font-family: var(--font-geist-mono), monospace;
@@ -594,8 +588,8 @@
 
 .thinkingToggleActive {
   border-color: var(--blue);
-  background: rgba(36, 71, 255, 0.1);
-  color: var(--blue);
+  background: var(--snn-surface-active);
+  color: var(--snn-text);
 }
 
 .thinkingToggle span {
@@ -630,15 +624,15 @@
 .sendButton {
   min-width: 112px;
   padding: 0 16px;
-  background: var(--lime);
-  color: var(--on-lime);
+  background: var(--snn-control);
+  color: var(--snn-control-text);
   cursor: pointer;
 }
 
 .sendButton:hover:not(:disabled),
 .sendButton:focus-visible:not(:disabled) {
-  background: var(--blue);
-  color: var(--paper);
+  background: var(--snn-control-hover);
+  color: var(--snn-control-text);
 }
 
 .sendButton:disabled,
@@ -654,7 +648,7 @@
 .messages,
 .historyList {
   scrollbar-width: thin;
-  scrollbar-color: rgba(17, 17, 15, 0.2) transparent;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
 }
 
 .messages::-webkit-scrollbar,
@@ -670,13 +664,13 @@
 
 .messages::-webkit-scrollbar-thumb,
 .historyList::-webkit-scrollbar-thumb {
-  background: rgba(17, 17, 15, 0.18);
+  background: rgba(0, 0, 0, 0.15);
   border-radius: 3px;
 }
 
 .messages::-webkit-scrollbar-thumb:hover,
 .historyList::-webkit-scrollbar-thumb:hover {
-  background: rgba(17, 17, 15, 0.32);
+  background: rgba(0, 0, 0, 0.25);
 }
 
 .scrollToBottom {
@@ -755,7 +749,7 @@
     position: fixed;
     inset: 0;
     z-index: 20;
-    background: rgba(17, 17, 15, 0.4);
+    background: rgba(0, 0, 0, 0.24);
     opacity: 0;
     pointer-events: none;
     transition: opacity 220ms ease;

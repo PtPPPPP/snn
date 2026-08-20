@@ -139,6 +139,7 @@ const aiCopy = await import(
   `${pathToFileURL(aiCopyModulePath).href}?t=${Date.now()}`
 );
 const aiConvStoreSource = await readFile(path.join(root, "lib", "ai-conversation-store.ts"), "utf8");
+const aiQueueSource = await readFile(path.join(root, "lib", "ai-conversation-queue.mjs"), "utf8");
 const compiledAiConvStore = ts
   .transpileModule(aiConvStoreSource, {
     compilerOptions: {
@@ -256,6 +257,7 @@ await writeFile(path.join(outputDir, "ai", "ai.css"), `${staticCss}\n\n${aiCss}`
 await writeFile(path.join(outputDir, "ai", "ai-client.js"), compiledAiClient, "utf8");
 await writeFile(path.join(outputDir, "ai", "ai-copy.js"), compiledAiCopy, "utf8");
 await writeFile(path.join(outputDir, "ai", "ai-conversation-store.js"), compiledAiConvStore, "utf8");
+await writeFile(path.join(outputDir, "ai", "ai-conversation-queue.mjs"), aiQueueSource, "utf8");
 await writeFile(path.join(outputDir, "ai", "app.js"), compiledFtpChat, "utf8");
 
 const staticConfigPath = path.join(outputDir, "ai-config.js");

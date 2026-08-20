@@ -47,10 +47,15 @@ export function loadConfig(environment = process.env) {
       4_000,
       "AI_STATUS_TIMEOUT_MS",
     ),
-    chatTimeoutMs: readPositiveInteger(
-      environment.AI_CHAT_TIMEOUT_MS,
+    chatConnectTimeoutMs: readPositiveInteger(
+      environment.AI_CHAT_CONNECT_TIMEOUT_MS,
       45_000,
-      "AI_CHAT_TIMEOUT_MS",
+      "AI_CHAT_CONNECT_TIMEOUT_MS",
+    ),
+    streamIdleTimeoutMs: readPositiveInteger(
+      environment.AI_STREAM_IDLE_TIMEOUT_MS,
+      60_000,
+      "AI_STREAM_IDLE_TIMEOUT_MS",
     ),
     maxOutputTokens: readPositiveInteger(
       environment.AI_MAX_OUTPUT_TOKENS,
