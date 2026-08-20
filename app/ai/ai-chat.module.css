@@ -199,8 +199,8 @@
 
 .sidebarClose {
   display: none;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--ink);
@@ -305,6 +305,8 @@
 .historyItemDelete {
   display: block;
   flex: 0 0 auto;
+  min-width: 40px;
+  min-height: 40px;
   padding: 9px 10px;
   border: 0;
   background: transparent;
@@ -585,7 +587,7 @@
 
 .thinkingToggle {
   display: inline-flex;
-  height: 32px;
+  min-height: 40px;
   align-items: center;
   gap: 7px;
   padding: 0 11px;
@@ -896,6 +898,90 @@
 
   .composerHint {
     display: none;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .historyItemDelete {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 412px) {
+  .header {
+    min-height: 56px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .brand {
+    font-size: 14px;
+  }
+
+  .brand img {
+    width: 40px;
+    height: 40px;
+  }
+
+  .brand small {
+    display: none;
+  }
+
+  .backLink {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .chatShell {
+    margin-top: 8px;
+    margin-bottom: 8px;
+  }
+
+  .panelHeader {
+    min-height: 42px;
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .messages {
+    padding: 10px 16px;
+  }
+
+  .emptyState {
+    min-height: 0;
+    align-content: start;
+    margin: 0;
+    padding: 12px 0;
+  }
+
+  .emptyMark,
+  .emptyState p {
+    display: none;
+  }
+
+  .emptyState h2 {
+    margin: 0;
+    font-size: 32px;
+    line-height: 1.1;
+  }
+
+  .composer {
+    padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .composerHint {
+    display: none;
+  }
+
+  .composerInput {
+    min-height: 44px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .sendButton {
+    min-height: 44px;
   }
 }
 
