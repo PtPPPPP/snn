@@ -1,24 +1,3 @@
-// SnnHeroArt — "DIGITAL PLOTTER / NEURAL BLUEPRINT"
-//
-// The old radial-network / concentric-orbit HUD is gone. This is a single
-// master-timeline story: a blueprint sheet initialises, then an invisible
-// plotter head draws S, N, N — one letter segment at a time, in normal reading
-// direction — then neural connections are plotted AFTER all three letters are
-// complete, nodes spawn only where the line has already arrived, three nodes
-// activate lime left → mid → right, the completed network holds, then
-// everything retracts (erase) and the loop restarts seamlessly.
-//
-// Readability first: the S is a conventional uppercase-S skeleton split into
-// three independent paths (S_TOP arc / S_MIDDLE waist / S_BOTTOM bowl) so its
-// orientation can never flip from a single bad control point. Every letter was
-// calibrated during development against a standard bold sans-serif reference
-// (see DEV_GUIDE below; removed in production).
-//
-// Technique: React + inline SVG + pure CSS. Every element animates against
-// ONE 10s period with absolute keyframes (no per-element infinite loops with
-// different durations, so phases can never drift apart). The plotter heads
-// are lightweight SMIL <animateMotion> following the very same paths that are
-// being drawn. No animation libraries.
 
 const BLUE = "#2447ff";
 const LIME = "#c8ff00";
@@ -57,12 +36,17 @@ const pct = (t: number) => r2((t / T) * 100);
 // Letter geometry — readability first, engineering styling second.
 // ---------------------------------------------------------------------------
 
-// S — conventional uppercase S, split into three continuous segments:
-// Each segment is reversed so the visible S starts from the right.
-const S_TOP = "M214 250 C212 218 190 200 160 197 C130 194 102 206 98 252";
-const S_MIDDLE = "M120 308 C136 314 160 318 182 310 C206 300 216 282 214 250";
-const S_BOTTOM =
-  "M222 344 L216 356 C208 378 186 392 154 392 C124 392 100 376 98 352 C96 330 104 314 120 308";
+// S — one continuous, normal-reading uppercase path. It starts at the upper
+// right, rolls left across the top, turns right through the waist, then opens
+// left across the lower bowl.
+const S_PATH =
+  "M214 214 C196 194 174 190 150 192 C116 194 98 214 98 242 C98 270 122 286 160 296 C198 306 222 324 222 352 C222 382 198 400 160 400 C128 400 104 390 90 374";
+const S_ANCHORS = {
+  start: { x: 214, y: 214 },
+  waist: { x: 160, y: 296 },
+  lower: { x: 214, y: 350 },
+  end: { x: 90, y: 374 },
+} as const;
 
 // N — left vertical (bottom→top + serif), diagonal (top-left → bottom-right),
 // right vertical (bottom→top + serif). Width matched to S's visual weight.
@@ -85,11 +69,7 @@ type Seg = {
   erase: [number, number];
 };
 
-const S_SEGS: Seg[] = [
-  { id: "art-s-bot", cls: "plot-s-bot", d: S_BOTTOM, draw: [0.55, 1.18], erase: [8.65, 9.0] },
-  { id: "art-s-mid", cls: "plot-s-mid", d: S_MIDDLE, draw: [1.18, 1.82], erase: [8.75, 9.1] },
-  { id: "art-s-top", cls: "plot-s-top", d: S_TOP, draw: [1.82, 2.45], erase: [8.85, 9.2] },
-];
+const S_SEG: Seg = { id: "art-s-path", cls: "plot-s", d: S_PATH, draw: [0.55, 2.45], erase: [8.65, 9.2] };
 
 const N1_SEGS: Seg[] = [
   { id: "art-n1", cls: "plot-n1", d: nPath(N1), draw: [2.5, 4.3], erase: [8.55, 8.9] },
@@ -99,11 +79,7 @@ const N2_SEGS: Seg[] = [
   { id: "art-n2", cls: "plot-n2", d: nPath(N2), draw: [3.9, 5.7], erase: [8.45, 8.8] },
 ];
 
-const ALL_SEGS: Seg[] = [...S_SEGS, ...N1_SEGS, ...N2_SEGS];
-
-// Composite path used by the S plotter head. The reversed segment order keeps
-// the pen continuous while starting at the rightmost lower terminal.
-const S_COMBO = `${S_BOTTOM}${S_MIDDLE}${S_TOP}`;
+const ALL_SEGS: Seg[] = [S_SEG, ...N1_SEGS, ...N2_SEGS];
 
 type Conn = {
   id: string;
@@ -123,7 +99,7 @@ const CONNS: Conn[] = [
   {
     id: "a",
     cls: "conn-a",
-    d: "M214 250 C230 254 246 252 263 250",
+    d: `M${S_ANCHORS.start.x} ${S_ANCHORS.start.y} C230 224 246 238 263 250`,
     draw: [5.97, 6.14],
     erase: [8.55, 8.64],
     extra: true,
@@ -131,7 +107,7 @@ const CONNS: Conn[] = [
   {
     id: "b",
     cls: "conn-b",
-    d: "M216 356 C230 358 246 358 263 356",
+    d: `M${S_ANCHORS.lower.x} ${S_ANCHORS.lower.y} C230 352 246 354 263 356`,
     draw: [6.14, 6.31],
     erase: [8.48, 8.57],
     extra: true,
@@ -167,20 +143,28 @@ const CONN_CURSOR_KEYTIMES =
 // Nodes — each spawns (scale 0→1, opacity 0→1) right after the line has
 // reached its position. Small (r≈3.2) so they never overpower the letter
 // outlines; the S keeps only end-point nodes (start + terminal).
-type NodeDef = { id: string; x: number; y: number; at: number; r?: number };
+type NodeDef = {
+  id: string;
+  x: number;
+  y: number;
+  at: number;
+  r?: number;
+  activationAt?: number;
+};
 const NODES: NodeDef[] = [
-  { id: "s0", x: 222, y: 344, at: 0.65 },
-  { id: "s3", x: 98, y: 252, at: 2.55 },
+  { id: "s-start", ...S_ANCHORS.start, at: 0.6, activationAt: 7.0 },
+  { id: "s-waist", ...S_ANCHORS.waist, at: 1.55 },
+  { id: "s-end", ...S_ANCHORS.end, at: 2.5 },
   { id: "n1-lb", x: 263, y: 396, at: 2.6 },
   { id: "n1-lt", x: 263, y: 196, at: 3.2 },
-  { id: "n1-mid", x: 320, y: 296, at: 3.45 },
+  { id: "n1-mid", x: 320, y: 296, at: 3.45, activationAt: 7.2 },
   { id: "n1-rb", x: 377, y: 396, at: 3.75 },
   { id: "n1-rt", x: 377, y: 196, at: 4.4 },
   { id: "n2-lb", x: 431, y: 396, at: 4.0 },
   { id: "n2-lt", x: 431, y: 196, at: 4.6 },
   { id: "n2-mid", x: 488, y: 296, at: 4.85 },
   { id: "n2-rb", x: 545, y: 396, at: 5.15 },
-  { id: "n2-rt", x: 545, y: 196, at: 5.8 },
+  { id: "n2-rt", x: 545, y: 196, at: 5.8, activationAt: 7.4 },
   { id: "src", x: 320, y: 128, at: 6.05, r: 4 },
   { id: "c23", x: 404, y: 296, at: 6.55 },
   { id: "br1", x: 154, y: 430, at: 6.7 },
@@ -188,12 +172,11 @@ const NODES: NodeDef[] = [
   { id: "br3", x: 408, y: 430, at: 7.05 },
 ];
 
-// Lime "activation" — left → middle → right, after the whole network exists.
-const LIME_AT = [
-  { id: "s0", x: 98, y: 252, at: 7.0 },
-  { id: "n1-mid", x: 320, y: 296, at: 7.2 },
-  { id: "n2-rt", x: 545, y: 196, at: 7.4 },
-];
+// Lime activation reuses the exact node definitions above; it never carries a
+// second set of coordinates.
+const LIME_NODES = NODES.filter(
+  (node): node is NodeDef & { activationAt: number } => node.activationAt !== undefined,
+);
 
 // ---------------------------------------------------------------------------
 // Keyframe generator — everything written in absolute % of the 10s master
@@ -270,9 +253,9 @@ function buildArtCss() {
   parts.push(cursorAnimCss("plot-cursor-n1", [2.5, 4.5] as [number, number]));
   parts.push(cursorAnimCss("plot-cursor-n2", [3.9, 5.95] as [number, number]));
   parts.push(cursorAnimCss("plot-cursor-c", [5.7, 7.15] as [number, number]));
-  for (const l of LIME_AT) {
-    parts.push(limeAnimCss(`lime-${l.id}`, l.at));
-    parts.push(ringAnimCss(`ring-${l.id}`, l.at));
+  for (const node of LIME_NODES) {
+    parts.push(limeAnimCss(`lime-${node.id}`, node.activationAt));
+    parts.push(ringAnimCss(`ring-${node.id}`, node.activationAt));
   }
   parts.push(ANN_CSS);
   return parts.join("\n");
@@ -442,21 +425,21 @@ export function SnnHeroArt({ className }: { className?: string }) {
         ))}
 
         {/* ============ lime activation overlays + rings ============ */}
-        {LIME_AT.map((l) => (
-          <g key={l.id}>
+        {LIME_NODES.map((node) => (
+          <g key={node.id}>
             <circle
-              className={`lime-${l.id} plot-lime`}
+              className={`lime-${node.id} plot-lime`}
               data-plot-lime
-              cx={l.x}
-              cy={l.y}
+              cx={node.x}
+              cy={node.y}
               r={3.2}
               fill={LIME}
             />
             <circle
-              className={`ring-${l.id} plot-ring`}
+              className={`ring-${node.id} plot-ring`}
               data-plot-ring
-              cx={l.x}
-              cy={l.y}
+              cx={node.x}
+              cy={node.y}
               r={7}
               fill="none"
               stroke={LIME}
@@ -471,13 +454,13 @@ export function SnnHeroArt({ className }: { className?: string }) {
           <circle r={6} fill="none" stroke={BLUE} strokeWidth={1.1} opacity={0.4} />
           <animateMotion
             dur={`${T}s`}
-            begin="0.55s"
+            begin="0s"
             repeatCount="indefinite"
             calcMode="linear"
-            keyPoints="0;0.455;0.716;1;1"
-            keyTimes="0;0.063;0.127;0.19;1"
+            keyPoints="0;1;1"
+            keyTimes="0.055;0.245;1"
           >
-            <mpath href="#art-s-combo" xlinkHref="#art-s-combo" />
+            <mpath href="#art-s-path" xlinkHref="#art-s-path" />
           </animateMotion>
         </g>
         <g className="plot-cursor plot-cursor-n1" data-plot-cursor>
@@ -523,7 +506,6 @@ export function SnnHeroArt({ className }: { className?: string }) {
           </animateMotion>
         </g>
         {/* hidden reference paths used by the plotter heads */}
-        <path id="art-s-combo" d={S_COMBO} fill="none" stroke="none" />
         <path id="art-conn-path" d={CONN_CURSOR_PATH} fill="none" stroke="none" />
 
         {/* ============ completed-state annotations ============ */}

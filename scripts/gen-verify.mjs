@@ -27,9 +27,9 @@ const TIMES = [
   15.0, // loop-phase pair with 5.0
 ];
 
-const PATHS = ["#art-s-top", "#art-s-mid", "#art-s-bot", "#art-n1", "#art-n2", ".conn-lead", ".conn-a", ".conn-b", ".conn-c", ".conn-br1", ".conn-br2", ".conn-br3"];
-const NODES = [".node-s0", ".node-s3", ".node-n1-lb", ".node-n1-lt", ".node-n1-mid", ".node-n1-rt", ".node-n2-lb", ".node-n2-lt", ".node-n2-mid", ".node-n2-rt", ".node-src", ".node-c23", ".node-br3"];
-const LIMES = [".lime-s0", ".lime-n1-mid", ".lime-n2-rt"];
+const PATHS = ["#art-s-path", "#art-n1", "#art-n2", ".conn-lead", ".conn-a", ".conn-b", ".conn-c", ".conn-br1", ".conn-br2", ".conn-br3"];
+const NODES = [".node-s-start", ".node-s-waist", ".node-s-end", ".node-n1-lb", ".node-n1-lt", ".node-n1-mid", ".node-n1-rt", ".node-n2-lb", ".node-n2-lt", ".node-n2-mid", ".node-n2-rt", ".node-src", ".node-c23", ".node-br3"];
+const LIMES = [".lime-s-start", ".lime-n1-mid", ".lime-n2-rt"];
 const CURSORS = [".plot-cursor-s", ".plot-cursor-n1", ".plot-cursor-n2", ".plot-cursor-c"];
 const GROUPS = [".plot-marks", ".plot-ann"];
 
@@ -176,6 +176,7 @@ const page = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SNN plotter art — state verification harness</title>
 <link rel="stylesheet" href="/styles.css">
 </head>
@@ -202,11 +203,13 @@ const cleanPage = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SNN plotter art — clean render</title>
 <link rel="stylesheet" href="/styles.css">
+<style>.hero-art{width:100% !important;height:auto !important;max-width:640px}</style>
 ${ENTER_OFF}
 </head>
-<body style="margin:0;background:#f4f1e8;width:640px">
+<body style="margin:0;background:#f4f1e8;width:100%;max-width:640px">
 ${styleMatch[0]}
 ${svgMatch[0]}
 </body>
@@ -230,7 +233,7 @@ const seekScript = `
     });
   }
   var sel = [
-    "#art-s-top","#art-s-mid","#art-s-bot","#art-n1","#art-n2",
+    "#art-s-path","#art-n1","#art-n2",
     ".conn-lead",".conn-a",".conn-b",".conn-c",".conn-br1",".conn-br2",".conn-br3",
     ".plot-node",".plot-lime",".plot-ring",".plot-marks",".plot-ann",
     ".plot-cursor-s",".plot-cursor-n1",".plot-cursor-n2",".plot-cursor-c"
@@ -256,11 +259,13 @@ const seekPage = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SNN plotter art — seek</title>
 <link rel="stylesheet" href="/styles.css">
+<style>.hero-art{width:100% !important;height:auto !important;max-width:640px}</style>
 ${ENTER_OFF}
 </head>
-<body style="margin:0;background:#f4f1e8;width:640px">
+<body style="margin:0;background:#f4f1e8;width:100%;max-width:640px">
 ${styleMatch[0]}
 ${svgMatch[0]}
 ${seekScript}
@@ -277,14 +282,16 @@ const linesOnlyPage = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SNN plotter art — lines only</title>
 <link rel="stylesheet" href="/styles.css">
+<style>.hero-art{width:100% !important;height:auto !important;max-width:640px}</style>
 ${ENTER_OFF}
 <style>
 .plot-marks, .plot-ann, .plot-node, .plot-lime, .plot-ring, .plot-cursor, .plot-conn { display: none; }
 </style>
 </head>
-<body style="margin:0;background:#f4f1e8;width:640px">
+<body style="margin:0;background:#f4f1e8;width:100%;max-width:640px">
 ${styleMatch[0]}
 ${svgMatch[0]}
 ${seekScript}
