@@ -16,7 +16,7 @@
     "ai:node": "npm --prefix ai-node run start",
     "test:ai-node": "npm --prefix ai-node test",
     "test:ai-gateway": "npm --prefix cloudflare-ai-gateway test",
-    "test:ai-state": "node --test tests/ai-conversation-state.test.mjs",
+    "test:ai-state": "node --test tests/ai-conversation-state.test.mjs tests/ai-responsive-contract.test.mjs",
     "test:artifact": "bash scripts/validate-artifact.sh",
     "test:pages": "node --test tests/rendered-html.test.mjs",
     "verify": "npm run lint && npm run test:ai-state && npm run test:ai-node && npm run test:ai-gateway && npm run build && npm run test:artifact && npm run test:pages",

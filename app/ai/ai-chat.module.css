@@ -338,10 +338,12 @@
 
 .modal {
   width: min(360px, calc(100% - 48px));
+  max-height: calc(100dvh - 32px);
   padding: 28px 24px 20px;
   border: 1px solid var(--ink);
   background: var(--paper);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+  overflow-y: auto;
 }
 
 .modalTitle {
@@ -501,6 +503,7 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
+  overflow-x: auto;
 }
 
 .userBubble {
@@ -542,6 +545,8 @@
 }
 
 .composer {
+  min-width: 0;
+  box-sizing: border-box;
   padding: 16px clamp(20px, 3vw, 40px) 18px;
   border-top: 1px solid var(--ink);
   background: var(--paper);
@@ -556,6 +561,7 @@
 }
 
 .composerControls {
+  min-width: 0;
   display: flex;
   align-items: stretch;
   gap: 10px;
@@ -615,6 +621,8 @@
   color: var(--ink);
   font: inherit;
   line-height: 1.4;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .composerInput::placeholder {
@@ -639,6 +647,13 @@
 .composerInput:disabled {
   cursor: not-allowed;
   opacity: 0.56;
+}
+
+.page button:focus-visible,
+.page a:focus-visible,
+.page textarea:focus-visible {
+  outline: 2px solid rgba(0, 0, 0, 0.55);
+  outline-offset: 2px;
 }
 
 .composerHint {
@@ -873,5 +888,17 @@
 
   .composerHint {
     display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .backdrop,
+  .historyItem {
+    transition: none;
+  }
+
+  .typing i {
+    animation: none;
   }
 }
