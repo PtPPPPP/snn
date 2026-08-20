@@ -23,7 +23,7 @@
     "test:browser-smoke": "playwright test",
     "test:mobile-smoke": "playwright test tests/mobile-browser-smoke.spec.mjs",
     "preflight:production": "node scripts/check-production-readiness.mjs",
-    "verify": "npm run lint && npm run test:ai-state && npm run test:production-readiness && npm run test:ai-node && npm run test:ai-gateway && npm run build && npm run test:artifact && npm run test:pages",
+    "verify": "npm run lint && npm run test:ai-state && npm run test:ai-node && npm run test:ai-gateway && npm run build && npm run test:artifact && npm run test:production-readiness && npm run test:pages",
     "test": "npm run verify",
     "validate:artifact": "npm run test:artifact",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .preview"

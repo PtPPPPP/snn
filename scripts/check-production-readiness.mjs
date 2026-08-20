@@ -74,7 +74,10 @@ async function main() {
   };
   const errors = validateProductionConfig(config);
   const clientDir = path.join(root, "dist", "client");
-  if (await stat(clientDir).then(() => true).catch(() => false)) {
+  const artifactExists = await stat(clientDir).then(() => true).catch(() => false);
+  if (!artifactExists) {
+    errors.push("production client artifact is missing; run npm run build before production readiness");
+  } else {
     const findings = await scanClientArtifact(clientDir, ["CF-Access-Client-Secret", "QWEN_UPSTREAM_API_KEY", "AI_ORIGIN_URL", "Bearer "]);
     if (findings.length) errors.push("production client artifact contains an internal credential or origin marker");
   }
