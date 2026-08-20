@@ -58,16 +58,11 @@ const pct = (t: number) => r2((t / T) * 100);
 // ---------------------------------------------------------------------------
 
 // S — conventional uppercase S, split into three continuous segments:
-//   S_TOP    : top-left start → round top arc → top-right vertex
-//   S_MIDDLE : top-right vertex → right side down → waist crossing left
-//   S_BOTTOM : waist → lower-left side → round bottom bowl → bottom-right
-//              terminal tick
-// This is the normal-reading "S" (upper body right, waist crossing left,
-// lower body left, bottom sweeping right).
-const S_TOP = "M98 252 C102 206 130 194 160 197 C190 200 212 218 214 250";
-const S_MIDDLE = "M214 250 C216 282 206 300 182 310 C160 318 136 314 120 308";
+// Each segment is reversed so the visible S starts from the right.
+const S_TOP = "M214 250 C212 218 190 200 160 197 C130 194 102 206 98 252";
+const S_MIDDLE = "M120 308 C136 314 160 318 182 310 C206 300 216 282 214 250";
 const S_BOTTOM =
-  "M120 308 C104 314 96 330 98 352 C100 376 124 392 154 392 C186 392 208 378 216 356 L222 344";
+  "M222 344 L216 356 C208 378 186 392 154 392 C124 392 100 376 98 352 C96 330 104 314 120 308";
 
 // N — left vertical (bottom→top + serif), diagonal (top-left → bottom-right),
 // right vertical (bottom→top + serif). Width matched to S's visual weight.
@@ -91,9 +86,9 @@ type Seg = {
 };
 
 const S_SEGS: Seg[] = [
-  { id: "art-s-top", cls: "plot-s-top", d: S_TOP, draw: [0.55, 1.15], erase: [8.85, 9.2] },
-  { id: "art-s-mid", cls: "plot-s-mid", d: S_MIDDLE, draw: [1.05, 1.75], erase: [8.75, 9.1] },
-  { id: "art-s-bot", cls: "plot-s-bot", d: S_BOTTOM, draw: [1.65, 2.45], erase: [8.65, 9.0] },
+  { id: "art-s-bot", cls: "plot-s-bot", d: S_BOTTOM, draw: [0.55, 1.18], erase: [8.65, 9.0] },
+  { id: "art-s-mid", cls: "plot-s-mid", d: S_MIDDLE, draw: [1.18, 1.82], erase: [8.75, 9.1] },
+  { id: "art-s-top", cls: "plot-s-top", d: S_TOP, draw: [1.82, 2.45], erase: [8.85, 9.2] },
 ];
 
 const N1_SEGS: Seg[] = [
@@ -106,9 +101,9 @@ const N2_SEGS: Seg[] = [
 
 const ALL_SEGS: Seg[] = [...S_SEGS, ...N1_SEGS, ...N2_SEGS];
 
-// Composite path used by the S plotter head (TOP → MIDDLE → BOTTOM,
-// continuous, so the head never jumps).
-const S_COMBO = `${S_TOP}${S_MIDDLE}${S_BOTTOM}`;
+// Composite path used by the S plotter head. The reversed segment order keeps
+// the pen continuous while starting at the rightmost lower terminal.
+const S_COMBO = `${S_BOTTOM}${S_MIDDLE}${S_TOP}`;
 
 type Conn = {
   id: string;
@@ -174,8 +169,8 @@ const CONN_CURSOR_KEYTIMES =
 // outlines; the S keeps only end-point nodes (start + terminal).
 type NodeDef = { id: string; x: number; y: number; at: number; r?: number };
 const NODES: NodeDef[] = [
-  { id: "s0", x: 98, y: 252, at: 0.65 },
-  { id: "s3", x: 222, y: 344, at: 2.55 },
+  { id: "s0", x: 222, y: 344, at: 0.65 },
+  { id: "s3", x: 98, y: 252, at: 2.55 },
   { id: "n1-lb", x: 263, y: 396, at: 2.6 },
   { id: "n1-lt", x: 263, y: 196, at: 3.2 },
   { id: "n1-mid", x: 320, y: 296, at: 3.45 },
@@ -479,8 +474,8 @@ export function SnnHeroArt({ className }: { className?: string }) {
             begin="0.55s"
             repeatCount="indefinite"
             calcMode="linear"
-            keyPoints="0;0.284;0.284;0.545;0.545;1"
-            keyTimes="0;0.055;0.115;0.175;0.245;1"
+            keyPoints="0;0.455;0.716;1;1"
+            keyTimes="0;0.063;0.127;0.19;1"
           >
             <mpath href="#art-s-combo" xlinkHref="#art-s-combo" />
           </animateMotion>
