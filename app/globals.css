@@ -1,19 +1,64 @@
 @import "tailwindcss";
 
 :root {
-  --paper: #f4f1e8;
-  --paper-soft: rgba(244, 241, 232, 0.84);
-  --ink: #11110f;
-  --ink-100: #11110f;
-  --ink-60: #55534a;
-  --ink-30: rgba(17, 17, 15, 0.28);
-  --lime: #c8ff00;
-  --on-lime: #11110f;
-  --on-lime-accent: #2447ff;
-  --blue: #2447ff;
-  --grid: #d8d4c8;
-  --muted: #69675f;
-  --white: #fffef8;
+  --paper: #f7f7f4;
+  --paper-soft: rgba(247, 247, 244, 0.9);
+  --ink: #20251f;
+  --ink-100: #20251f;
+  --ink-60: #647066;
+  --ink-30: rgba(32, 37, 31, 0.16);
+  --lime: #dce5d5;
+  --on-lime: #20251f;
+  --on-lime-accent: #405448;
+  --blue: #405448;
+  --grid: #dce1da;
+  --muted: #718076;
+  --white: #ffffff;
+}
+
+/* Quiet, editorial finish: one neutral palette, consistent rhythm, and no
+   decorative effects that compete with the content. */
+.site-header {
+  height: 88px;
+  border-color: var(--ink-30);
+  background: rgba(247, 247, 244, 0.78);
+  backdrop-filter: blur(14px);
+}
+
+.brand-logo { width: 54px; height: 54px; }
+.brand-divider { height: 30px; background: var(--ink-30); }
+.main-nav { gap: clamp(18px, 2.2vw, 36px); font-size: 14px; font-weight: 600; }
+.main-nav .nav-ai { color: var(--ink-60); }
+.main-nav .nav-join,
+.button-primary { background: var(--ink-100); color: var(--paper); border-color: var(--ink-100); }
+.main-nav .nav-join:hover,
+.main-nav .nav-join:focus-visible,
+.button-primary:hover,
+.button-primary:focus-visible { box-shadow: none; transform: translateY(-1px); background: var(--blue); }
+
+.hero { min-height: calc(100dvh - 88px); background-image: none; }
+.hero-copy { max-width: 680px; padding: clamp(72px, 9vw, 128px) 0; }
+.eyebrow { margin-bottom: 18px; color: var(--blue); font-size: 12px; letter-spacing: .14em; }
+.hero h1 { max-width: 680px; font-size: clamp(48px, 5.1vw, 82px); font-weight: 760; letter-spacing: -.055em; line-height: 1.04; }
+.hero-intro { max-width: 510px; margin-top: 24px; font-size: clamp(16px, 1.25vw, 19px); line-height: 1.75; }
+.hero-actions { gap: 12px; margin-top: 32px; }
+.button { min-width: 178px; height: 52px; padding: 0 18px; border-radius: 2px; font-size: 15px; font-weight: 650; }
+.button-ghost { border: 1px solid var(--ink-30); background: transparent; }
+.button-ghost:hover, .button-ghost:focus-visible { background: var(--white); border-color: var(--ink-100); }
+.hero-proof { min-height: 62px; background: transparent; color: var(--ink-60); font-size: 10px; letter-spacing: .12em; }
+.hero-proof span { padding-left: clamp(16px, 2.2vw, 32px); }
+.blueprint { opacity: .16; color: var(--blue); }
+
+.section-kicker { margin-bottom: clamp(46px, 6vw, 78px); color: var(--blue); }
+.section { border-color: var(--ink-30); }
+@media (max-width: 760px) {
+  .site-header { height: 72px; padding: 0 20px; background: rgba(247,247,244,.94); }
+  .brand-logo { width: 46px; height: 46px; }
+  .hero { min-height: auto; }
+  .hero-copy { padding: 104px 0 46px; }
+  .hero-actions { width: 100%; }
+  .button { min-width: 0; height: 50px; }
+  .hero-proof { min-height: 56px; }
 }
 
 * {
@@ -392,7 +437,7 @@ a {
 }
 
 .section {
-  padding: 110px clamp(24px, 5.5vw, 88px);
+  padding: clamp(76px, 9vw, 132px) clamp(24px, 5.5vw, 88px);
   border-top: 1px solid var(--ink-30);
 }
 
@@ -1376,3 +1421,28 @@ footer {
     opacity: 0 !important;
   }
 }
+
+/* Final presentation overrides. Kept last so the responsive system remains
+   deliberate instead of accumulating conflicting visual treatments. */
+.site-header { height: 88px; background: rgba(247,247,244,.78); backdrop-filter: blur(14px); }
+.brand-logo { width: 54px; height: 54px; }
+.brand-divider { height: 30px; background: var(--ink-30); }
+.main-nav { gap: clamp(18px,2.2vw,36px); font-size: 14px; font-weight: 600; }
+.main-nav .nav-ai { color: var(--ink-60); }
+.main-nav .nav-join, .button-primary { background: var(--ink-100); color: var(--paper); border-color: var(--ink-100); }
+.main-nav .nav-join:hover, .main-nav .nav-join:focus-visible, .button-primary:hover, .button-primary:focus-visible { background: var(--blue); box-shadow: none; transform: translateY(-1px); }
+.hero { min-height: calc(100dvh - 88px); background-image: none; }
+.hero-copy { max-width: 680px; padding: clamp(72px,9vw,128px) 0; }
+.eyebrow { margin-bottom: 18px; color: var(--blue); font-size: 12px; letter-spacing: .14em; }
+.hero h1 { max-width: 680px; font-size: clamp(48px,5.1vw,82px); font-weight: 760; letter-spacing: -.055em; line-height: 1.04; }
+.hero-intro { max-width: 510px; margin-top: 24px; font-size: clamp(16px,1.25vw,19px); line-height: 1.75; }
+.hero-actions { gap: 12px; margin-top: 32px; }
+.button { min-width: 178px; height: 52px; padding: 0 18px; border-radius: 2px; font-size: 15px; font-weight: 650; }
+.button-ghost { border: 1px solid var(--ink-30); background: transparent; }
+.button-ghost:hover, .button-ghost:focus-visible { background: var(--white); border-color: var(--ink-100); }
+.hero-proof { min-height: 62px; background: transparent; color: var(--ink-60); font-size: 10px; letter-spacing: .12em; }
+.hero-proof span { padding-left: clamp(16px,2.2vw,32px); }
+.blueprint { opacity: .16; color: var(--blue); }
+.section-kicker { margin-bottom: clamp(46px,6vw,78px); color: var(--blue); }
+.section { border-color: var(--ink-30); }
+@media (max-width:760px) { .site-header{height:72px;padding:0 20px;background:rgba(247,247,244,.94)} .brand-logo{width:46px;height:46px} .hero{min-height:auto}.hero-copy{padding:104px 0 46px}.hero-actions{width:100%}.button{min-width:0;height:50px}.hero-proof{min-height:56px} }
