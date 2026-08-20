@@ -28,6 +28,7 @@ import ChatInput from "./chat-input";
 import ChatMessage, { type ChatMessageModel } from "./chat-message";
 import styles from "./ai-chat.module.css";
 import { buildConversationSnapshot, canApplyGeneration, canApplyNavigation } from "../../lib/ai-conversation-state.mjs";
+import { deleteConversationLifecycle, saveConversationWithNotice } from "../../lib/ai-conversation-lifecycle.mjs";
 
 type AiNodeState = "checking" | "offline" | "online";
 const THINKING_STORAGE_KEY = "snn-ai-thinking-mode";
@@ -170,14 +171,14 @@ export default function AiChat() {
 
   function persistCurrentMessages(convId: string, uiMessages: ChatMessageModel[]) {
     const stored = toStoredMessages(uiMessages.filter((m) => m.content.trim() !== ""));
-    void saveConversation({
+    void saveConversationWithNotice({ conversation: {
       id: convId,
       title: conversations.find((c) => c.id === convId)?.title ?? "新对话",
       createdAt: conversations.find((c) => c.id === convId)?.createdAt ?? now(),
       updatedAt: now(),
       messages: stored,
       version: 1,
-    }).then(() => { setStorageNotice(null); return refreshConversationList(); }).catch(() => setStorageNotice("本次对话未保存"));
+    }, saveConversation, setNotice: setStorageNotice }).then((saved) => { if (saved) refreshConversationList(); });
   }
 
   function refreshConversationList() {
@@ -294,7 +295,7 @@ export default function AiChat() {
       messages: toStoredMessages(requestMessages),
       version: 1,
     };
-    void saveConversation(updatedConv).then(() => { setStorageNotice(null); return refreshConversationList(); }).catch(() => setStorageNotice("本次对话未保存"));
+    void saveConversationWithNotice({ conversation: updatedConv, saveConversation, setNotice: setStorageNotice }).then((saved) => { if (saved) refreshConversationList(); });
 
     const sentConvId = convId;
 
@@ -386,26 +387,16 @@ export default function AiChat() {
     const id = confirmDeleteId;
     if (!id) return;
     setConfirmDeleteId(null);
-    if (id === activeIdRef.current) {
-      streamControllerRef.current?.abort();
-      streamControllerRef.current = null;
-      activeGenerationRef.current = ++generationSequenceRef.current;
-      ++navigationSequenceRef.current;
-    }
-    deleteConv(id).then(async () => {
-      const list = await listConversations();
-      setConversations(list);
-      if (id === activeIdRef.current) {
-        if (list.length > 0) {
-          switchConversation(list[0].id);
-        } else {
-          const fresh = createConversation();
-          setActiveId(fresh.id);
-          activeIdRef.current = fresh.id;
-          setActiveConversationId(fresh.id);
-          setMessages([]);
-        }
-      }
+    void deleteConversationLifecycle({
+      targetConversationId: id,
+      activeConversationId: activeIdRef.current,
+      abortActiveRequest: () => { streamControllerRef.current?.abort(); streamControllerRef.current = null; },
+      invalidateGeneration: () => { activeGenerationRef.current = ++generationSequenceRef.current; },
+      invalidateNavigation: () => { ++navigationSequenceRef.current; },
+      deleteConversation: deleteConv,
+      listConversations,
+      selectConversation: async (next) => { setConversations(await listConversations()); await switchConversation(next.id); },
+      selectEmpty: () => { setConversations([]); setActiveId(null); activeIdRef.current = null; setActiveConversationId(null); setMessages([]); },
     }).catch(() => setStorageNotice("本次对话未保存"));
   }
 

@@ -1,8 +1,8 @@
 
-const BLUE = "#2447ff";
-const LIME = "#c8ff00";
-const PAPER = "#f4f1e8";
-const INK = "#11110f";
+const BLUE = "#111111";
+const LIME = "#f4f4f6";
+const PAPER = "#ffffff";
+const INK = "#111111";
 const MONO =
   'ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Consolas, monospace';
 

@@ -23,15 +23,22 @@ const TITLE_LIMIT = 28;
 let dbPromise: Promise<IDBDatabase> | null = null;
 const enqueueConversation = createPerConversationQueue();
 const deletedConversationIds = new Set<string>();
+let indexedDbOverride: IDBFactory | undefined;
+
+export function setIndexedDbForTests(value?: IDBFactory): void {
+  indexedDbOverride = value;
+  dbPromise = null;
+}
 
 function openDb(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
-    if (typeof indexedDB === "undefined") {
+    const indexedDb = indexedDbOverride ?? (typeof indexedDB === "undefined" ? undefined : indexedDB);
+    if (!indexedDb) {
       reject(new Error("IndexedDB unavailable"));
       return;
     }
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    const req = indexedDb.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE)) {
