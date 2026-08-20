@@ -8,6 +8,7 @@ type Props = {
   statusLabel: string;
   statusDetail: string;
   nodeState: "checking" | "offline" | "online";
+  id?: string;
   onOpenChange: (open: boolean) => void;
   onNew: () => void;
   onSelect: (id: string) => void;
@@ -27,9 +28,9 @@ function relativeTime(ts: number): string {
   return new Date(ts).toLocaleDateString("zh-CN", { month: "long", day: "numeric" });
 }
 
-export default function ConversationSidebar({ conversations, activeId, statusLabel, statusDetail, nodeState, onOpenChange, onNew, onSelect, onDelete }: Props) {
+export default function ConversationSidebar({ id, conversations, activeId, statusLabel, statusDetail, nodeState, onOpenChange, onNew, onSelect, onDelete }: Props) {
   return (
-    <aside className={styles.sidebar}>
+    <aside className={styles.sidebar} id={id}>
       <div className={styles.sidebarHeader}>
         <div><p className={styles.sectionCode}>{SIDEBAR.sectionCode}</p><h1>{SIDEBAR.title}</h1><p className={styles.description}>{SIDEBAR.description}</p></div>
         <button className={styles.sidebarClose} type="button" aria-label="关闭历史" onClick={() => onOpenChange(false)}>✕</button>
@@ -41,7 +42,7 @@ export default function ConversationSidebar({ conversations, activeId, statusLab
         {conversations.length === 0 ? <p className={styles.historyEmpty}>暂无历史对话</p> : conversations.map((conv) => (
           <div key={conv.id} className={`${styles.historyItem} ${conv.id === activeId ? styles.historyItemActive : ""}`} aria-current={conv.id === activeId ? "true" : undefined}>
             <button className={styles.historyItemMain} type="button" onClick={() => onSelect(conv.id)}><span className={styles.historyItemTitle}>{conv.title}</span><span className={styles.historyItemTime}>{relativeTime(conv.updatedAt)}</span></button>
-            <button className={styles.historyItemDelete} type="button" aria-label={`删除对话：${conv.title}`} onClick={() => onDelete(conv.id)}>⋯</button>
+            <button id={`conversation-delete-${conv.id}`} className={styles.historyItemDelete} type="button" aria-label={`删除对话：${conv.title}`} onClick={() => onDelete(conv.id)}>⋯</button>
           </div>
         ))}
       </nav>

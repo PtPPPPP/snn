@@ -407,6 +407,8 @@ export default function AiChat() {
             className={styles.sidebarToggle}
             type="button"
             aria-label="打开历史对话"
+            aria-expanded={sidebarOpen}
+            aria-controls="conversation-sidebar"
             onClick={() => setSidebarOpen(true)}
           >
             ☰
@@ -416,7 +418,7 @@ export default function AiChat() {
       </header>
 
       <section className={`${styles.chatShell} ${sidebarOpen ? styles.chatShellShifted : ""}`} aria-label="SNN AI Chat">
-        <ConversationSidebar conversations={conversations} activeId={activeId} statusLabel={statusLabel} statusDetail={statusDetail} nodeState={aiNodeState} onOpenChange={setSidebarOpen} onNew={startNewConversation} onSelect={switchConversation} onDelete={handleDelete} />
+        <ConversationSidebar id="conversation-sidebar" conversations={conversations} activeId={activeId} statusLabel={statusLabel} statusDetail={statusDetail} nodeState={aiNodeState} onOpenChange={setSidebarOpen} onNew={startNewConversation} onSelect={switchConversation} onDelete={handleDelete} />
 
         {sidebarOpen ? <div className={styles.backdrop} onClick={() => setSidebarOpen(false)} aria-hidden="true" /> : null}
 
@@ -456,7 +458,7 @@ export default function AiChat() {
         </div>
       </section>
 
-      {confirmDeleteId ? <DeleteConversationDialog onCancel={() => setConfirmDeleteId(null)} onConfirm={confirmDelete} /> : null}
+      {confirmDeleteId ? <DeleteConversationDialog returnFocusId={`conversation-delete-${confirmDeleteId}`} onCancel={() => setConfirmDeleteId(null)} onConfirm={confirmDelete} /> : null}
     </main>
   );
 }

@@ -26,6 +26,9 @@ jobs:
       - name: Test ai conversation state
         run: npm run test:ai-state
 
+      - name: Test production readiness rules
+        run: npm run test:production-readiness
+
       - name: Test ai-gateway
         run: npm run test:ai-gateway
 
