@@ -182,7 +182,7 @@ const page = `<!doctype html>
 </head>
 <body style="margin:0">
 ${styleMatch[0]}
-${svgMatch[0]}
+<div class="hero-visual" style="height:auto;min-height:0;padding:0">${svgMatch[0]}</div>
 <pre id="report" style="position:absolute;left:0;top:0;font:11px monospace;color:#000;background:#fff;padding:8px;white-space:pre-wrap;max-height:50vh;overflow:auto;z-index:99"></pre>
 ${script}
 </body>
@@ -209,9 +209,9 @@ const cleanPage = `<!doctype html>
 <style>.hero-art{width:100% !important;height:auto !important;max-width:640px}</style>
 ${ENTER_OFF}
 </head>
-<body style="margin:0;background:#f4f1e8;width:100%;max-width:640px">
+<body style="margin:0;background:#f4f1e8;width:100vw;max-width:none;overflow:hidden">
 ${styleMatch[0]}
-${svgMatch[0]}
+<div class="hero-visual" style="height:auto;min-height:0;padding:0">${svgMatch[0]}</div>
 </body>
 </html>
 `;
@@ -265,9 +265,9 @@ const seekPage = `<!doctype html>
 <style>.hero-art{width:100% !important;height:auto !important;max-width:640px}</style>
 ${ENTER_OFF}
 </head>
-<body style="margin:0;background:#f4f1e8;width:100%;max-width:640px">
+<body style="margin:0;background:#f4f1e8;width:100vw;max-width:none;overflow:hidden">
 ${styleMatch[0]}
-${svgMatch[0]}
+<div class="hero-visual" style="height:auto;min-height:0;padding:0">${svgMatch[0]}</div>
 ${seekScript}
 </body>
 </html>
@@ -291,7 +291,7 @@ ${ENTER_OFF}
 .plot-marks, .plot-ann, .plot-node, .plot-lime, .plot-ring, .plot-cursor, .plot-conn { display: none; }
 </style>
 </head>
-<body style="margin:0;background:#f4f1e8;width:100%;max-width:640px">
+<body style="margin:0;background:#f4f1e8;width:100vw;max-width:none;overflow:hidden">
 ${styleMatch[0]}
 ${svgMatch[0]}
 ${seekScript}
