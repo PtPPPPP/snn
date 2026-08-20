@@ -18,7 +18,6 @@ import {
 import {
   EMPTY_STATE,
   NODE_STATES,
-  SIDEBAR,
   STATUS_DETAILS,
   STATUS_LABELS,
   THINKING_MODE,
@@ -26,6 +25,8 @@ import {
 } from "../../lib/ai-copy";
 import ChatInput from "./chat-input";
 import ChatMessage, { type ChatMessageModel } from "./chat-message";
+import ConversationSidebar from "./conversation-sidebar";
+import DeleteConversationDialog from "./delete-conversation-dialog";
 import styles from "./ai-chat.module.css";
 import { buildConversationSnapshot, canApplyGeneration, canApplyNavigation } from "../../lib/ai-conversation-state.mjs";
 import { deleteConversationLifecycle, saveConversationWithNotice } from "../../lib/ai-conversation-lifecycle.mjs";
@@ -43,19 +44,6 @@ function toUiMessages(messages: AiChatMessage[]): ChatMessageModel[] {
 
 function toStoredMessages(messages: ChatMessageModel[]): AiChatMessage[] {
   return messages.map((m) => ({ role: m.role, content: m.content }));
-}
-
-function formatRelativeTime(ts: number): string {
-  const diff = Date.now() - ts;
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return "刚刚";
-  if (min < 60) return `${min} 分钟前`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr} 小时前`;
-  const day = Math.floor(hr / 24);
-  if (day === 1) return "昨天";
-  if (day < 30) return `${day} 天前`;
-  return new Date(ts).toLocaleDateString("zh-CN", { month: "long", day: "numeric" });
 }
 
 // Module-level wrapper so the timestamp is not flagged by react-hooks/purity
@@ -428,52 +416,7 @@ export default function AiChat() {
       </header>
 
       <section className={`${styles.chatShell} ${sidebarOpen ? styles.chatShellShifted : ""}`} aria-label="SNN AI Chat">
-        <aside className={styles.sidebar}>
-          <div className={styles.sidebarHeader}>
-            <div>
-              <p className={styles.sectionCode}>{SIDEBAR.sectionCode}</p>
-              <h1>{SIDEBAR.title}</h1>
-              <p className={styles.description}>{SIDEBAR.description}</p>
-            </div>
-            <button className={styles.sidebarClose} type="button" aria-label="关闭历史" onClick={() => setSidebarOpen(false)}>✕</button>
-          </div>
-          <div className={styles.statusCard} aria-label="AI 服务状态">
-            <span className={`${styles.statusDot} ${aiNodeState === "online" ? styles.statusOnline : aiNodeState === "checking" ? styles.statusChecking : styles.statusOffline}`} aria-hidden="true" />
-            <div><strong>{statusLabel}</strong><span>{statusDetail}</span></div>
-          </div>
-          <button className={styles.newChatButton} type="button" onClick={startNewConversation}>
-            <span>＋</span> 新建对话
-          </button>
-          <div className={styles.historyLabel}>最近对话</div>
-          <nav className={styles.historyList} aria-label="历史对话">
-            {conversations.length === 0 ? (
-              <p className={styles.historyEmpty}>暂无历史对话</p>
-            ) : (
-              conversations.map((conv) => (
-                <div
-                  key={conv.id}
-                  className={`${styles.historyItem} ${conv.id === activeId ? styles.historyItemActive : ""}`}
-                  aria-current={conv.id === activeId ? "true" : undefined}
-                >
-                  <button
-                    className={styles.historyItemMain}
-                    type="button"
-                    onClick={() => switchConversation(conv.id)}
-                  >
-                    <span className={styles.historyItemTitle}>{conv.title}</span>
-                    <span className={styles.historyItemTime}>{formatRelativeTime(conv.updatedAt)}</span>
-                  </button>
-                  <button
-                    className={styles.historyItemDelete}
-                    type="button"
-                    aria-label="删除对话"
-                    onClick={() => handleDelete(conv.id)}
-                  >⋯</button>
-                </div>
-              ))
-            )}
-          </nav>
-        </aside>
+        <ConversationSidebar conversations={conversations} activeId={activeId} statusLabel={statusLabel} statusDetail={statusDetail} nodeState={aiNodeState} onOpenChange={setSidebarOpen} onNew={startNewConversation} onSelect={switchConversation} onDelete={handleDelete} />
 
         {sidebarOpen ? <div className={styles.backdrop} onClick={() => setSidebarOpen(false)} aria-hidden="true" /> : null}
 
@@ -513,18 +456,7 @@ export default function AiChat() {
         </div>
       </section>
 
-      {confirmDeleteId ? (
-        <div className={styles.modalBackdrop} onClick={() => setConfirmDeleteId(null)} role="dialog" aria-modal="true">
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <p className={styles.modalTitle}>确定删除这个对话吗？</p>
-            <p className={styles.modalDesc}>此操作无法恢复。</p>
-            <div className={styles.modalActions}>
-              <button className={styles.modalCancel} type="button" onClick={() => setConfirmDeleteId(null)}>取消</button>
-              <button className={styles.modalConfirm} type="button" onClick={confirmDelete}>删除</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {confirmDeleteId ? <DeleteConversationDialog onCancel={() => setConfirmDeleteId(null)} onConfirm={confirmDelete} /> : null}
     </main>
   );
 }

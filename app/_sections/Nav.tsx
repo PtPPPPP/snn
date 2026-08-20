@@ -5,8 +5,9 @@ import Link from "next/link";
 
 const NAV_LINKS = [
   { href: "#about", label: "关于我们", id: "about" },
-  { href: "#activities", label: "活动", id: "activities" },
   { href: "#projects", label: "项目", id: "projects" },
+  { href: "#activities", label: "活动", id: "activities" },
+  { href: "#join", label: "加入", id: "join" },
 ];
 
 export function Nav() {
@@ -49,10 +50,6 @@ export function Nav() {
       </a>
 
       <nav className="main-nav" aria-label="主导航">
-        <button className="nav-menu-pill" type="button" aria-label="打开导航">
-          <span className="nav-menu-icon" aria-hidden="true">＋</span> Menu
-        </button>
-        <span className="nav-tags" aria-label="SNN 方向"><span>AI Coding</span><span>Agents</span></span>
         {NAV_LINKS.map((link) => (
           <a
             key={link.id}
@@ -62,9 +59,8 @@ export function Nav() {
             {link.label}
           </a>
         ))}
-          <Link className="nav-ai" href="/ai/" title="SNN 独立 AI 产品页">Open SNN AI</Link>
       </nav>
-      <Link className="nav-open-pill" href="/ai/"><span aria-hidden="true">•••</span> Open SNN AI</Link>
+      <Link className="nav-open-pill" href="/ai/" aria-label="打开 SNN AI"><span aria-hidden="true">•••</span> Open SNN AI</Link>
     </header>
   );
 }
