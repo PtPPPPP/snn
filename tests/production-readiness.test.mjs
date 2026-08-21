@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import test from "node:test";
 import { scanClientArtifact, validateProductionConfig } from "../scripts/check-production-readiness.mjs";
+import { validateProductionArtifact } from "../scripts/check-production-artifact.mjs";
 
 const valid = {
   publicOrigin: "https://snn.example.org",
@@ -35,4 +36,13 @@ test("strict production preflight requires secrets without printing them", () =>
 test("production client artifact contains no internal origin or credential markers", async () => {
   const findings = await scanClientArtifact(path.resolve("dist/client"), ["CF-Access-Client-Secret", "QWEN_UPSTREAM_API_KEY", "AI_ORIGIN_URL", "Bearer "]);
   assert.deepEqual(findings, []);
+});
+
+test("production Worker deploys the React client artifact and never ftp-upload", () => {
+  const workerConfig = { main: "index.js", assets: { directory: "../client" } };
+  const manifest = { "app/ai/page.tsx": { file: "assets/ai-chat-current.js", css: ["assets/ai-chat-current.css"] } };
+  const aiSource = 'const webSearch = true; const label = "联网搜索";';
+  assert.deepEqual(validateProductionArtifact({ workerConfig, manifest, aiSource }), []);
+  assert.ok(validateProductionArtifact({ workerConfig: { ...workerConfig, assets: { directory: "../../ftp-upload" } }, manifest, aiSource }).some((error) => error.includes("ftp-upload")));
+  assert.ok(validateProductionArtifact({ workerConfig, manifest, aiSource: "" }).some((error) => error.includes("web-search")));
 });

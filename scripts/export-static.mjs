@@ -268,4 +268,5 @@ if (!(await exists(staticConfigPath))) {
 }
 await rmQuiet(tempDir);
 
-console.log(`Static FTP package created: ${outputDir}`);
+console.log(`Static compatibility package created: ${outputDir}`);
+console.log("WARNING: ftp-upload is TEST / COMPATIBILITY ONLY. Never deploy it to the SNN production Cloudflare project.");

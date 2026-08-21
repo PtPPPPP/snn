@@ -48,14 +48,17 @@ npm run verify       # 完整验收：lint + AI 单测 + 构建 + 产物校验 +
 | 命令 | 说明 |
 | --- | --- |
 | `npm run dev` | 本地开发服务器（Vite + Vinext） |
-| `npm run build` | 生产构建（Cloudflare Workers） |
+| `npm run build` | React / Vinext 生产构建（Cloudflare Workers） |
+| `npm run build:production` | 与 `build` 相同的明确生产 React 构建 |
+| `npm run deploy:production` | 部署已验证的 Vinext Worker + React 客户端产物到 Cloudflare Workers |
 | `npm run start` | 预览已构建产物 |
 | `npm run verify` | 一键验收：`lint` → `AI 单测` → `build` → `产物校验` → `页面测试` |
 | `npm test` | `verify` 别名 |
 | `npm run lint` | ESLint 校验 |
-| `npm run test:artifact` | 校验 `dist/` 产物完整性 |
+| `npm run test:artifact` | 校验 Worker 产物完整性 |
+| `npm run test:production-artifact` | 校验生产目标是 Worker + React，而非 FTP 兼容包 |
 | `npm run test:pages` | 校验构建后页面可渲染性 |
-| `npm run export:static` | 导出纯静态站点至 `ftp-upload/`（虚拟主机 / FTP 部署） |
+| `npm run build:ftp` | 导出兼容静态包至 `ftp-upload/`，仅用于测试 / 兼容验证 |
 | `npm run gen:og` | 重新生成 `og.png`（需 Python + Pillow） |
 
 ## 项目结构
@@ -88,18 +91,22 @@ npm run verify       # 完整验收：lint + AI 单测 + 构建 + 产物校验 +
 
 ## 静态导出与部署
 
-**FTP / 静态托管**
+**兼容静态包（仅测试 / 兼容验证）**
 ```bash
 npm run export:static   # 输出至 ftp-upload/（含首页 HTML + assets + SNN AI）
 ```
-直接上传 `ftp-upload/` 至虚拟主机即可。
+
+`ftp-upload/` 不是 SNN 正式生产前端，禁止部署到正式 Cloudflare 项目或覆盖 `/ai/`。
 
 > `ftp-upload/ai-config.js` 默认为占位地址，使用 AI 聊天前请改为实际推理服务地址。
 
 **Cloudflare Workers**
 ```bash
-npm run build           # Vinext 生产构建
+npm run build:production              # 生成 Worker + React 客户端产物
+npm run test:production-artifact      # 确认目标不是 ftp-upload/
+npm run deploy:production              # 明确部署到 Cloudflare Workers
 ```
+生产运行时是 `dist/server/index.js`，其静态资源指向 `dist/client/`。不要将 `dist/client/` 或 `ftp-upload/` 单独作为 Pages 输出目录上传。
 `.openai/hosting.json` 已预留可选 D1 / R2 绑定，`vite.config.ts` 会在本地模拟；当前展示功能无需启用。
 
 正式域名请设置 `NEXT_PUBLIC_SITE_URL`（如 `https://snn.example.com`），否则 OG 图等将无法生成绝对地址，影响分享卡片。
