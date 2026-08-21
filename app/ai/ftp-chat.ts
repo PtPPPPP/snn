@@ -54,6 +54,9 @@ const sidebar = document.querySelector<HTMLElement>(".sidebar");
 const backdrop = document.querySelector<HTMLElement>("#ai-backdrop");
 const scrollToBottomBtn = document.querySelector<HTMLButtonElement>("#ai-scroll-to-bottom");
 const SEND_ICON = '<span aria-hidden="true">↑</span>';
+// Same geometry as the React composer's StopIcon (app/ai/chat-input.tsx):
+// a solid rounded square rendered at ~9x9px inside the 16x16 icon slot.
+const STOP_ICON = '<svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false"><rect x="4.375" y="4.375" width="11.25" height="11.25" rx="1.875" fill="currentColor"></rect></svg>';
 
 function formatRelativeTime(ts: number): string {
   const diff = Date.now() - ts;
@@ -287,8 +290,10 @@ function startNewConversation() {
 
 function setIsResponding(v: boolean) {
   if (!sendButton || !input) return;
+  // Icon-only stop button, matching the React composer (sendButtonStop state class).
+  sendButton.classList.toggle("sendButtonStop", v);
   if (v) {
-    sendButton.textContent = "停止";
+    sendButton.innerHTML = STOP_ICON;
     sendButton.setAttribute("aria-label", "停止生成");
     sendButton.title = "停止生成";
     input.disabled = true;
