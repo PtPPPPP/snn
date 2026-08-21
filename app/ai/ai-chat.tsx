@@ -148,7 +148,7 @@ export default function AiChat() {
   // reserved padding from that single variable.
   useEffect(() => {
     const panel = chatPanelRef.current;
-    const composerForm = panel?.querySelector("form");
+    const composerForm = panel?.querySelector("[data-chat-composer]");
     if (!panel || !composerForm) return;
     const sync = () => {
       const extent = Math.ceil(
@@ -515,20 +515,22 @@ export default function AiChat() {
             <span>{aiNodeState === "online" ? NODE_STATES.ready : NODE_STATES.offline}</span>
           </div>
           <div className={styles.messages} ref={messagesRef} onScroll={handleMessagesScroll} aria-live="polite">
-            {!loaded ? null : messages.length === 0 ? (
-              <div className={styles.emptyState}>
-                <span className={styles.emptyMark}>{EMPTY_STATE.mark}</span>
-                <h2>{EMPTY_STATE.title}</h2>
-                <p>{EMPTY_STATE.description}</p>
-              </div>
-            ) : (
-              messages.map((message) => <ChatMessage key={message.id} message={message} />)
-            )}
-            {isResponding && !isThinkingRequest ? (
-              <div className={styles.typing}><span>SNN AI 正在准备回复</span><i /><i /><i /></div>
-            ) : null}
-          {streamNotice ? <p className={styles.streamNotice}>{streamNotice}</p> : null}
-          {storageNotice ? <p className={styles.streamNotice}>{storageNotice}</p> : null}
+            <div className={styles.conversationRail}>
+              {!loaded ? null : messages.length === 0 ? (
+                <div className={styles.emptyState}>
+                  <span className={styles.emptyMark}>{EMPTY_STATE.mark}</span>
+                  <h2>{EMPTY_STATE.title}</h2>
+                  <p>{EMPTY_STATE.description}</p>
+                </div>
+              ) : (
+                messages.map((message) => <ChatMessage key={message.id} message={message} />)
+              )}
+              {isResponding && !isThinkingRequest ? (
+                <div className={styles.typing}><span>SNN AI 正在准备回复</span><i /><i /><i /></div>
+              ) : null}
+              {streamNotice ? <p className={styles.streamNotice}>{streamNotice}</p> : null}
+              {storageNotice ? <p className={styles.streamNotice}>{storageNotice}</p> : null}
+            </div>
           </div>
           <div className={styles.composerDock}>
             {showScrollToBottom ? (

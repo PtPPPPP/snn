@@ -69,6 +69,7 @@ export default function ChatInput({
   return (
     <form
       className={styles.composer}
+      data-chat-composer
       onSubmit={handleSubmit}
       onClick={(e) => {
         if (e.target === e.currentTarget) textareaRef.current?.focus();

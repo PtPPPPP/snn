@@ -979,10 +979,6 @@
     padding: 0;
   }
 
-  .composerDock {
-    bottom: 12px;
-  }
-
 }
 
 @media (hover: none), (pointer: coarse) {
@@ -1041,10 +1037,6 @@
     padding-top: 12px;
     padding-left: 16px;
     padding-right: 16px;
-  }
-
-  .composerDock {
-    bottom: 8px;
   }
 
   .emptyState {
@@ -1111,34 +1103,115 @@
   }
 }
 
-/* Composer focus retains subtle ring; workspace already defined in base rules above. */
+/* Conversation workspace ownership: one rail, one dock, controlled breakpoints. */
+.conversationRail {
+  width: min(800px, 100%);
+  margin: 0 auto;
+}
 
-/* Final polish: quieter metadata, lighter mobile drawer, centered return control. */
-.sidebar h1 { font-family: inherit; font-size: 26px; font-weight: 800; letter-spacing: -0.05em; line-height: 1; }
-.sectionCode { margin-bottom: 10px; font-size: 9px; font-weight: 600; letter-spacing: 0.08em; opacity: .52; }
-.description { margin-top: 8px; color: var(--snn-text-secondary); font-size: 13px; font-weight: 500; line-height: 1.6; }
-.historyLabel { font-family: inherit; font-size: 11px; font-weight: 650; letter-spacing: 0.02em; color: var(--snn-text-secondary); }
-.historyItemTitle { font-family: inherit; font-size: 13px; font-weight: 650; }
-.historyItemTime { font-family: var(--font-geist-mono), monospace; font-size: 10px; letter-spacing: .02em; opacity: .6; }
-.statusCard strong { font-family: inherit; font-size: 12px; font-weight: 700; }
-.statusCard span:not(.statusDot) { font-family: var(--font-geist-mono), monospace; font-size: 10px; letter-spacing: .02em; opacity: .65; }
+.sidebar h1 {
+  font-family: inherit;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+
+.sectionCode {
+  margin-bottom: 10px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  opacity: 0.52;
+}
+
+.description {
+  margin-top: 8px;
+  color: var(--snn-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.6;
+}
+
+.historyLabel,
+.historyItemTitle,
+.statusCard strong {
+  font-family: inherit;
+}
+
+.historyLabel {
+  padding: 8px 0 2px;
+  color: var(--snn-text-secondary);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.historyItemTitle { font-size: 13px; font-weight: 650; }
+.historyItemTime,
+.statusCard span:not(.statusDot) {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  opacity: 0.6;
+}
+.statusCard strong { font-size: 12px; font-weight: 700; }
+
+.messageRow { width: 100%; margin-bottom: 24px; }
+.assistantMessageRow { justify-items: start; }
+.userMessageRow { justify-items: end; }
+.assistantMessageRow .messageBubble {
+  max-width: min(680px, 92%);
+  padding: 6px 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.userBubble {
+  max-width: min(620px, 78%);
+  padding: 14px 16px;
+  border-color: var(--snn-border-soft);
+  border-radius: 18px;
+  background: var(--snn-surface);
+}
+.typing,
+.streamNotice { max-width: min(680px, 92%); }
+
+.emptyState {
+  width: min(560px, 100%);
+  margin: 0;
+  padding: 32px 0;
+}
 
 .composerDock {
   position: absolute;
-  left: 0;
   right: 0;
   bottom: 24px;
+  left: 0;
   z-index: 5;
   display: flex;
   flex-direction: column;
   align-items: center;
   min-width: 0;
-  background: transparent;
   pointer-events: none;
 }
+
+.composer {
+  width: min(800px, calc(100% - 40px));
+  margin: 0;
+  padding: 10px 14px 8px;
+  border-color: var(--snn-border);
+  border-radius: 24px;
+  box-shadow: 0 2px 12px rgba(16, 24, 40, 0.05);
+}
+
+.composer:focus-within {
+  border-color: var(--snn-border-strong);
+  box-shadow: 0 0 0 3px rgba(16, 24, 40, 0.06);
+}
+
 .scrollToBottom {
   position: absolute;
-  right: auto;
   bottom: calc(100% + 12px);
   left: 50%;
   z-index: 10;
@@ -1155,42 +1228,34 @@
   color: var(--snn-text);
   line-height: 0;
   transform: translateX(-50%);
-  box-shadow: 0 8px 24px rgba(16, 24, 16, .12);
+  box-shadow: 0 4px 14px rgba(16, 24, 40, 0.1);
   pointer-events: auto;
 }
-.scrollToBottom svg {
-  display: block;
-  width: 16px;
-  height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.scrollToBottom::before {
-  content: "";
-  position: absolute;
-  inset: -6px;
-  border-radius: 50%;
-}
 
+.scrollToBottom svg { display: block; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.scrollToBottom::before { content: ""; position: absolute; inset: -6px; border-radius: 50%; }
 .scrollToBottom:hover { background: var(--snn-surface); }
 .scrollToBottom:active { transform: translateX(-50%) scale(0.98); }
 
 @media (max-width: 620px) {
   .sidebarHeader .sectionCode,
   .sidebarHeader .description { display: none; }
-  .sidebar h1 { font-size: 22px; letter-spacing: -.04em; }
+  .sidebar h1 { font-size: 22px; letter-spacing: -0.04em; }
   .sidebarHeader { order: 1; }
   .newChatButton { order: 2; }
   .historyLabel { order: 3; padding-top: 10px; }
   .historyList { order: 4; }
-  .statusCard { order: 5; padding: 6px 0; margin-top: auto; border-top: 1px solid var(--snn-border-soft); padding-top: 12px; }
+  .statusCard { order: 5; margin-top: auto; padding: 12px 0 6px; border-top: 1px solid var(--snn-border-soft); }
   .statusCard span:not(.statusDot) { display: none; }
+  .conversationRail { width: 100%; }
+  .emptyState h2 { font-size: clamp(28px, 8vw, 32px); }
+  .composerDock { bottom: 12px; }
+  .composer { width: calc(100% - 20px); border-radius: 22px; }
   .scrollToBottom { bottom: calc(100% + 8px); width: 34px; height: 34px; }
 }
 
 @media (orientation: landscape) and (max-height: 412px) {
+  .composerDock { bottom: 8px; }
+  .composer { width: calc(100% - 20px); border-radius: 18px; }
   .scrollToBottom { bottom: calc(100% + 5px); width: 32px; height: 32px; }
 }
