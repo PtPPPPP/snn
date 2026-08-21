@@ -586,13 +586,17 @@
   box-sizing: border-box;
   width: min(720px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 12px 14px 10px;
+  padding: 10px 14px 8px;
   border: 1px solid var(--snn-border);
   border-radius: 20px;
   background: var(--snn-bg);
   box-shadow: 0 4px 16px rgba(16, 24, 40, 0.06);
   transition: border-color 160ms ease, box-shadow 160ms ease;
   pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: text;
 }
 
 .composer:focus-within {
@@ -606,7 +610,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 8px;
+  margin-top: 0;
 }
 
 .thinkingToggle {
@@ -649,11 +653,11 @@
 
 .composerInput {
   min-width: 0;
-  min-height: 48px;
+  min-height: 36px;
   max-height: 160px;
   flex: 1;
   resize: none;
-  padding: 10px 4px;
+  padding: 8px 4px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -666,10 +670,7 @@
   overflow-wrap: anywhere;
   outline: 0;
   field-sizing: content;
-}
-
-.composerInput::placeholder {
-  color: var(--muted);
+  cursor: text;
 }
 
 .sendButton {
@@ -908,7 +909,7 @@
   }
 
   .composer {
-    padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
     background: var(--snn-bg);
     border: 1px solid var(--snn-border);
     box-shadow: 0 2px 12px rgba(16,24,40,0.06);
@@ -919,8 +920,8 @@
   }
 
   .composerInput {
-    min-height: 50px;
-    padding: 10px 4px;
+    min-height: 36px;
+    padding: 8px 4px;
     border-radius: 0;
   }
 

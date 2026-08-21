@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, KeyboardEvent, useState } from "react";
+import { FormEvent, KeyboardEvent, useRef, useState } from "react";
 import styles from "./ai-chat.module.css";
 
 type ChatInputProps = {
@@ -19,6 +19,7 @@ export default function ChatInput({
   onThinkingChange,
 }: ChatInputProps) {
   const [value, setValue] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   function submit() {
     const content = value.trim();
@@ -50,18 +51,24 @@ export default function ChatInput({
   }
 
   return (
-    <form className={styles.composer} onSubmit={handleSubmit}>
+    <form
+      className={styles.composer}
+      onSubmit={handleSubmit}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) textareaRef.current?.focus();
+      }}
+    >
       <textarea
+        ref={textareaRef}
         className={styles.composerInput}
         id="ai-message"
         value={value}
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="向 SNN AI 提问…"
         rows={1}
         maxLength={12000}
         disabled={isStreaming}
-        aria-label="给 SNN AI 发消息"
+        aria-label="输入消息"
       />
       <div className={styles.composerControls}>
         <button
