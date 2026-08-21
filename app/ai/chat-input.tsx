@@ -22,7 +22,7 @@ function SendIcon() {
 function StopIcon() {
   return (
     <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false">
-      <rect x="5" y="5" width="10" height="10" rx="1.5" fill="currentColor" />
+      <rect x="4.375" y="4.375" width="11.25" height="11.25" rx="1.875" fill="currentColor" />
     </svg>
   );
 }
