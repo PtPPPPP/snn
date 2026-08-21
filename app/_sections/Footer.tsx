@@ -5,11 +5,11 @@ export function Footer() {
   return (
     <footer>
       <div className="footer-top">
-        <a className="brand footer-brand" href="#top" aria-label="Back to top">
+        <a className="brand footer-brand" href="#top" aria-label="返回首页顶部">
           <img
             className="brand-logo"
             src="/assets/snn-logo-fixed.png"
-            alt="SNN Logo"
+            alt="SNN 社团 Logo"
             width={1254}
             height={1254}
           />
@@ -21,10 +21,10 @@ export function Footer() {
         <div className="footer-cols">
           <div className="footer-col">
             <span className="footer-col-title">ABOUT</span>
-            <a href="#about">About</a>
-            <a href="#activities">Activities</a>
-            <a href="#projects">Projects</a>
-            <a href="#join">Join SNN</a>
+            <a href="#about">关于我们</a>
+            <a href="#activities">活动机制</a>
+            <a href="#projects">共创项目</a>
+            <a href="#join">加入 SNN</a>
           </div>
           <div className="footer-col">
             <span className="footer-col-title">PROJECTS</span>
