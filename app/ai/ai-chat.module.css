@@ -659,14 +659,14 @@
   max-height: 160px;
   flex: 1;
   resize: none;
-  padding: 12px 6px;
+  padding: 10px 4px;
   border: 0;
-  border-radius: 12px;
+  border-radius: 0;
   background: transparent;
   color: var(--ink);
   font: inherit;
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.6;
   max-width: 100%;
   overflow-y: auto;
   overflow-wrap: anywhere;
@@ -909,7 +909,8 @@
 
   .composerInput {
     min-height: 50px;
-    padding: 14px 12px;
+    padding: 10px 4px;
+    border-radius: 0;
   }
 
   .sendButton {
@@ -1009,8 +1010,8 @@
   .composerInput {
     min-height: 38px;
     max-height: 96px;
-    padding-top: 8px;
-    padding-bottom: 8px;
+    padding: 8px 4px;
+    border-radius: 0;
     font-size: 14px;
   }
 

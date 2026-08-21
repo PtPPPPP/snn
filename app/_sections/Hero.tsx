@@ -7,7 +7,6 @@ export function Hero() {
       <div className="hero-fade" aria-hidden="true" />
       <div className="hero-bottom">
         <div className="hero-copy">
-          <p className="eyebrow"><span aria-hidden="true">●</span> 智能神经网络</p>
           <h1>与 AI 共创，<br />构建下一步。</h1>
           <div className="hero-actions">
             <a className="button button-primary" href="#projects">探索项目</a>
