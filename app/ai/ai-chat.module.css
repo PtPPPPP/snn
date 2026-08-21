@@ -543,7 +543,7 @@
 .userBubble {
   background: var(--snn-surface);
   border-color: var(--snn-border);
-  border-radius: var(--snn-radius-md);
+  border-radius: 12px;
 }
 
 .typing {
@@ -587,9 +587,9 @@
   margin: 0 auto 16px;
   padding: 10px 12px 10px;
   border: 1px solid var(--snn-border);
-  border-radius: 16px;
+  border-radius: 20px;
   background: var(--snn-bg);
-  box-shadow: 0 4px 16px rgba(32, 37, 31, 0.06);
+  box-shadow: 0 4px 20px rgba(32, 37, 31, 0.07);
 }
 
 .composer:focus-within {
@@ -627,7 +627,7 @@
   gap: 7px;
   padding: 0 11px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--snn-surface);
   color: var(--muted);
   cursor: pointer;
@@ -659,9 +659,9 @@
   max-height: 160px;
   flex: 1;
   resize: none;
-  padding: 12px 4px;
+  padding: 12px 6px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 12px;
   background: transparent;
   color: var(--ink);
   font: inherit;
@@ -681,7 +681,7 @@
 .sendButton {
   min-width: 96px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 0 16px;
   background: var(--snn-control);
   color: var(--snn-control-text);
