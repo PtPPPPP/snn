@@ -100,8 +100,6 @@
 .sectionCode,
 .panelHeader,
 .messageLabel,
-.composerLabel,
-.composerHint,
 .statusCard span,
 .typing {
   font-family: var(--font-geist-mono), monospace;
@@ -424,7 +422,7 @@
   display: grid;
   min-width: 0;
   min-height: 0;
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
   background: var(--snn-bg);
   isolation: isolate;
 }
@@ -673,6 +671,8 @@
   cursor: text;
 }
 
+.page textarea.composerInput:focus-visible { outline: none; }
+
 .sendButton {
   min-width: 36px;
   width: 36px;
@@ -714,10 +714,6 @@
 .page textarea:focus-visible {
   outline: var(--snn-focus-ring-width) solid var(--snn-focus-ring);
   outline-offset: var(--snn-focus-ring-offset);
-}
-
-.composerHint {
-  margin: 8px 0 0;
 }
 
 .messages,
@@ -932,17 +928,10 @@
     padding: 0;
   }
 
-  .composerHint {
-    display: none;
-  }
-
   .messages {
     padding-bottom: 160px;
   }
 
-  .composerDock {
-    bottom: 12px;
-  }
 }
 
 @media (hover: none), (pointer: coarse) {
@@ -1001,10 +990,6 @@
     padding: 12px 16px 120px;
   }
 
-  .composerDock {
-    bottom: 8px;
-  }
-
   .emptyState {
     min-height: 0;
     align-content: start;
@@ -1032,20 +1017,12 @@
     box-shadow: 0 2px 10px rgba(16,24,40,0.05);
   }
 
-  .composerHint {
-    display: none;
-  }
-
   .composerInput {
     min-height: 38px;
     max-height: 96px;
     padding: 8px 4px;
     border-radius: 0;
     font-size: 14px;
-  }
-
-  .composerToolbar {
-    gap: 8px;
   }
 
   .thinkingToggle {
@@ -1091,17 +1068,14 @@
 .statusCard span:not(.statusDot) { font-family: var(--font-geist-mono), monospace; font-size: 10px; letter-spacing: .02em; opacity: .65; }
 
 .composerDock {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 24px;
+  position: relative;
   z-index: 5;
   display: flex;
   flex-direction: column;
   align-items: center;
   min-width: 0;
   background: transparent;
-  pointer-events: none;
+  pointer-events: auto;
 }
 .scrollToBottom {
   position: absolute;

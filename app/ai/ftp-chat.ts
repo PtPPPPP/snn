@@ -53,6 +53,7 @@ const sidebarClose = document.querySelector<HTMLButtonElement>("#ai-sidebar-clos
 const sidebar = document.querySelector<HTMLElement>(".sidebar");
 const backdrop = document.querySelector<HTMLElement>("#ai-backdrop");
 const scrollToBottomBtn = document.querySelector<HTMLButtonElement>("#ai-scroll-to-bottom");
+const SEND_ICON = '<span aria-hidden="true">↑</span>';
 
 function formatRelativeTime(ts: number): string {
   const diff = Date.now() - ts;
@@ -287,11 +288,15 @@ function startNewConversation() {
 function setIsResponding(v: boolean) {
   if (!sendButton || !input) return;
   if (v) {
-    sendButton.textContent = "停止生成";
+    sendButton.textContent = "停止";
+    sendButton.setAttribute("aria-label", "停止生成");
+    sendButton.title = "停止生成";
     input.disabled = true;
     thinkingToggle?.setAttribute("disabled", "");
   } else {
-    sendButton.textContent = "发送 ↗";
+    sendButton.innerHTML = SEND_ICON;
+    sendButton.setAttribute("aria-label", "发送");
+    sendButton.title = "发送";
     input.disabled = false;
     thinkingToggle?.removeAttribute("disabled");
     input.focus();

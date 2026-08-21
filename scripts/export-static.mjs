@@ -230,15 +230,11 @@ const aiHtml = `<!doctype html>
           <div class="composerDock">
             <button class="scrollToBottom" id="ai-scroll-to-bottom" type="button" style="display:none" aria-label="回到底部" title="回到底部"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v15M6 13l6 6 6-6" /></svg></button>
             <form class="composer" id="ai-composer">
-            <div class="composerToolbar">
-              <label class="composerLabel" for="ai-message">MESSAGE / 输入消息</label>
-              <button class="thinkingToggle" id="ai-thinking-toggle" type="button" aria-pressed="false"><span aria-hidden="true">◇</span> ${aiCopy.THINKING_MODE.label}</button>
-            </div>
+            <textarea class="composerInput" id="ai-message" aria-label="输入消息" rows="1"></textarea>
             <div class="composerControls">
-              <textarea class="composerInput" id="ai-message" placeholder="向 SNN AI 提问…" rows="1"></textarea>
-              <button class="sendButton" id="ai-send" type="submit">发送 <span aria-hidden="true">↗</span></button>
+              <button class="thinkingToggle" id="ai-thinking-toggle" type="button" aria-pressed="false"><span aria-hidden="true">◇</span> ${aiCopy.THINKING_MODE.label}</button>
+              <button class="sendButton" id="ai-send" type="submit" aria-label="发送" title="发送"><span aria-hidden="true">↑</span></button>
             </div>
-            <p class="composerHint">Enter 发送 · Shift + Enter 换行</p>
             </form>
           </div>
         </div>
