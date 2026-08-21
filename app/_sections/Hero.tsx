@@ -13,7 +13,6 @@ export function Hero() {
             <a className="button button-ghost" href="/ai/">进入 SNN AI</a>
           </div>
         </div>
-        <div className="hero-tags" aria-label="SNN 方向"><span>智能体</span><span>项目</span><span>具身智能</span></div>
       </div>
     </section>
   );

@@ -586,15 +586,40 @@
   width: min(720px, calc(100% - 32px));
   margin: 0 auto 16px;
   padding: 10px 12px 10px;
-  border: 1px solid var(--snn-border);
+  border: 1px solid rgba(205, 215, 230, 0.62);
   border-radius: 20px;
-  background: var(--snn-bg);
-  box-shadow: 0 4px 20px rgba(32, 37, 31, 0.07);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(252,253,254,0.96) 55%, rgba(246,247,249,0.98) 100%),
+    linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
+  background-blend-mode: normal;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.94),
+    inset 0 -1px 0 rgba(230,235,245,0.55),
+    0 1px 3px rgba(16,24,40,0.04),
+    0 8px 28px rgba(16,24,40,0.06);
+  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.composer:hover {
+  border-color: rgba(195,210,230,0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.96),
+    inset 0 -1px 0 rgba(230,235,245,0.6),
+    0 1px 4px rgba(16,24,40,0.05),
+    0 10px 30px rgba(16,24,40,0.07);
 }
 
 .composer:focus-within {
-  border-color: var(--snn-border-strong);
-  box-shadow: 0 0 0 3px rgba(64, 84, 72, 0.12);
+  border-color: rgba(175,190,220,0.82);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(252,253,254,0.98) 55%, rgba(245,247,250,1) 100%),
+    linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.98),
+    inset 0 -1px 0 rgba(225,232,248,0.65),
+    0 1px 4px rgba(16,24,40,0.05),
+    0 12px 32px rgba(16,24,40,0.08),
+    0 0 0 1px rgba(180,195,220,0.18);
 }
 
 .composerLabel,
@@ -680,24 +705,42 @@
 
 .sendButton {
   min-width: 96px;
-  border: 0;
+  border: 1px solid rgba(255,255,255,0.08);
   border-radius: 12px;
   padding: 0 16px;
-  background: var(--snn-control);
+  background: linear-gradient(180deg, #2e3238 0%, #0e1013 100%);
   color: var(--snn-control-text);
   cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.14),
+    0 1px 2px rgba(0,0,0,0.28),
+    0 4px 12px rgba(0,0,0,0.18);
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background 120ms ease;
 }
 
 .sendButton:hover:not(:disabled),
 .sendButton:focus-visible:not(:disabled) {
-  background: var(--snn-control-hover);
+  background: linear-gradient(180deg, #353a41 0%, #13151a 100%);
+  border-color: rgba(255,255,255,0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.18),
+    0 1px 3px rgba(0,0,0,0.32),
+    0 6px 16px rgba(0,0,0,0.20);
   color: var(--snn-control-text);
+}
+
+.sendButton:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    0 1px 1px rgba(0,0,0,0.28);
 }
 
 .sendButton:disabled,
 .composerInput:disabled {
   cursor: not-allowed;
-  opacity: 0.56;
+  opacity: 0.52;
+  box-shadow: none;
 }
 
 .page button:focus-visible,
@@ -901,6 +944,9 @@
 
   .composer {
     padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+    background: var(--snn-bg);
+    border: 1px solid var(--snn-border);
+    box-shadow: 0 2px 12px rgba(16,24,40,0.06);
   }
 
   .composerControls {
@@ -1001,6 +1047,9 @@
     margin: 4px 10px 6px;
     padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
     border-radius: 12px;
+    background: var(--snn-bg);
+    border: 1px solid var(--snn-border);
+    box-shadow: 0 2px 10px rgba(16,24,40,0.05);
   }
 
   .composerHint {
@@ -1035,7 +1084,9 @@
 @media (prefers-reduced-motion: reduce) {
   .sidebar,
   .backdrop,
-  .historyItem {
+  .historyItem,
+  .composer,
+  .sendButton {
     transition: none;
   }
 
