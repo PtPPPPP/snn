@@ -1477,3 +1477,12 @@ footer {
   .hero-bottom { gap: 16px; padding-bottom: 24px; }
   .hero h1 { max-width: 340px; }
 }
+
+/* Final rhythm adjustment: keep the art perceptible without making it the
+   headline, and bring the action row slightly closer to the fold. */
+.hero-art { opacity: .34; }
+.hero-bottom { padding-bottom: 60px; }
+@media (max-width: 760px) {
+  .hero-art { opacity: .46; }
+  .hero-bottom { padding-bottom: 30px; }
+}

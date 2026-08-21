@@ -452,18 +452,22 @@ export default function AiChat() {
           {streamNotice ? <p className={styles.streamNotice}>{streamNotice}</p> : null}
           {storageNotice ? <p className={styles.streamNotice}>{storageNotice}</p> : null}
           </div>
-          {showScrollToBottom ? (
-            <button className={styles.scrollToBottom} type="button" onClick={scrollToBottom}>
-              ↓ 回到底部
-            </button>
-          ) : null}
-          <ChatInput
-            isStreaming={isResponding}
-            thinking={thinkingMode}
-            onSend={sendMessage}
-            onStop={stopGeneration}
-            onThinkingChange={handleThinkingChange}
-          />
+          <div className={styles.composerDock}>
+            {showScrollToBottom ? (
+              <button className={styles.scrollToBottom} type="button" onClick={scrollToBottom} aria-label="回到底部" title="回到底部">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M12 4v15M6 13l6 6 6-6" />
+                </svg>
+              </button>
+            ) : null}
+            <ChatInput
+              isStreaming={isResponding}
+              thinking={thinkingMode}
+              onSend={sendMessage}
+              onStop={stopGeneration}
+              onThinkingChange={handleThinkingChange}
+            />
+          </div>
         </div>
       </section>
 
