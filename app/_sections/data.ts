@@ -12,25 +12,25 @@ export const projects: Project[] = [
     index: "01",
     title: "Intent2Prompt",
     summary:
-      "把模糊想法转译为清晰、可执行的结构化提示词，让 AI 协作从表达意图开始。",
+      "Translates vague intent into clear, executable structured prompts — starting AI collaboration from expression.",
     tags: ["PROMPT ENGINEERING", "LLM", "AI TOOL"],
     status: "GitHub Repo",
     href: "https://github.com/PtPPPPP/intent2prompt",
   },
   {
     index: "02",
-    title: "低空无人机哨兵",
+    title: "Low-Altitude Sentinel",
     summary:
-      "面向低空场景的无人机智能感知与安全监测项目，探索从识别到预警的完整链路。",
+      "Intelligent sensing and safety monitoring for low-altitude scenarios — from perception to early warning, end-to-end.",
     tags: ["DRONE", "COMPUTER VISION", "LOW ALTITUDE"],
     status: "GitHub Repo",
     href: "https://github.com/PtPPPPP/low-altitude-drone-sentinel",
   },
   {
     index: "03",
-    title: "具身智能训练平台",
+    title: "Embodied Training Platform",
     summary:
-      "围绕机器人学习与仿真训练，搭建可实验、可复现、可持续扩展的具身智能平台。",
+      "A reproducible, extensible platform for robot learning and simulation — built to experiment, repeat, and scale.",
     tags: ["EMBODIED AI", "ROBOTICS", "SIMULATION"],
     status: "GitHub Repo",
     href: "https://github.com/PtPPPPP/embodied-training-platform",
@@ -46,17 +46,17 @@ export type Activity = {
 export const activities: Activity[] = [
   {
     code: "LEARN / 01",
-    title: "技术小课",
-    detail: "成员轮流分享 AI、机器人与工程工具，20 分钟讲清一个可复用方法。",
+    title: "Micro-Lessons",
+    detail: "Members share AI, robotics, and tooling — 20 minutes to teach one reusable method.",
   },
   {
     code: "BUILD / 02",
-    title: "项目冲刺",
-    detail: "以 2–4 周为周期组队交付，从需求、Demo 到复盘，留下公开作品。",
+    title: "Build Sprints",
+    detail: "Teams deliver in 2–4 week cycles: from requirements to demo to review, leaving public artifacts.",
   },
   {
     code: "CONNECT / 03",
-    title: "开放交流",
-    detail: "邀请老师、学长与行业伙伴交流，让学习路径连接比赛、科研与职业方向。",
+    title: "Open Exchange",
+    detail: "Invite faculty, seniors, and industry partners to link learning to competition, research, and career.",
   },
 ];

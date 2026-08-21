@@ -5,22 +5,23 @@ export function JoinSection() {
     <section className="section section-join" id="join">
       <div className="join-main">
         <p className="eyebrow">JOIN THE NETWORK / 04</p>
-        <h2>不必等准备好，从一个角色开始。</h2>
+        <h2>Start before you feel ready. Pick a role.</h2>
         <p className="join-intro">
-          无论你刚写出第一个程序，还是已经在做机器人、算法或产品项目，SNN
-          都欢迎愿意学习、愿意协作、愿意交付的你。
+          Whether you just wrote your first program or are already building
+          robots, algorithms, or products — if you like to learn, collaborate,
+          and ship, you belong here.
         </p>
-        <div className="join-status" aria-label="公众号状态">
+        <div className="join-status" aria-label="WeChat status">
           <span className="pulse" aria-hidden="true" />
-          SNN 社团公众号已上线
+          SNN WeChat Official Account is live
         </div>
         <p className="join-placeholder">
-          扫描二维码关注公众号，获取活动预告、项目进展与最新招募信息。
+          Follow the QR code for event updates, project progress, and recruitment.
         </p>
       </div>
       <div className="wechat-card" id="join-steps">
         <div className="wechat-card-head">
-          <span>WECHAT / 公众号</span>
+          <span>WECHAT</span>
           <span className="wechat-card-scan">
             SCAN TO FOLLOW <ArrowDownRight className="wechat-card-scan-icon" />
           </span>
@@ -28,7 +29,7 @@ export function JoinSection() {
         <div className="wechat-qr-wrap">
           <img
             src="/assets/snn-wechat.jpg"
-            alt="SNN 社团公众号二维码"
+            alt="SNN WeChat QR code — 二维码"
             width={430}
             height={430}
           />
@@ -36,8 +37,8 @@ export function JoinSection() {
           <span className="corner corner-b" aria-hidden="true" />
         </div>
         <div className="wechat-card-foot">
-          <strong>SNN 社团</strong>
-          <span>活动 · 项目 · 招募</span>
+          <strong>SNN</strong>
+          <span>Events · Projects · Recruitment</span>
         </div>
       </div>
     </section>

@@ -3,30 +3,31 @@ export function AboutSection() {
     <section className="section section-about" id="about">
       <div className="section-kicker">
         <span>01</span>
-        <span>ABOUT / 定位</span>
+        <span>ABOUT</span>
       </div>
       <div className="about-grid">
-        <h2>学得会，做得出，讲得清。</h2>
+        <h2>Learn it. Build it. Explain it.</h2>
         <div className="about-copy">
           <p className="about-lead">
-            SNN 不是只听分享的兴趣群，也不是只服务少数高手的比赛队。
-            我们用真实项目，把分散的知识变成可以运行、展示和继续迭代的作品。
+            SNN is neither a lecture-only club nor an elite-only team.
+            Through real projects, we turn scattered knowledge into runnable,
+            demonstrable, and evolving work.
           </p>
           <div className="principles">
             <article>
               <span>INPUT</span>
-              <h3>对新手开放</h3>
-              <p>从工具和基础任务开始，有清晰入口，也有进阶空间。</p>
+              <h3>Open to beginners</h3>
+              <p>Start with tools and entry tasks — clear entry points with room to grow.</p>
             </article>
             <article>
               <span>PROCESS</span>
-              <h3>以项目驱动</h3>
-              <p>围绕问题组队协作，在交付中补齐代码、硬件与表达能力。</p>
+              <h3>Project-driven</h3>
+              <p>Collaborate around real problems and build code, hardware, and communication through delivery.</p>
             </article>
             <article>
               <span>OUTPUT</span>
-              <h3>让成果可见</h3>
-              <p>保留文档、Demo 与复盘，让每次实践沉淀为个人作品。</p>
+              <h3>Make work visible</h3>
+              <p>Keep docs, demos, and retrospectives so every practice becomes a portfolio piece.</p>
             </article>
           </div>
         </div>

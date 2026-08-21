@@ -1422,8 +1422,7 @@ footer {
 .main-nav > a:not(.nav-ai) { display: inline-flex; align-items: center; padding: 8px 5px; color: var(--snn-text-secondary); font-size: 12px; }
 .main-nav > a:not(.nav-ai):hover, .main-nav > a:not(.nav-ai):focus-visible, .main-nav > a.active { color: var(--snn-text); }
 .nav-open-pill { display: inline-flex; min-height: 40px; align-items: center; border-radius: var(--snn-radius-pill); font: inherit; font-size: 12px; font-weight: 650; }
-.nav-open-pill { gap: 8px; padding: 8px 12px; background: var(--snn-surface); color: var(--snn-text); }
-.nav-open-pill span { display: grid; width: 20px; height: 20px; place-items: center; border-radius: 50%; background: #111; color: #fff; font-size: 9px; letter-spacing: -2px; }
+.nav-open-pill { padding: 8px 12px; background: var(--snn-surface); color: var(--snn-text); }
 /* REDESIGN: stronger hierarchy — H1 unmistakably primary, art secondary but present */
 .hero { position: relative; min-height: 92vh; min-height: 92svh; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; background: #fcfcfc; }
 .hero-visual { position: absolute; inset: 0; z-index: 0; display: block; overflow: hidden; pointer-events: none; }

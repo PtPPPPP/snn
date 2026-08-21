@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 const NAV_LINKS = [
-  { href: "#about", label: "关于我们", id: "about" },
-  { href: "#projects", label: "项目", id: "projects" },
-  { href: "#activities", label: "活动", id: "activities" },
-  { href: "#join", label: "加入", id: "join" },
+  { href: "#about", label: "About", id: "about" },
+  { href: "#projects", label: "Projects", id: "projects" },
+  { href: "#activities", label: "Activities", id: "activities" },
+  { href: "#join", label: "Join", id: "join" },
 ];
 
 export function Nav() {
@@ -38,18 +38,18 @@ export function Nav() {
 
   return (
     <header className="site-header">
-      <a className="brand" href="#top" aria-label="SNN 首页">
+      <a className="brand" href="#top" aria-label="SNN Home">
         <img
           className="brand-logo"
           src="/assets/snn-logo-fixed.png"
-          alt="SNN 社团 Logo"
+          alt="SNN Logo"
           width={1254}
           height={1254}
         />
         <span className="brand-name">SNN</span>
       </a>
 
-      <nav className="main-nav" aria-label="主导航">
+      <nav className="main-nav" aria-label="Primary navigation">
         {NAV_LINKS.map((link) => (
           <a
             key={link.id}
@@ -60,7 +60,7 @@ export function Nav() {
           </a>
         ))}
       </nav>
-      <Link className="nav-open-pill" href="/ai/" aria-label="打开 SNN AI"><span aria-hidden="true">•••</span> Open SNN AI</Link>
+      <Link className="nav-open-pill" href="/ai/" aria-label="Open SNN AI">Open SNN AI</Link>
     </header>
   );
 }

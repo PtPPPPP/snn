@@ -6,12 +6,13 @@ export function ProjectsSection() {
     <section className="section section-projects" id="projects">
       <div className="section-kicker">
         <span>02</span>
-        <span>PROJECTS / 共创项目</span>
+        <span>PROJECTS</span>
       </div>
       <div className="projects-heading">
-        <h2>从第一行代码，到第一个现场。</h2>
+        <h2>From first line of code to first demo.</h2>
         <p>
-          项目不按专业设限。你可以从算法、控制、硬件、产品或视觉表达中的任一位置加入。
+          Projects are open to any discipline. Contribute from algorithms, control,
+          hardware, product, or visual expression.
         </p>
       </div>
       <div className="project-list">
@@ -22,7 +23,7 @@ export function ProjectsSection() {
             key={project.index}
             target="_blank"
             rel="noreferrer"
-            aria-label={`在 GitHub 查看 ${project.title}`}
+            aria-label={`View ${project.title} on GitHub`}
           >
             <span className="project-index">P/{project.index}</span>
             <div className="project-title-wrap">
