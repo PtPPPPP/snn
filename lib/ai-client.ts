@@ -13,11 +13,13 @@ export type AiStatus = {
   online: boolean;
   model: string | null;
   status: string;
+  capabilities?: { thinking: boolean; webSearch: boolean };
 };
 
 type SendChatMessageOptions = {
   messages: AiChatMessage[];
   thinking?: boolean;
+  webSearch?: boolean;
 };
 
 export type AiStreamDone = {
@@ -112,13 +114,14 @@ async function requestJson<T>(
 export async function sendChatMessage({
   messages,
   thinking = false,
+  webSearch = false,
 }: SendChatMessageOptions): Promise<AiChatResponse> {
   const response = await requestJson<AiChatResponse>(
     "/chat",
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ messages, thinking }),
+      body: JSON.stringify({ messages, thinking, webSearch }),
     },
     CHAT_TIMEOUT_MS,
   );
@@ -185,6 +188,7 @@ function parseSseEvent(eventBlock: string) {
 export async function streamChatMessage({
   messages,
   thinking = false,
+  webSearch = false,
   signal,
   onDelta,
   onReasoningStart,
@@ -197,7 +201,7 @@ export async function streamChatMessage({
     response = await fetch(`${getAiApiBaseUrl()}/chat/stream`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ messages, thinking }),
+      body: JSON.stringify({ messages, thinking, webSearch }),
       signal,
     });
   } catch (error) {
@@ -315,8 +319,9 @@ export async function getAiStatus(): Promise<AiStatus> {
       online: response.online,
       model: typeof response.model === "string" ? response.model : null,
       status: response.status,
+      capabilities: { thinking: response.capabilities?.thinking === true, webSearch: response.capabilities?.webSearch === true },
     };
   } catch {
-    return { online: false, model: null, status: "offline" };
+    return { online: false, model: null, status: "offline", capabilities: { thinking: false, webSearch: false } };
   }
 }

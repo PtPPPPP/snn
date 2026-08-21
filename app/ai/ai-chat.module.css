@@ -624,7 +624,7 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   margin-top: 0;
 }
@@ -661,6 +661,10 @@
   font-size: 14px;
   line-height: 1;
 }
+
+.thinkingToggle svg { flex: 0 0 auto; color: var(--blue); }
+
+.sendButton { margin-left: auto; }
 
 .thinkingToggle:disabled {
   cursor: not-allowed;

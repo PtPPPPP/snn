@@ -33,43 +33,41 @@ import { deleteConversationLifecycle, saveConversationWithNotice } from "../../l
 
 type AiNodeState = "checking" | "offline" | "online";
 const THINKING_STORAGE_KEY = "snn-ai-thinking-mode";
+const WEB_SEARCH_STORAGE_KEY = "snn-ai-web-search-mode";
 
 // Thinking preference as a hydration-safe external store (F-01).
 // During SSR and the hydration render React uses the server snapshot (false),
 // then switches to the live localStorage snapshot after mount — so the first
 // client render always matches the server output (no React #418) while the
 // persisted preference still restores without user interaction.
-function readThinkingPreference(): boolean {
+function readPreference(key: string): boolean {
   try {
-    return window.localStorage.getItem(THINKING_STORAGE_KEY) === "true";
+    return window.localStorage.getItem(key) === "true";
   } catch {
     return false;
   }
 }
 
-const thinkingListeners = new Set<() => void>();
+const preferenceListeners = new Set<() => void>();
 
-function subscribeThinking(listener: () => void): () => void {
-  thinkingListeners.add(listener);
-  return () => thinkingListeners.delete(listener);
+function subscribePreference(listener: () => void): () => void {
+  preferenceListeners.add(listener);
+  return () => preferenceListeners.delete(listener);
 }
 
-function getThinkingSnapshot(): boolean {
-  return readThinkingPreference();
+function preferenceStore(key: string) {
+  return {
+    subscribe: subscribePreference,
+    getSnapshot: () => readPreference(key),
+    getServerSnapshot: () => false,
+    write(enabled: boolean) {
+      try { window.localStorage.setItem(key, String(enabled)); } catch {}
+      for (const listener of preferenceListeners) listener();
+    },
+  };
 }
-
-function getThinkingServerSnapshot(): boolean {
-  return false;
-}
-
-function writeThinkingPreference(enabled: boolean): void {
-  try {
-    window.localStorage.setItem(THINKING_STORAGE_KEY, String(enabled));
-  } catch {
-    // localStorage unavailable — in-memory state still updates via listeners.
-  }
-  for (const listener of thinkingListeners) listener();
-}
+const thinkingPreference = preferenceStore(THINKING_STORAGE_KEY);
+const webSearchPreference = preferenceStore(WEB_SEARCH_STORAGE_KEY);
 
 function toUiMessages(messages: AiChatMessage[]): ChatMessageModel[] {
   return messages.map((m, i) => ({
@@ -113,10 +111,12 @@ export default function AiChat() {
   // Hydration-safe: server snapshot is always false; the persisted value is
   // applied by React right after hydration via the external store.
   const thinkingMode = useSyncExternalStore(
-    subscribeThinking,
-    getThinkingSnapshot,
-    getThinkingServerSnapshot,
+    thinkingPreference.subscribe,
+    thinkingPreference.getSnapshot,
+    thinkingPreference.getServerSnapshot,
   );
+  const webSearchMode = useSyncExternalStore(webSearchPreference.subscribe, webSearchPreference.getSnapshot, webSearchPreference.getServerSnapshot);
+  const [webSearchAvailable, setWebSearchAvailable] = useState(false);
   const [isThinkingRequest, setIsThinkingRequest] = useState(false);
 
   const messagesRef = useRef<HTMLDivElement>(null);
@@ -227,6 +227,7 @@ export default function AiChat() {
       if (!isCurrent) return;
       setAiNodeState(status.online ? "online" : "offline");
       setModelName(status.model);
+      setWebSearchAvailable(status.capabilities?.webSearch === true);
     });
     return () => {
       isCurrent = false;
@@ -325,7 +326,11 @@ export default function AiChat() {
   }
 
   function handleThinkingChange(enabled: boolean) {
-    writeThinkingPreference(enabled);
+    thinkingPreference.write(enabled);
+  }
+
+  function handleWebSearchChange(enabled: boolean) {
+    webSearchPreference.write(enabled);
   }
 
   function sendMessage(content: string) {
@@ -333,6 +338,7 @@ export default function AiChat() {
     if (!convId) return;
 
     const activeThinking = thinkingMode;
+    const activeWebSearch = webSearchMode && webSearchAvailable;
     const userMessage = createUiMessage("user", content);
     const assistantMessage = createUiMessage("assistant", "");
     const requestMessages = [...messages, userMessage];
@@ -372,6 +378,7 @@ export default function AiChat() {
     void streamChatMessage({
       messages: requestMessages.map(({ role, content: mc }) => ({ role, content: mc })),
       thinking: activeThinking,
+      webSearch: activeWebSearch,
       signal: controller.signal,
       onReasoningStart: () => {
         if (!canApplyGeneration(activeGenerationRef.current, generationToken, activeIdRef.current, sentConvId) || !activeThinking) return;
@@ -543,9 +550,12 @@ export default function AiChat() {
             <ChatInput
               isStreaming={isResponding}
               thinking={thinkingMode}
+              webSearch={webSearchMode}
+              webSearchAvailable={webSearchAvailable}
               onSend={sendMessage}
               onStop={stopGeneration}
               onThinkingChange={handleThinkingChange}
+              onWebSearchChange={handleWebSearchChange}
             />
           </div>
         </div>

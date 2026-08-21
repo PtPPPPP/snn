@@ -81,6 +81,7 @@ test("status forwards a valid online contract", async () => {
     online: true,
     model: "Qwen3-test",
     status: "ready",
+    capabilities: { thinking: false, webSearch: false },
   });
 });
 
@@ -126,7 +127,7 @@ test("chat forwards only messages and adds Access service token headers", async 
   assert.equal(body.reply, "你好，我是 SNN AI。");
   assert.equal(requestHeaders.get("CF-Access-Client-Id"), "test-client-id");
   assert.equal(requestHeaders.get("CF-Access-Client-Secret"), "test-client-secret");
-  assert.deepEqual(requestBody, { messages: [{ role: "user", content: "你好" }], thinking: true });
+  assert.deepEqual(requestBody, { messages: [{ role: "user", content: "你好" }], thinking: true, webSearch: false });
   assert.equal(JSON.stringify(body).includes("test-client-secret"), false);
 });
 

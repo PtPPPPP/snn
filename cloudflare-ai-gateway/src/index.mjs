@@ -1,4 +1,4 @@
-import { normalizeThinking, validateMessages } from "../../shared/ai-validation.mjs";
+import { normalizeThinking, normalizeWebSearch, validateMessages } from "../../shared/ai-validation.mjs";
 
 class OriginError extends Error {
   constructor(kind, status = null) {
@@ -276,8 +276,9 @@ export async function handleRequest(request, environment, { fetchImpl = fetch, l
                 online: body.online,
                 model: typeof body.model === "string" ? body.model : null,
                 status: body.status,
+                capabilities: { thinking: body?.capabilities?.thinking === true, webSearch: body?.capabilities?.webSearch === true },
               }
-            : { online: false, model: null, status: "offline" },
+            : { online: false, model: null, status: "offline", capabilities: { thinking: false, webSearch: false } },
           origin,
         );
       } catch (error) {
@@ -319,6 +320,7 @@ export async function handleRequest(request, environment, { fetchImpl = fetch, l
         return jsonResponse(responseStatus, { error: "Invalid chat request", requestId: id }, origin);
       }
       const thinking = normalizeThinking(body?.thinking);
+      const webSearch = normalizeWebSearch(body?.webSearch);
 
       const withinLimit = await enforceRateLimit(environment.AI_CHAT_RATE_LIMIT, request);
       if (!withinLimit) {
@@ -332,7 +334,7 @@ export async function handleRequest(request, environment, { fetchImpl = fetch, l
           const originRequest = await fetchOrigin(fetchImpl, environment, "/api/ai/chat/stream", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ messages, thinking }),
+            body: JSON.stringify({ messages, thinking, webSearch }),
           }, request.signal);
           originStatus = originRequest.response.status;
           responseStatus = 200;
@@ -359,7 +361,7 @@ export async function handleRequest(request, environment, { fetchImpl = fetch, l
         const originRequest = await fetchOrigin(fetchImpl, environment, "/api/ai/chat", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ messages, thinking }),
+          body: JSON.stringify({ messages, thinking, webSearch }),
         }, request.signal);
         originStatus = originRequest.response.status;
         let responseBody;

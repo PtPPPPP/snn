@@ -43,3 +43,7 @@ export function validateMessages(value) {
 export function normalizeThinking(value) {
   return value === true;
 }
+
+export function normalizeWebSearch(value) {
+  return value === true;
+}

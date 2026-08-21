@@ -22,6 +22,12 @@ function normalizeUpstreamBaseUrl(value) {
   return parsed.toString().replace(/\/+$/, "");
 }
 
+function normalizeWebSearchBaseUrl(value) {
+  const parsed = new URL(value);
+  if (parsed.protocol !== "https:") throw new Error("QWEN_WEB_SEARCH_BASE_URL must use HTTPS");
+  return parsed.toString().replace(/\/+$/, "");
+}
+
 export function loadConfig(environment = process.env) {
   const host = environment.SNN_AI_NODE_HOST || "127.0.0.1";
   if (host !== "127.0.0.1") {
@@ -33,6 +39,14 @@ export function loadConfig(environment = process.env) {
     .map((origin) => origin.trim())
     .filter(Boolean);
 
+  const webSearchBaseUrl = environment.QWEN_WEB_SEARCH_BASE_URL?.trim();
+  const webSearchApiKey = environment.QWEN_WEB_SEARCH_API_KEY || "";
+  const webSearchModel = environment.QWEN_WEB_SEARCH_MODEL?.trim() || "";
+  const webSearchConfigured = Boolean(webSearchBaseUrl && webSearchApiKey && webSearchModel);
+  if ((webSearchBaseUrl || webSearchApiKey || webSearchModel) && !webSearchConfigured) {
+    throw new Error("QWEN web search requires base URL, API key, and model");
+  }
+
   return {
     host,
     port: readPositiveInteger(environment.SNN_AI_NODE_PORT, 8787, "SNN_AI_NODE_PORT"),
@@ -42,6 +56,7 @@ export function loadConfig(environment = process.env) {
     ),
     upstreamApiKey: environment.QWEN_UPSTREAM_API_KEY || "",
     model: environment.QWEN_MODEL || "",
+    webSearch: webSearchConfigured ? { baseUrl: normalizeWebSearchBaseUrl(webSearchBaseUrl), apiKey: webSearchApiKey, model: webSearchModel } : null,
     statusTimeoutMs: readPositiveInteger(
       environment.AI_STATUS_TIMEOUT_MS,
       4_000,

@@ -80,6 +80,7 @@ test("status is offline when the runtime is unreachable", async () => {
         online: false,
         model: null,
         status: "offline",
+        capabilities: { thinking: false, webSearch: false },
       });
     },
   );
@@ -95,6 +96,7 @@ test("status reports ready only after upstream models responds", async () => {
         online: true,
         model: "Qwen3-test",
         status: "ready",
+        capabilities: { thinking: true, webSearch: false },
       });
     },
   );
@@ -274,6 +276,35 @@ test("thinking mode uses Qwen-compatible parameters without modifying user messa
       assert.equal(upstreamBody.presence_penalty, 0);
     },
   );
+});
+
+test("web search uses the separately configured Qwen endpoint and forces native search", async () => {
+  let upstreamUrl;
+  let upstreamHeaders;
+  let upstreamBody;
+  await withNode(
+    async (url, init) => {
+      upstreamUrl = url;
+      upstreamHeaders = new Headers(init.headers);
+      upstreamBody = JSON.parse(init.body);
+      return sseResponse(['data: {"choices":[{"delta":{"content":"联网回答"}}]}\n\n', "data: [DONE]\n\n"]);
+    },
+    async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/ai/chat/stream`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ messages: [{ role: "user", content: "今天有什么新闻？" }], thinking: true, webSearch: true }),
+      });
+      assert.equal(response.status, 200);
+      assert.match(await response.text(), /联网回答/);
+    },
+    { webSearch: { baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", apiKey: "test-search-key", model: "qwen3-max" } },
+  );
+  assert.equal(upstreamUrl, "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions");
+  assert.equal(upstreamHeaders.get("authorization"), "Bearer test-search-key");
+  assert.equal(upstreamBody.enable_search, true);
+  assert.deepEqual(upstreamBody.search_options, { forced_search: true });
+  assert.equal(upstreamBody.enable_thinking, true);
 });
 
 test("thinking stream emits reasoning_start before delta and reports observed reasoning", async () => {

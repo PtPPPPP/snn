@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
-import { normalizeThinking, validateMessages } from "../../shared/ai-validation.mjs";
+import { normalizeThinking, normalizeWebSearch, validateMessages } from "../../shared/ai-validation.mjs";
 import { parseSseEvent, takeSseEvents } from "./sse.mjs";
 
 class UpstreamError extends Error {
@@ -57,8 +57,8 @@ function requestOrigin(request, config) {
   return { allowed: config.allowedOrigins.includes(origin), origin };
 }
 
-function upstreamUrl(config, path) {
-  return new URL(path.replace(/^\//, ""), `${config.upstreamBaseUrl}/`).toString();
+function upstreamUrl(baseUrl, path) {
+  return new URL(path.replace(/^\//, ""), `${baseUrl}/`).toString();
 }
 
 async function fetchUpstream(fetchImpl, url, init, timeoutMs, externalSignal) {
@@ -109,10 +109,10 @@ async function readJsonBody(request, maxBytes) {
   }
 }
 
-function upstreamHeaders(config) {
+function upstreamHeaders(apiKey) {
   const headers = { "content-type": "application/json" };
-  if (config.upstreamApiKey) {
-    headers.authorization = `Bearer ${config.upstreamApiKey}`;
+  if (apiKey) {
+    headers.authorization = `Bearer ${apiKey}`;
   }
   return headers;
 }
@@ -128,15 +128,26 @@ async function runtimeReady(config, fetchImpl) {
 
   const response = await fetchUpstream(
     fetchImpl,
-    upstreamUrl(config, "models"),
-    { method: "GET", headers: upstreamHeaders(config) },
+    upstreamUrl(config.upstreamBaseUrl, "models"),
+    { method: "GET", headers: upstreamHeaders(config.upstreamApiKey) },
     config.statusTimeoutMs,
   );
   await response.json();
   return true;
 }
 
-function buildUpstreamBody(config, messages, stream, thinking) {
+function buildUpstreamBody(config, messages, stream, thinking, webSearch) {
+  if (webSearch) {
+    return JSON.stringify({
+      model: config.webSearch.model,
+      messages: [{ role: "system", content: config.systemPrompt }, ...messages],
+      stream,
+      max_tokens: config.maxOutputTokens,
+      enable_search: true,
+      search_options: { forced_search: true },
+      enable_thinking: thinking,
+    });
+  }
   const thinkingParameters = thinking
     ? {
         chat_template_kwargs: {
@@ -171,7 +182,7 @@ function buildUpstreamBody(config, messages, stream, thinking) {
   });
 }
 
-async function forwardSse(upstreamResponse, response, config, requestId, upstreamController, thinking) {
+async function forwardSse(upstreamResponse, response, config, requestId, upstreamController, thinking, model) {
   if (!upstreamResponse.body) {
     throw new UpstreamError("response");
   }
@@ -209,7 +220,7 @@ async function forwardSse(upstreamResponse, response, config, requestId, upstrea
     if (event.done) {
       done = true;
       writeSse(response, "done", {
-        model: config.model,
+        model,
         requestId,
         thinking,
         reasoningObserved,
@@ -324,13 +335,13 @@ export function createAiNodeServer(config, { fetchImpl = fetch, logger = console
             response,
             200,
             online
-              ? { online: true, model: config.model, status: "ready" }
-              : { online: false, model: null, status: "offline" },
+              ? { online: true, model: config.model, status: "ready", capabilities: { thinking: true, webSearch: Boolean(config.webSearch) } }
+              : { online: false, model: null, status: "offline", capabilities: { thinking: false, webSearch: false } },
             origin,
           );
         } catch (error) {
           upstreamStatus = error.status ?? null;
-          sendJson(response, 200, { online: false, model: null, status: "offline" }, origin);
+          sendJson(response, 200, { online: false, model: null, status: "offline", capabilities: { thinking: false, webSearch: false } }, origin);
         }
         return;
       }
@@ -355,8 +366,16 @@ export function createAiNodeServer(config, { fetchImpl = fetch, logger = console
       }
 
       const thinking = normalizeThinking(body?.thinking);
+      const webSearch = normalizeWebSearch(body?.webSearch);
 
-      if (!config.model) {
+      if (webSearch && !config.webSearch) {
+        const error = { error: "联网搜索暂时不可用，请关闭联网搜索后重试。", code: "web_search_unavailable", requestId };
+        if (isChatStream) { beginSse(response, origin); writeSse(response, "error", error); response.end(); }
+        else sendJson(response, 503, error, origin);
+        return;
+      }
+
+      if (!config.model && !webSearch) {
         if (isChatStream) {
           beginSse(response, origin);
           writeSse(response, "error", { error: "SNN AI node is unavailable", requestId });
@@ -369,13 +388,14 @@ export function createAiNodeServer(config, { fetchImpl = fetch, logger = console
 
       if (isChat) {
         try {
+          const target = webSearch ? config.webSearch : { baseUrl: config.upstreamBaseUrl, apiKey: config.upstreamApiKey, model: config.model };
           const upstreamResponse = await fetchUpstream(
             fetchImpl,
-            upstreamUrl(config, "chat/completions"),
+            upstreamUrl(target.baseUrl, "chat/completions"),
             {
               method: "POST",
-              headers: upstreamHeaders(config),
-              body: buildUpstreamBody(config, messages, false, thinking),
+              headers: upstreamHeaders(target.apiKey),
+              body: buildUpstreamBody(config, messages, false, thinking, webSearch),
             },
             config.chatConnectTimeoutMs,
           );
@@ -387,7 +407,7 @@ export function createAiNodeServer(config, { fetchImpl = fetch, logger = console
             return;
           }
 
-          sendJson(response, 200, { reply: reply.trim(), model: config.model, requestId }, origin);
+          sendJson(response, 200, { reply: reply.trim(), model: target.model, requestId }, origin);
         } catch (error) {
           upstreamStatus = error.status ?? null;
           sendJson(
@@ -415,13 +435,14 @@ export function createAiNodeServer(config, { fetchImpl = fetch, logger = console
 
       beginSse(response, origin);
       try {
+        const target = webSearch ? config.webSearch : { baseUrl: config.upstreamBaseUrl, apiKey: config.upstreamApiKey, model: config.model };
         const upstreamResponse = await fetchUpstream(
           fetchImpl,
-          upstreamUrl(config, "chat/completions"),
+          upstreamUrl(target.baseUrl, "chat/completions"),
           {
             method: "POST",
-            headers: upstreamHeaders(config),
-            body: buildUpstreamBody(config, messages, true, thinking),
+            headers: upstreamHeaders(target.apiKey),
+            body: buildUpstreamBody(config, messages, true, thinking, webSearch),
           },
             config.chatConnectTimeoutMs,
             upstreamAbortController.signal,
@@ -434,6 +455,7 @@ export function createAiNodeServer(config, { fetchImpl = fetch, logger = console
           requestId,
           upstreamAbortController,
           thinking,
+          target.model,
         );
       } catch (error) {
         upstreamStatus = error.status ?? null;
