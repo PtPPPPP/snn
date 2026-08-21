@@ -401,17 +401,21 @@ async function handleSubmit(event: SubmitEvent) {
   streamController = controller;
   thinkingStartedAt = null;
 
-  // Save user message + auto title
+  // Save user message + auto title. This snapshot (with its derived title) is
+  // the authoritative record for the whole request lifecycle; the finally
+  // block persists the completed version of the SAME snapshot instead of
+  // re-deriving the title from the (possibly stale) conversations list.
   const conv = conversations.find((c) => c.id === convId);
   const isFirstMessage = messages.length <= 2; // user + empty assistant
-  saveConversation({
+  const updatedConv: Conversation = {
     id: convId,
     title: isFirstMessage ? generateTitle(content) : conv?.title ?? "新对话",
     createdAt: conv?.createdAt ?? Date.now(),
     updatedAt: Date.now(),
     messages: requestMessages,
     version: 1,
-  }).then(refreshConversationList);
+  };
+  saveConversation(updatedConv).then(refreshConversationList);
 
   try {
     await streamChatMessage({
@@ -474,8 +478,12 @@ async function handleSubmit(event: SubmitEvent) {
       thinkingStartedAt = null;
       currentAssistantBubble = null;
       currentAssistantContent = "";
-      // Persist final state
-      persistCurrentMessages(convId);
+      // Persist final state from the request snapshot (title survives completion)
+      saveConversation({
+        ...updatedConv,
+        updatedAt: Date.now(),
+        messages: messages.filter((m) => m.content.trim() !== ""),
+      }).then(refreshConversationList);
       requestConversationId = null;
     }
   }
@@ -511,6 +519,25 @@ scrollToBottomBtn?.addEventListener("click", () => {
     messageList.scrollTo({ top: messageList.scrollHeight, behavior: "smooth" });
   }
 });
+
+// Floating composer content reservation: keep --snn-composer-extent on the
+// chat panel in sync with the live composer geometry (mirrors the React
+// version in ai-chat.tsx). The CSS derives the messages bottom padding from
+// this single variable, so no static padding magic numbers are needed.
+const chatPanel = document.querySelector<HTMLElement>(".chatPanel");
+function syncComposerReservation() {
+  if (!chatPanel || !form) return;
+  const extent = Math.ceil(
+    chatPanel.getBoundingClientRect().bottom - form.getBoundingClientRect().top,
+  );
+  chatPanel.style.setProperty("--snn-composer-extent", `${extent}px`);
+}
+syncComposerReservation();
+if (typeof ResizeObserver !== "undefined" && chatPanel && form) {
+  const composerObserver = new ResizeObserver(syncComposerReservation);
+  composerObserver.observe(form);
+  composerObserver.observe(chatPanel);
+}
 
 // Initialize
 async function init() {

@@ -26,6 +26,33 @@ test("composer controls and safe area are bounded", () => {
   assert.match(css, /env\(safe-area-inset-bottom\)/);
 });
 
+test("composer content reservation derives from live geometry, not static paddings", () => {
+  // Single source of truth: extent var + safety gap drive the reserved space.
+  assert.match(css, /--snn-composer-extent:\s*128px;/);
+  assert.match(css, /--composer-safety-gap:\s*28px;/);
+  assert.match(
+    css,
+    /--messages-reserved-bottom:\s*calc\(var\(--snn-composer-extent\)\s*\+\s*var\(--composer-safety-gap\)\);/,
+  );
+  assert.match(css, /padding:\s*24px clamp\(20px,\s*3vw,\s*40px\)\s*var\(--messages-reserved-bottom\);/);
+  // Breakpoints must not re-introduce static bottom paddings (F-05 regression).
+  assert.doesNotMatch(css, /padding-bottom:\s*(220|160|120)px/);
+  assert.doesNotMatch(css, /padding:\s*24px 16px 160px/);
+  assert.doesNotMatch(css, /padding:\s*12px 16px 120px/);
+  // The last message leaves spacing to the reserved area, keeping the
+  // last-message/composer gap equal to the safety gap at every breakpoint.
+  assert.match(css, /\.messages > \.messageRow:last-of-type\s*\{\s*margin-bottom:\s*0;/);
+});
+
+test("composer textarea keeps identical geometry when disabled", () => {
+  // Derived min-height (one line + vertical padding) instead of a magic value:
+  // a disabled EMPTY textarea otherwise shrinks to its rows-intrinsic height
+  // under field-sizing: content and makes the composer jump while streaming.
+  assert.match(css, /\.composerInput\s*\{[^}]*min-height:\s*calc\(1\.6em \+ 16px\);/);
+  assert.doesNotMatch(css, /\.composerInput\s*\{[^}]*min-height:\s*36px/);
+  assert.doesNotMatch(css, /\.composerInput\s*\{[^}]*min-height:\s*38px/);
+});
+
 test("keyboard composition is not treated as Enter send", () => {
   assert.match(input, /event\.nativeEvent\.isComposing/);
   assert.match(input, /event\.isComposing/);

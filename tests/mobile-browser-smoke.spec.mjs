@@ -55,8 +55,8 @@ async function mockAiStatus(page) {
   }));
 }
 
-async function seedConversation(page, { id = "mobile-remediation", title = "Mobile remediation", content = "hello" } = {}) {
-  await page.evaluate(async ({ conversationId, conversationTitle, messageContent }) => {
+async function seedConversation(page, { id = "mobile-remediation", title = "Mobile remediation", content = "hello", messages } = {}) {
+  await page.evaluate(async ({ conversationId, conversationTitle, messageContent, conversationMessages }) => {
     await new Promise((resolve, reject) => {
       const request = indexedDB.open("snn-ai", 1);
       request.onupgradeneeded = () => {
@@ -77,14 +77,14 @@ async function seedConversation(page, { id = "mobile-remediation", title = "Mobi
         title: conversationTitle,
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        messages: [{ role: "user", content: messageContent }],
+        messages: conversationMessages ?? [{ role: "user", content: messageContent }],
         version: 1,
       });
       transaction.oncomplete = resolve;
       transaction.onerror = () => reject(transaction.error);
     });
     localStorage.setItem("snn-ai-active-conversation-id", conversationId);
-  }, { conversationId: id, conversationTitle: title, messageContent: content });
+  }, { conversationId: id, conversationTitle: title, messageContent: content, conversationMessages: messages ?? null });
 }
 
 for (const profileName of mobileProfiles) {
@@ -215,6 +215,39 @@ test("long content remains above the composer in short landscape", async ({ brow
   await noDocumentOverflow(page);
   await context.close();
 });
+
+// F-03: at max multiline composer height the last message must stop fully
+// above the floating composer with a real safety gap on small viewports.
+for (const [label, width, height] of [["390x844", 390, 844], ["320x700", 320, 700], ["750x342", 750, 342]]) {
+  test(`max multiline composer keeps last message clear ${label}`, async ({ browser }) => {
+    const context = await browser.newContext(mobileContextOptions(width, height));
+    const page = await context.newPage();
+    await mockAiStatus(page);
+    await page.goto(BASE_URL + "/ai/", { waitUntil: "domcontentloaded" });
+    const longMessages = [];
+    for (let i = 0; i < 6; i++) {
+      longMessages.push({ role: "user", content: `问题 ${i + 1}：` + "较长的中文提问内容".repeat(8) });
+      longMessages.push({ role: "assistant", content: "这是用于验证保留空间的助手回复。".repeat(16) });
+    }
+    await seedConversation(page, { content: "", messages: longMessages });
+    await page.reload({ waitUntil: "networkidle" });
+    await page.fill("#ai-message", Array.from({ length: 30 }, (_, i) => `第 ${i + 1} 行多行输入`).join("\n"));
+    await page.locator('[class*="messages"]').evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    const bubble = page.locator('[class*="messageBubble"]').last();
+    const geometry = await page.evaluate(() => {
+      const bubbleRect = document.querySelector('[class*="messageBubble"]').getBoundingClientRect();
+      const composerRect = document.querySelector("form").getBoundingClientRect();
+      return { bubbleBottom: bubbleRect.bottom, composerTop: composerRect.top };
+    });
+    expect(await bubble.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    expect(geometry.bubbleBottom).toBeLessThan(geometry.composerTop);
+    expect(geometry.composerTop - geometry.bubbleBottom).toBeGreaterThanOrEqual(8);
+    const composer = await box(page, "form");
+    expect(composer.bottom).toBeLessThanOrEqual(height + 1);
+    await noDocumentOverflow(page);
+    await context.close();
+  });
+}
 
 test("mobile reduced motion keeps the Hero static", async ({ browser }) => {
   const context = await browser.newContext(mobileContextOptions(390, 844));

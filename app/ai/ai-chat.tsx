@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AiClientError, getAiStatus, streamChatMessage } from "../../lib/ai-client";
 import type { AiChatMessage } from "../../lib/ai-client";
 import {
@@ -33,6 +33,43 @@ import { deleteConversationLifecycle, saveConversationWithNotice } from "../../l
 
 type AiNodeState = "checking" | "offline" | "online";
 const THINKING_STORAGE_KEY = "snn-ai-thinking-mode";
+
+// Thinking preference as a hydration-safe external store (F-01).
+// During SSR and the hydration render React uses the server snapshot (false),
+// then switches to the live localStorage snapshot after mount — so the first
+// client render always matches the server output (no React #418) while the
+// persisted preference still restores without user interaction.
+function readThinkingPreference(): boolean {
+  try {
+    return window.localStorage.getItem(THINKING_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+const thinkingListeners = new Set<() => void>();
+
+function subscribeThinking(listener: () => void): () => void {
+  thinkingListeners.add(listener);
+  return () => thinkingListeners.delete(listener);
+}
+
+function getThinkingSnapshot(): boolean {
+  return readThinkingPreference();
+}
+
+function getThinkingServerSnapshot(): boolean {
+  return false;
+}
+
+function writeThinkingPreference(enabled: boolean): void {
+  try {
+    window.localStorage.setItem(THINKING_STORAGE_KEY, String(enabled));
+  } catch {
+    // localStorage unavailable — in-memory state still updates via listeners.
+  }
+  for (const listener of thinkingListeners) listener();
+}
 
 function toUiMessages(messages: AiChatMessage[]): ChatMessageModel[] {
   return messages.map((m, i) => ({
@@ -73,23 +110,24 @@ export default function AiChat() {
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [thinkingMode, setThinkingMode] = useState(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      return window.localStorage.getItem(THINKING_STORAGE_KEY) === "true";
-    } catch {
-      return false;
-    }
-  });
+  // Hydration-safe: server snapshot is always false; the persisted value is
+  // applied by React right after hydration via the external store.
+  const thinkingMode = useSyncExternalStore(
+    subscribeThinking,
+    getThinkingSnapshot,
+    getThinkingServerSnapshot,
+  );
   const [isThinkingRequest, setIsThinkingRequest] = useState(false);
 
   const messagesRef = useRef<HTMLDivElement>(null);
+  const chatPanelRef = useRef<HTMLDivElement>(null);
   const shouldFollowStreamRef = useRef(true);
   const activeIdRef = useRef<string | null>(null);
   const requestConversationIdRef = useRef<string | null>(null);
   const streamControllerRef = useRef<AbortController | null>(null);
   const thinkingStartedAtRef = useRef<number | null>(null);
   const messagesRefLatest = useRef<ChatMessageModel[]>([]);
+  const conversationsRefLatest = useRef<Conversation[]>([]);
   const generationSequenceRef = useRef(0);
   const activeGenerationRef = useRef(0);
   const navigationSequenceRef = useRef(0);
@@ -98,6 +136,36 @@ export default function AiChat() {
   useEffect(() => {
     messagesRefLatest.current = messages;
   }, [messages]);
+
+  useEffect(() => {
+    conversationsRefLatest.current = conversations;
+  }, [conversations]);
+
+  // Floating composer content reservation (F-03/F-05): the messages canvas
+  // reserves bottom space from the composer's LIVE geometry instead of static
+  // magic paddings. The extent (composer height + clearance below it) is
+  // synced into --snn-composer-extent on the chat panel; CSS derives the
+  // reserved padding from that single variable.
+  useEffect(() => {
+    const panel = chatPanelRef.current;
+    const composerForm = panel?.querySelector("form");
+    if (!panel || !composerForm) return;
+    const sync = () => {
+      const extent = Math.ceil(
+        panel.getBoundingClientRect().bottom - composerForm.getBoundingClientRect().top,
+      );
+      panel.style.setProperty("--snn-composer-extent", `${extent}px`);
+    };
+    sync();
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(sync);
+    observer?.observe(composerForm);
+    observer?.observe(panel);
+    return () => {
+      observer?.disconnect();
+      panel.style.removeProperty("--snn-composer-extent");
+    };
+  }, []);
 
   // Load conversations on mount
   useEffect(() => {
@@ -165,16 +233,24 @@ export default function AiChat() {
     };
   }, []);
 
+  // Persistence always receives an authoritative Conversation snapshot.
+  // Titles must never be re-derived from render-time UI state: a stale
+  // conversations closure previously overwrote freshly generated titles
+  // back to "新对话" when the stream finished (F-02).
+  function persistConversationSnapshot(conversation: Conversation) {
+    void saveConversationWithNotice({ conversation, saveConversation, setNotice: setStorageNotice }).then((saved) => { if (saved) refreshConversationList(); });
+  }
+
   function persistCurrentMessages(convId: string, uiMessages: ChatMessageModel[]) {
-    const stored = toStoredMessages(uiMessages.filter((m) => m.content.trim() !== ""));
-    void saveConversationWithNotice({ conversation: {
+    const existing = conversationsRefLatest.current.find((c) => c.id === convId);
+    persistConversationSnapshot({
       id: convId,
-      title: conversations.find((c) => c.id === convId)?.title ?? "新对话",
-      createdAt: conversations.find((c) => c.id === convId)?.createdAt ?? now(),
+      title: existing?.title ?? "新对话",
+      createdAt: existing?.createdAt ?? now(),
       updatedAt: now(),
-      messages: stored,
+      messages: toStoredMessages(uiMessages.filter((m) => m.content.trim() !== "")),
       version: 1,
-    }, saveConversation, setNotice: setStorageNotice }).then((saved) => { if (saved) refreshConversationList(); });
+    });
   }
 
   function refreshConversationList() {
@@ -249,12 +325,7 @@ export default function AiChat() {
   }
 
   function handleThinkingChange(enabled: boolean) {
-    setThinkingMode(enabled);
-    try {
-      window.localStorage.setItem(THINKING_STORAGE_KEY, String(enabled));
-    } catch {
-      // ignore
-    }
+    writeThinkingPreference(enabled);
   }
 
   function sendMessage(content: string) {
@@ -280,9 +351,12 @@ export default function AiChat() {
     setIsThinkingRequest(activeThinking);
     setStreamNotice(null);
 
-    // Save user message immediately + auto title on first message
+    // Save user message immediately + auto title on first message.
+    // This snapshot (with its derived title) is the authoritative record for
+    // the whole request lifecycle; the finally block persists the completed
+    // version of the SAME snapshot instead of re-deriving the title.
     const isFirstMessage = messages.length === 0;
-    const conv = conversations.find((c) => c.id === convId);
+    const conv = conversationsRefLatest.current.find((c) => c.id === convId);
     const updatedConv: Conversation = {
       id: convId,
       title: isFirstMessage ? generateTitle(content) : conv?.title ?? "新对话",
@@ -291,7 +365,7 @@ export default function AiChat() {
       messages: toStoredMessages(requestMessages),
       version: 1,
     };
-    void saveConversationWithNotice({ conversation: updatedConv, saveConversation, setNotice: setStorageNotice }).then((saved) => { if (saved) refreshConversationList(); });
+    persistConversationSnapshot(updatedConv);
 
     const sentConvId = convId;
 
@@ -359,7 +433,11 @@ export default function AiChat() {
         setStreamNotice((cur) => cur ?? UNAVAILABLE_REPLY);
       })
       .finally(() => {
-        persistCurrentMessages(sentConvId, buildConversationSnapshot(updatedConv, requestMessages, assistantMessage, assistantContent).messages);
+        // Persist the completed snapshot built from updatedConv, so the title
+        // generated at send time survives response completion (F-02).
+        persistConversationSnapshot(
+          buildConversationSnapshot({ ...updatedConv, updatedAt: now() }, requestMessages, assistantMessage, assistantContent),
+        );
         if (activeGenerationRef.current === generationToken) {
           setIsResponding(false);
           setIsThinkingRequest(false);
@@ -431,7 +509,7 @@ export default function AiChat() {
 
         {sidebarOpen ? <div className={styles.backdrop} onClick={() => setSidebarOpen(false)} aria-hidden="true" /> : null}
 
-        <div className={styles.chatPanel}>
+        <div className={styles.chatPanel} ref={chatPanelRef}>
           <div className={styles.panelHeader}>
             <span>CHAT / HTTP READY</span>
             <span>{aiNodeState === "online" ? NODE_STATES.ready : NODE_STATES.offline}</span>

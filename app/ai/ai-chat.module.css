@@ -424,6 +424,15 @@
   grid-template-rows: minmax(0, 1fr);
   background: var(--snn-bg);
   isolation: isolate;
+  /* Floating composer geometry — single source of truth (F-03/F-05).
+     --snn-composer-extent = composer height + clearance below it; it is kept
+     in sync with the live composer by ai-chat.tsx (ResizeObserver). The
+     fallback matches the base single-line composer (104px form + 24px dock
+     offset) so first paint reserves correctly before JS runs. Breakpoints
+     must only override these variables, never re-declare paddings. */
+  --snn-composer-extent: 128px;
+  --composer-safety-gap: 28px;
+  --messages-reserved-bottom: calc(var(--snn-composer-extent) + var(--composer-safety-gap));
 }
 
 /* REDESIGN: panelHeader removed from visual hierarchy — technical metadata secondary */
@@ -439,7 +448,14 @@
   box-sizing: border-box;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 24px clamp(20px, 3vw, 40px) 220px;
+  padding: 24px clamp(20px, 3vw, 40px) var(--messages-reserved-bottom);
+}
+
+/* The last message carries no bottom margin: the reserved space below the
+   canvas already includes the safety gap, so the gap between the last message
+   and the composer is exactly --composer-safety-gap at every breakpoint. */
+.messages > .messageRow:last-of-type {
+  margin-bottom: 0;
 }
 
 .emptyState {
@@ -653,7 +669,12 @@
 
 .composerInput {
   min-width: 0;
-  min-height: 36px;
+  /* One text line (line-height 1.6 × font-size) + vertical padding.
+     Derived instead of a magic value so the box keeps identical geometry
+     when disabled (a disabled EMPTY textarea otherwise shrinks to its
+     rows-intrinsic height under field-sizing: content — the 4px composer
+     jump while streaming). */
+  min-height: calc(1.6em + 16px);
   max-height: 160px;
   flex: 1;
   resize: none;
@@ -909,7 +930,8 @@
     min-width: 0;
     box-sizing: border-box;
     overflow-x: hidden;
-    padding: 24px 16px;
+    padding-left: 16px;
+    padding-right: 16px;
   }
 
   .messageRow {
@@ -946,7 +968,6 @@
   }
 
   .composerInput {
-    min-height: 36px;
     padding: 8px 4px;
     border-radius: 0;
   }
@@ -956,10 +977,6 @@
     width: 36px;
     height: 36px;
     padding: 0;
-  }
-
-  .messages {
-    padding-bottom: 160px;
   }
 
   .composerDock {
@@ -1021,7 +1038,9 @@
   }
 
   .messages {
-    padding: 12px 16px 120px;
+    padding-top: 12px;
+    padding-left: 16px;
+    padding-right: 16px;
   }
 
   .composerDock {
@@ -1056,7 +1075,6 @@
   }
 
   .composerInput {
-    min-height: 38px;
     max-height: 96px;
     padding: 8px 4px;
     border-radius: 0;
