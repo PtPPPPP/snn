@@ -11,6 +11,22 @@ type ChatInputProps = {
   onThinkingChange: (enabled: boolean) => void;
 };
 
+function SendIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false">
+      <path d="M10 16V4M5.5 8.5 10 4l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function StopIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false">
+      <rect x="5" y="5" width="10" height="10" rx="1.5" fill="currentColor" />
+    </svg>
+  );
+}
+
 export default function ChatInput({
   isStreaming,
   thinking,
@@ -81,13 +97,13 @@ export default function ChatInput({
           <span aria-hidden="true">{thinking ? "◆" : "◇"}</span> 深度思考
         </button>
         <button
-          className={styles.sendButton}
+          className={`${styles.sendButton} ${isStreaming ? styles.sendButtonStop : ""}`}
           type="submit"
           disabled={!isStreaming && !value.trim()}
           aria-label={isStreaming ? "停止生成" : "发送"}
           title={isStreaming ? "停止生成" : "发送"}
         >
-          <span aria-hidden="true">{isStreaming ? "■" : "↑"}</span>
+          {isStreaming ? <StopIcon /> : <SendIcon />}
         </button>
       </div>
     </form>
