@@ -36,6 +36,8 @@
   --snn-focus-ring: #111111;
   --snn-focus-ring-width: 3px;
   --snn-focus-ring-offset: 3px;
+  --snn-shadow-surface: 0 18px 48px rgba(32, 37, 31, 0.08);
+  --snn-shadow-floating: 0 24px 70px rgba(32, 37, 31, 0.16);
 }
 
 .section { scroll-margin-top: 96px; }
@@ -1463,4 +1465,15 @@ footer {
 }
 @media (prefers-reduced-motion: reduce) {
   .hero-art, .hero-copy, .hero-tags { animation: none; }
+}
+
+/* Hero remediation: keep the editorial whitespace, but give the first view a
+   clear relationship between headline, action, and supporting art. */
+.hero-art { opacity: .3; transform: scale(1.02); }
+.hero-bottom { padding-bottom: 48px; }
+.hero-copy { max-width: 720px; }
+@media (max-width: 760px) {
+  .hero-art { width: 82%; height: 62%; opacity: .42; transform: scale(1.02); }
+  .hero-bottom { gap: 16px; padding-bottom: 24px; }
+  .hero h1 { max-width: 340px; }
 }
