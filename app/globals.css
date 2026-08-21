@@ -29,6 +29,13 @@
   --snn-control: #111111;
   --snn-control-hover: #242424;
   --snn-control-text: #ffffff;
+  --snn-radius-sm: 4px;
+  --snn-radius-md: 8px;
+  --snn-radius-lg: 12px;
+  --snn-radius-pill: 999px;
+  --snn-focus-ring: #111111;
+  --snn-focus-ring-width: 3px;
+  --snn-focus-ring-offset: 3px;
 }
 
 .section { scroll-margin-top: 96px; }
@@ -933,8 +940,8 @@ footer {
 }
 
 :focus-visible {
-  outline: 3px solid var(--blue);
-  outline-offset: 5px;
+  outline: var(--snn-focus-ring-width) solid var(--snn-focus-ring);
+  outline-offset: var(--snn-focus-ring-offset);
 }
 
 @keyframes rotate-blueprint {
@@ -1407,7 +1414,7 @@ footer {
 .main-nav { gap: 10px; }
 .main-nav > a:not(.nav-ai) { display: inline-flex; align-items: center; padding: 8px 5px; color: var(--snn-text-secondary); font-size: 12px; }
 .main-nav > a:not(.nav-ai):hover, .main-nav > a:not(.nav-ai):focus-visible, .main-nav > a.active { color: var(--snn-text); }
-.nav-open-pill { display: inline-flex; min-height: 40px; align-items: center; border-radius: 999px; font: inherit; font-size: 12px; font-weight: 650; }
+.nav-open-pill { display: inline-flex; min-height: 40px; align-items: center; border-radius: var(--snn-radius-pill); font: inherit; font-size: 12px; font-weight: 650; }
 .nav-open-pill { gap: 8px; padding: 8px 12px; background: var(--snn-surface); color: var(--snn-text); }
 .nav-open-pill span { display: grid; width: 20px; height: 20px; place-items: center; border-radius: 50%; background: #111; color: #fff; font-size: 9px; letter-spacing: -2px; }
 .hero { position: relative; min-height: 100vh; min-height: 100svh; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; background: #fff; }
@@ -1422,13 +1429,13 @@ footer {
 .hero h1 { margin: 0; max-width: 900px; color: #111; font-size: clamp(3.5rem,5.5vw,5.4rem); font-weight: 300; letter-spacing: -.055em; line-height: .94; }
 .hero-intro, .hero-microcopy, .hero-proof { display: none; }
 .hero-actions { display: flex; gap: 8px; margin-top: 24px; }
-.hero .button { min-width: 0; height: auto; padding: 11px 16px; border-radius: 999px; font-size: 13px; font-weight: 650; }
+.hero .button { min-width: 0; height: auto; padding: 11px 16px; border-radius: var(--snn-radius-pill); font-size: 13px; font-weight: 650; }
 .hero .button-primary { border-color: #111; background: #111; color: #fff; }
 .hero .button-primary:hover, .hero .button-primary:focus-visible { background: #242424; }
 .hero .button-ghost { border-color: rgba(0,0,0,.35); background: transparent; color: #111; }
 .hero .button-ghost:hover, .hero .button-ghost:focus-visible { border-color: rgba(0,0,0,.35); background: #f4f4f6; }
 .hero-tags { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; animation: heroFooterIn 1s 1.05s cubic-bezier(.16,1,.3,1) both; }
-.hero-tags span { padding: 7px 12px; border: 1px solid rgba(0,0,0,.12); border-radius: 999px; background: #fff; color: rgba(0,0,0,.68); font-size: 11px; }
+.hero-tags span { padding: 7px 12px; border: 1px solid rgba(0,0,0,.12); border-radius: var(--snn-radius-pill); background: #fff; color: rgba(0,0,0,.68); font-size: 11px; }
 @keyframes heroVisualIn { from { opacity: 0; transform: scale(1.05); } to { opacity: .22; transform: scale(1.12); } }
 @keyframes heroFooterIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 760px) {

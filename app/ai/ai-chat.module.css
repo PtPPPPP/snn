@@ -50,12 +50,13 @@
 .backLink,
 .newChatButton,
 .sendButton {
-  border: 1px solid var(--ink);
+  border: 1px solid var(--snn-border);
   font: inherit;
   font-weight: 800;
 }
 
 .backLink {
+  border-radius: var(--snn-radius-md);
   padding: 12px 16px;
   font-size: 14px;
 }
@@ -129,7 +130,8 @@
   align-items: flex-start;
   gap: 12px;
   padding: 16px;
-  border: 1px solid var(--ink);
+  border: 1px solid var(--snn-border);
+  border-radius: var(--snn-radius-sm);
   background: var(--snn-surface-muted);
 }
 
@@ -175,6 +177,8 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
+  border-color: var(--snn-border-strong);
+  border-radius: var(--snn-radius-md);
   background: var(--ink);
   color: var(--paper);
   cursor: pointer;
@@ -203,7 +207,8 @@
   height: 40px;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--ink);
+  border: 1px solid var(--snn-border);
+  border-radius: var(--snn-radius-sm);
   background: transparent;
   color: var(--on-lime);
   font-size: 16px;
@@ -222,7 +227,8 @@
   height: 40px;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--ink);
+  border: 1px solid var(--snn-border);
+  border-radius: var(--snn-radius-sm);
   background: transparent;
   color: var(--ink);
   font-size: 18px;
@@ -309,6 +315,7 @@
   min-height: 40px;
   padding: 9px 10px;
   border: 0;
+  border-radius: var(--snn-radius-sm);
   background: transparent;
   color: var(--on-lime);
   font-size: 16px;
@@ -376,7 +383,8 @@
 
 .modalCancel {
   padding: 10px 16px;
-  border: 1px solid var(--ink);
+  border: 1px solid var(--snn-border);
+  border-radius: var(--snn-radius-md);
   background: transparent;
   color: var(--ink);
   font: inherit;
@@ -386,7 +394,8 @@
 
 .modalConfirm {
   padding: 10px 16px;
-  border: 1px solid var(--ink);
+  border: 1px solid var(--snn-border-strong);
+  border-radius: var(--snn-radius-md);
   background: var(--ink);
   color: var(--paper);
   font: inherit;
@@ -504,7 +513,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 16px 18px;
-  border: 1px solid var(--ink);
+  border: 1px solid var(--snn-border);
   background: var(--white);
   font-size: 16px;
   font-weight: 550;
@@ -590,8 +599,8 @@
   align-items: center;
   gap: 7px;
   padding: 0 11px;
-  border: 1px solid var(--ink);
-  border-radius: 6px;
+  border: 1px solid var(--snn-border);
+  border-radius: var(--snn-radius-md);
   background: var(--snn-surface-muted);
   color: var(--muted);
   cursor: pointer;
@@ -624,8 +633,8 @@
   flex: 1;
   resize: vertical;
   padding: 15px 16px;
-  border: 1px solid var(--ink);
-  border-radius: 0;
+  border: 1px solid var(--snn-border);
+  border-radius: var(--snn-radius-md);
   background: var(--white);
   color: var(--ink);
   font: inherit;
@@ -640,6 +649,8 @@
 
 .sendButton {
   min-width: 112px;
+  border-color: var(--snn-border-strong);
+  border-radius: var(--snn-radius-md);
   padding: 0 16px;
   background: var(--snn-control);
   color: var(--snn-control-text);
@@ -661,8 +672,8 @@
 .page button:focus-visible,
 .page a:focus-visible,
 .page textarea:focus-visible {
-  outline: 2px solid rgba(0, 0, 0, 0.55);
-  outline-offset: 2px;
+  outline: var(--snn-focus-ring-width) solid var(--snn-focus-ring);
+  outline-offset: var(--snn-focus-ring-offset);
 }
 
 .composerHint {
@@ -706,7 +717,8 @@
   align-items: center;
   gap: 5px;
   padding: 7px 12px;
-  border: 1px solid var(--ink);
+  border: 1px solid var(--snn-border);
+  border-radius: var(--snn-radius-sm);
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-geist-mono), monospace;
