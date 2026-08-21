@@ -51,10 +51,19 @@ export default function ChatInput({
 
   return (
     <form className={styles.composer} onSubmit={handleSubmit}>
-      <div className={styles.composerToolbar}>
-        <label className={styles.composerLabel} htmlFor="ai-message">
-          MESSAGE / 输入消息
-        </label>
+      <textarea
+        className={styles.composerInput}
+        id="ai-message"
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="向 SNN AI 提问…"
+        rows={1}
+        maxLength={12000}
+        disabled={isStreaming}
+        aria-label="给 SNN AI 发消息"
+      />
+      <div className={styles.composerControls}>
         <button
           className={`${styles.thinkingToggle} ${thinking ? styles.thinkingToggleActive : ""}`}
           type="button"
@@ -62,30 +71,18 @@ export default function ChatInput({
           disabled={isStreaming}
           onClick={() => onThinkingChange(!thinking)}
         >
-          <span aria-hidden="true">◇</span> 深度思考
+          <span aria-hidden="true">{thinking ? "◆" : "◇"}</span> 深度思考
         </button>
-      </div>
-      <div className={styles.composerControls}>
-        <textarea
-          className={styles.composerInput}
-          id="ai-message"
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="向 SNN AI 提问…"
-          rows={1}
-          maxLength={12000}
-          disabled={isStreaming}
-        />
         <button
           className={styles.sendButton}
           type="submit"
           disabled={!isStreaming && !value.trim()}
+          aria-label={isStreaming ? "停止生成" : "发送"}
+          title={isStreaming ? "停止生成" : "发送"}
         >
-          {isStreaming ? "停止生成" : "发送"} <span aria-hidden="true">↗</span>
+          <span aria-hidden="true">{isStreaming ? "■" : "↑"}</span>
         </button>
       </div>
-      <p className={styles.composerHint}>Enter 发送 · Shift + Enter 换行</p>
     </form>
   );
 }
