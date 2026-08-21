@@ -497,7 +497,7 @@ backdrop?.addEventListener("click", closeSidebar);
 function updateScrollButton() {
   if (!messageList || !scrollToBottomBtn) return;
   const isNearBottom = shouldFollowMessages();
-  scrollToBottomBtn.style.display = (!isNearBottom && messages.length > 0) ? "inline-flex" : "none";
+  scrollToBottomBtn.style.display = (!isNearBottom && messages.length > 0) ? "grid" : "none";
 }
 
 messageList?.addEventListener("scroll", updateScrollButton);

@@ -227,8 +227,9 @@ const aiHtml = `<!doctype html>
         <div class="chatPanel">
           <div class="panelHeader"><span>CHAT / HTTP READY</span><span id="ai-panel-state">${aiCopy.NODE_STATES.offline}</span></div>
           <div class="messages" id="ai-messages" aria-live="polite"></div>
-          <button class="scrollToBottom" id="ai-scroll-to-bottom" type="button" style="display:none" aria-label="回到底部">↓ 回到底部</button>
-          <form class="composer" id="ai-composer">
+          <div class="composerDock">
+            <button class="scrollToBottom" id="ai-scroll-to-bottom" type="button" style="display:none" aria-label="回到底部" title="回到底部"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v15M6 13l6 6 6-6" /></svg></button>
+            <form class="composer" id="ai-composer">
             <div class="composerToolbar">
               <label class="composerLabel" for="ai-message">MESSAGE / 输入消息</label>
               <button class="thinkingToggle" id="ai-thinking-toggle" type="button" aria-pressed="false"><span aria-hidden="true">◇</span> ${aiCopy.THINKING_MODE.label}</button>
@@ -238,7 +239,8 @@ const aiHtml = `<!doctype html>
               <button class="sendButton" id="ai-send" type="submit">发送 <span aria-hidden="true">↗</span></button>
             </div>
             <p class="composerHint">Enter 发送 · Shift + Enter 换行</p>
-          </form>
+            </form>
+          </div>
         </div>
       </section>
     </main>
