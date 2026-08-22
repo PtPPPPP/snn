@@ -1,4 +1,5 @@
 import { readFile, stat } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -12,7 +13,7 @@ async function exists(file) {
   return stat(file).then(() => true).catch(() => false);
 }
 
-export function validateProductionArtifact({ workerConfig, manifest, aiSource }) {
+export function validateProductionArtifact({ workerConfig, manifest, aiSource, clientDir }) {
   const errors = [];
   if (JSON.stringify(workerConfig).includes("ftp-upload")) {
     errors.push("production Worker configuration must not reference ftp-upload");
@@ -32,6 +33,16 @@ export function validateProductionArtifact({ workerConfig, manifest, aiSource })
   } else if (!aiSource?.includes("webSearch") || !aiSource.includes("联网搜索")) {
     errors.push("production React AI asset is missing the current web-search feature contract");
   }
+  // The legacy FTP static template (public/ai or copied ftp-upload/ai) must
+  // never shadow the React /ai route: a stale ai/index.html in the client
+  // output takes precedence over SSR and breaks the deployed chat page.
+  if (clientDir) {
+    const legacyFiles = ["ai/index.html", "ai.html", "index.html"];
+    for (const rel of legacyFiles) {
+      const p = path.join(clientDir, rel);
+      if (existsSync(p)) errors.push(`stale file in dist/client shadows the /ai route: ${rel}`);
+    }
+  }
   return errors;
 }
 
@@ -46,7 +57,7 @@ async function main() {
   const assetNames = Object.values(manifest).flatMap((entry) => [entry.file, ...(entry.css || [])]);
   const aiAsset = assetNames.find((asset) => typeof asset === "string" && asset.includes("ai-chat") && asset.endsWith(".js"));
   const aiSource = aiAsset ? await readFile(path.join(clientPath, aiAsset), "utf8") : "";
-  const errors = validateProductionArtifact({ workerConfig, manifest, aiSource });
+  const errors = validateProductionArtifact({ workerConfig, manifest, aiSource, clientDir: clientPath });
   if (errors.length) throw new Error(errors.join("\n"));
 
   console.log("Production React artifact verified:");
