@@ -60,6 +60,11 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        {/* Must run synchronously before the client bundle: injects
+            window.__SNN_AI_API_BASE_URL__ consumed by lib/ai-client.ts.
+            async/defer would race hydration and break AI endpoint resolution. */}
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script src="/ai-config.js"></script>
         {children}
       </body>
     </html>
