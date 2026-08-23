@@ -2,21 +2,46 @@ import { createSnnAgentEvent } from "./contract.mjs";
 
 /**
  * Translate one official DSH notification into zero or one stable SNN event.
- * Unknown DSH events are intentionally ignored at this private boundary.
+ * Tool lifecycle events belong to ToolExecutionBridge. Unknown DSH events are
+ * diagnosed internally but never reach the public SNN event contract.
  *
  * @param {{ method?: unknown, params?: unknown }} notification
  * @param {{ runId: string, sessionId: string, now?: () => string }} context
+ * @param {{ onDiagnostic?: (diagnostic: Readonly<Record<string, unknown>>) => void }=} options
  * @returns {Readonly<Record<string, unknown>> | null}
  */
-export function adaptDshNotification(notification, context) {
-  if (notification?.method !== "session.event" || !isRecord(notification.params)) return null;
+export function adaptDshNotification(notification, context, { onDiagnostic = () => {} } = {}) {
+  if (notification?.method !== "session.event" || !isRecord(notification.params)) {
+    if (typeof notification?.method === "string" && !KNOWN_NOTIFICATION_METHODS.has(notification.method)) {
+      diagnose(onDiagnostic, "DSH_NOTIFICATION_UNKNOWN", context);
+    }
+    return null;
+  }
   if (notification.params.sessionId !== context.sessionId) return null;
-  return adaptSessionEvent(notification.params.event, context);
+  return adaptSessionEvent(notification.params.event, context, onDiagnostic);
 }
 
-/** @param {unknown} nativeEvent @param {{ runId: string, sessionId: string, now?: () => string }} context */
-function adaptSessionEvent(nativeEvent, context) {
-  if (!isRecord(nativeEvent) || typeof nativeEvent.type !== "string" || !isRecord(nativeEvent.data)) return null;
+const KNOWN_NOTIFICATION_METHODS = new Set(["session.status", "subagent.started", "subagent.finished"]);
+const IGNORED_SESSION_EVENTS = new Set([
+  "approval/decided",
+  "agent/inbox/spliced",
+  "request/context",
+  "request/header",
+  "session/end-seed",
+  "step/end",
+  "step/start",
+  "tool/call",
+  "tool/result",
+  "turn/start",
+  "user/message",
+]);
+
+/** @param {unknown} nativeEvent @param {{ runId: string, sessionId: string, now?: () => string }} context @param {(diagnostic: Readonly<Record<string, unknown>>) => void} onDiagnostic */
+function adaptSessionEvent(nativeEvent, context, onDiagnostic) {
+  if (!isRecord(nativeEvent) || typeof nativeEvent.type !== "string" || !isRecord(nativeEvent.data)) {
+    diagnose(onDiagnostic, "DSH_SESSION_EVENT_INVALID", context);
+    return null;
+  }
   const base = {
     runId: context.runId,
     sessionId: context.sessionId,
@@ -33,26 +58,6 @@ function adaptSessionEvent(nativeEvent, context) {
         type: "message.completed",
         payload: { content: isRecord(data.message) && Array.isArray(data.message.content) ? data.message.content : [] },
       });
-    case "tool/call":
-      if (typeof data.callId !== "string" || typeof data.name !== "string") return null;
-      return createSnnAgentEvent({
-        ...base,
-        type: "tool.started",
-        toolCallId: data.callId,
-        payload: { name: data.name, arguments: typeof data.arguments === "string" ? data.arguments : "" },
-      });
-    case "tool/result":
-      if (!isRecord(data.message) || typeof data.message.toolCallId !== "string") return null;
-      return createSnnAgentEvent({
-        ...base,
-        type: data.error === undefined ? "tool.completed" : "tool.failed",
-        toolCallId: data.message.toolCallId,
-        payload: {
-          content: Array.isArray(data.message.content) ? data.message.content : [],
-          ...(data.meta === undefined ? {} : { meta: data.meta }),
-        },
-        ...(data.error === undefined ? {} : { error: normalizeError(data.error, "DSH_TOOL_FAILED") }),
-      });
     case "approval/asked":
       if (typeof data.toolName !== "string") return null;
       return createSnnAgentEvent({
@@ -67,6 +72,9 @@ function adaptSessionEvent(nativeEvent, context) {
     case "turn/end":
       return adaptTurnEnd(data.reason, base);
     default:
+      if (!IGNORED_SESSION_EVENTS.has(nativeEvent.type)) {
+        diagnose(onDiagnostic, "DSH_SESSION_EVENT_UNKNOWN", { ...context, dshEventType: nativeEvent.type });
+      }
       return null;
   }
 }
@@ -123,6 +131,15 @@ function normalizeError(value, fallbackCode) {
       ? value.message
       : typeof value.name === "string" ? value.name : fallbackCode,
   };
+}
+
+/** @param {(diagnostic: Readonly<Record<string, unknown>>) => void} onDiagnostic @param {string} code @param {Record<string, unknown>} details */
+function diagnose(onDiagnostic, code, details) {
+  try {
+    onDiagnostic(Object.freeze({ code, ...details }));
+  } catch {
+    // Diagnostics are observational and must not break the runtime.
+  }
 }
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */

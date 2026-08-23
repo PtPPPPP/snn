@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { defineToolMetadata, riskFromDshCallKind } from "../src/agent/tool-metadata.mjs";
+import { projectDefaultToolPolicy } from "../src/agent/tool-policy.mjs";
 
 test("tool metadata is product-only immutable data", () => {
   const metadata = defineToolMetadata({
@@ -23,3 +24,10 @@ test("DSH call-kind risk mapping is explicit", () => {
   assert.throws(() => riskFromDshCallKind("other"), /explicit SNN risk mapping/);
 });
 
+test("default tool policy allows only READ metadata", () => {
+  assert.deepEqual(projectDefaultToolPolicy({ risk: "READ" }), { decision: "allow" });
+  for (const risk of ["WRITE", "EXEC", "EXTERNAL"]) {
+    assert.equal(projectDefaultToolPolicy({ risk }).decision, "deny");
+  }
+  assert.equal(projectDefaultToolPolicy(undefined).decision, "deny");
+});

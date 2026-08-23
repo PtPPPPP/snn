@@ -48,35 +48,14 @@ test("adapts reasoning lifecycle", () => {
   ]);
 });
 
-test("adapts tool started", () => {
+test("does not map a DSH tool request to tool.started", () => {
   const event = adaptDshNotification(sessionEvent("tool/call", {
     callId: "call-1",
     name: "read_file",
     arguments: '{"path":"README.md"}',
   }), context);
 
-  assert.equal(event.type, "tool.started");
-  assert.equal(event.toolCallId, "call-1");
-  assert.deepEqual(event.payload, { name: "read_file", arguments: '{"path":"README.md"}' });
-});
-
-test("adapts tool completed", () => {
-  const event = adaptDshNotification(sessionEvent("tool/result", {
-    message: { role: "tool", toolCallId: "call-1", content: [{ type: "text", text: "ok" }] },
-  }), context);
-
-  assert.equal(event.type, "tool.completed");
-  assert.equal(event.toolCallId, "call-1");
-});
-
-test("adapts tool failed with a stable error", () => {
-  const event = adaptDshNotification(sessionEvent("tool/result", {
-    message: { role: "tool", toolCallId: "call-1", content: [{ type: "text", text: "denied" }] },
-    error: { name: "ToolDeniedError", code: "DENIED" },
-  }), context);
-
-  assert.equal(event.type, "tool.failed");
-  assert.deepEqual(event.error, { code: "DENIED", message: "ToolDeniedError" });
+  assert.equal(event, null);
 });
 
 test("adapts approval required", () => {
@@ -109,4 +88,19 @@ test("adapts completed and cancelled runs", () => {
 test("ignores unknown DSH events", () => {
   assert.equal(adaptDshNotification(sessionEvent("future/native-event", {}), context), null);
   assert.equal(adaptDshNotification({ method: "future.notification", params: {} }, context), null);
+});
+
+test("reports unknown DSH events through the internal diagnostic callback", () => {
+  const diagnostics = [];
+  adaptDshNotification(sessionEvent("future/native-event", {}), context, {
+    onDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
+  });
+  adaptDshNotification({ method: "future.notification", params: {} }, context, {
+    onDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
+  });
+
+  assert.deepEqual(diagnostics.map((diagnostic) => diagnostic.code), [
+    "DSH_SESSION_EVENT_UNKNOWN",
+    "DSH_NOTIFICATION_UNKNOWN",
+  ]);
 });

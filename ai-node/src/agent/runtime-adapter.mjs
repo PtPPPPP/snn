@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { adaptDshNotification } from "./event-adapter.mjs";
 import { createSnnAgentEvent, SnnAgentRuntime } from "./contract.mjs";
+import { ToolExecutionBridge } from "./tool-execution-bridge.mjs";
 
 /** SNN-owned Agent Runtime implementation over the private DSH client. */
 export class DshRuntimeAdapter extends SnnAgentRuntime {
@@ -8,15 +9,20 @@ export class DshRuntimeAdapter extends SnnAgentRuntime {
   #now;
   #activeRuns = new Map();
   #activeSessionRuns = new Map();
+  #toolBridge;
+  #onDiagnostic;
   #disposed = false;
   #disposeTask;
 
-  /** @param {{ client: object, now?: () => string }} options */
-  constructor({ client, now = () => new Date().toISOString() }) {
+  /** @param {{ client: object, now?: () => string, metadataFor?: (toolName: string) => Record<string, unknown> | undefined, onDiagnostic?: (diagnostic: Readonly<Record<string, unknown>>) => void, toolBridge?: ToolExecutionBridge }} options */
+  constructor({ client, now = () => new Date().toISOString(), metadataFor, onDiagnostic = () => {}, toolBridge } = {}) {
     super();
     if (!client) throw new TypeError("client is required");
+    if (typeof onDiagnostic !== "function") throw new TypeError("onDiagnostic must be a function");
     this.#client = client;
     this.#now = now;
+    this.#onDiagnostic = onDiagnostic;
+    this.#toolBridge = toolBridge ?? new ToolExecutionBridge({ metadataFor, now, onDiagnostic });
   }
 
   createSession(options) {
@@ -45,6 +51,7 @@ export class DshRuntimeAdapter extends SnnAgentRuntime {
     const stream = new AsyncEventStream();
     this.#activeRuns.set(runId, { sessionId, stream });
     this.#activeSessionRuns.set(sessionId, runId);
+    this.#toolBridge.beginRun({ runId, sessionId });
     stream.push(createSnnAgentEvent({
       type: "run.started",
       runId,
@@ -57,8 +64,14 @@ export class DshRuntimeAdapter extends SnnAgentRuntime {
       sessionId,
       contentBlocks,
       onNotification: (notification) => {
-        const event = adaptDshNotification(notification, { runId, sessionId, now: this.#now });
+        for (const toolEvent of this.#toolBridge.observeDshNotification(notification, { runId, sessionId })) {
+          stream.push(toolEvent);
+        }
+        const event = adaptDshNotification(notification, { runId, sessionId, now: this.#now }, { onDiagnostic: this.#onDiagnostic });
         if (event) stream.push(event);
+        if (event && isRunTerminal(event.type)) {
+          this.#toolBridge.endRun({ runId, sessionId, outcome: event.type });
+        }
       },
     })).then(
       () => stream.close(),
@@ -70,9 +83,11 @@ export class DshRuntimeAdapter extends SnnAgentRuntime {
           timestamp: this.#now(),
           error: normalizeRuntimeError(error),
         }));
+        this.#toolBridge.endRun({ runId, sessionId, outcome: "run.failed" });
         stream.fail(error instanceof Error ? error : new Error(String(error)));
       },
     ).finally(() => {
+      this.#toolBridge.endRun({ runId, sessionId, outcome: "run.closed" });
       this.#activeRuns.delete(runId);
       this.#activeSessionRuns.delete(sessionId);
     });
@@ -92,6 +107,7 @@ export class DshRuntimeAdapter extends SnnAgentRuntime {
   dispose() {
     this.#disposeTask ??= (() => {
       this.#disposed = true;
+      this.#toolBridge.dispose();
       return Promise.resolve(this.#client.dispose());
     })();
     return this.#disposeTask;
@@ -100,6 +116,11 @@ export class DshRuntimeAdapter extends SnnAgentRuntime {
   #assertActive() {
     if (this.#disposed) throw new Error("SNN Agent Runtime is disposed");
   }
+}
+
+/** @param {unknown} type */
+function isRunTerminal(type) {
+  return type === "run.completed" || type === "run.failed" || type === "run.cancelled";
 }
 
 class AsyncEventStream {

@@ -66,6 +66,42 @@ test("runtime adapter forwards DSH notifications as SNN events", async () => {
   assert.ok(events.every((event) => event.runId === run.runId));
 });
 
+test("runtime adapter does not mislabel a DSH tool request as execution start", async () => {
+  const diagnostics = [];
+  const client = {
+    async sendMessage({ onNotification }) {
+      onNotification({
+        method: "session.event",
+        params: {
+          sessionId: "session-1",
+          event: { type: "tool/call", data: { callId: "call-1", name: "read", arguments: "{}" } },
+        },
+      });
+      onNotification({
+        method: "session.event",
+        params: {
+          sessionId: "session-1",
+          event: {
+            type: "tool/result",
+            data: { message: { content: [{ type: "tool-result", toolCallId: "call-1", content: [], isError: false }] } },
+          },
+        },
+      });
+      onNotification({
+        method: "session.event",
+        params: { sessionId: "session-1", event: { type: "turn/end", data: { reason: { kind: "completed" } } } },
+      });
+    },
+    async dispose() {},
+  };
+  const runtime = new DshRuntimeAdapter({ client, onDiagnostic: (diagnostic) => diagnostics.push(diagnostic) });
+  const run = runtime.sendMessage({ sessionId: "session-1", content: "hello" });
+  const events = await collect(run.events);
+
+  assert.deepEqual(events.map((event) => event.type), ["run.started", "run.completed"]);
+  assert.equal(diagnostics.some((diagnostic) => diagnostic.code === "TOOL_RESULT_WITHOUT_EXECUTION_START"), true);
+});
+
 test("runtime adapter delegates abort for an active run", async () => {
   const pending = deferred();
   const aborts = [];
