@@ -26,7 +26,6 @@
     "deploy:production": "npm run build:production && npm run test:production-artifact && wrangler deploy --config dist/server/wrangler.json",
     "verify": "npm run lint && npm run test:ai-state && npm run test:ai-node && npm run test:ai-gateway && npm run build && npm run test:artifact && npm run test:production-artifact && npm run test:production-readiness && npm run test:rendered-html",
     "test": "npm run verify",
-    "validate:artifact": "npm run test:artifact",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .preview"
   },
   "dependencies": {
