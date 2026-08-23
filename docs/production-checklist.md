@@ -2,15 +2,15 @@
 
 本清单只用于部署前检查，不会执行部署、DNS 修改或 Secret 上传。
 
-## 链路
+## 当前生产 AI 链路
 
 ```text
-Browser → SNN Website / React → Public HTTPS Gateway → Cloudflare Access → Private AI Origin → 127.0.0.1 AI Node → Local Model Runtime
+Browser → https://snnai.cn (Worker + React) → api.snnai.cn → Cloudflare Tunnel → AI11 127.0.0.1:8787 → ai-node → Qwen
 ```
 
-- Browser 只请求相对 `/api/ai`，不应知道 AI Origin、AI Node 或模型 URL。
-- AI Node 默认绑定 `127.0.0.1`，不直接暴露公网。
-- Gateway → Origin 的 Access Client ID、Client Secret 只能通过 Worker Secret 提供。
+- `api.snnai.cn` 通过命名 Tunnel 直接指向 ai-node（127.0.0.1:8787），不经过 Gateway Worker。
+- `cloudflare-ai-gateway/` 目前**不在生产请求路径中**，保留作为未来可选的限流/校验层。
+- AI Node 默认绑定 `127.0.0.1`，通过 Tunnel 暴露 HTTPS，不直接暴露公网。
 - Qwen/模型 API Key 只能保存在 AI Node 环境中。
 
 ## 配置
@@ -18,14 +18,8 @@ Browser → SNN Website / React → Public HTTPS Gateway → Cloudflare Access �
 部署前在部署环境提供真实值：
 
 ```text
-SNN_PUBLIC_ORIGIN=https://<正式网站域名>
-SNN_AI_GATEWAY_URL=https://<正式 Gateway 域名>
-AI_ORIGIN_URL=https://<Access 保护的 Origin 域名>
-ALLOWED_ORIGINS=https://<正式网站域名>
-AI_CHAT_RATE_LIMIT_NAMESPACE_ID=<真实 namespace id>
-AI_STATUS_RATE_LIMIT_NAMESPACE_ID=<真实 namespace id>
-CF_ACCESS_CLIENT_ID=<Worker Secret>
-CF_ACCESS_CLIENT_SECRET=<Worker Secret>
+SNN_PUBLIC_ORIGIN=https://snnai.cn
+AI_GATEWAY_URL=https://api.snnai.cn/api/ai
 QWEN_UPSTREAM_API_KEY=<AI Node Secret，如需要>
 ```
 
@@ -40,12 +34,11 @@ npm run preflight:production -- --strict
 ## 部署顺序
 
 1. 准备并验证 Qwen Runtime 与 AI Node，确认只监听 `127.0.0.1`。
-2. 创建/确认 Cloudflare Tunnel 与 Access Application。
-3. 配置 Gateway Worker vars、Rate Limit bindings 和 Worker Secrets。
-4. 配置网站正式域名与 HTTPS。
-5. 运行 `npm run verify` 与 production preflight。
-6. 由维护者分别部署 Gateway 与 Website。
-7. 通过 `/`、`/ai/`、Gateway status 和一次人工 SSE 请求做 smoke。
+2. 确认 Cloudflare Tunnel 将 `api.snnai.cn` 指向 `127.0.0.1:8787`。
+3. 配置网站正式域名与 HTTPS。
+4. 运行 `npm run verify` 与 production preflight。
+5. 由维护者部署 Website。
+6. 通过 `/`、`/ai/`、Gateway status 和一次人工 SSE 请求做 smoke。
 
 ## 缓存与 SSE
 
@@ -56,4 +49,4 @@ npm run preflight:production -- --strict
 
 ## 回滚
 
-发现异常时，回滚 Website 与 Gateway 到上一份已验证版本，恢复上一份配置，再重新执行 status、`/ai/` 与 SSE smoke。不要用 DNS 临时绕过 Gateway。
+发现异常时，回滚 Website 到上一份已验证版本，恢复上一份配置，再重新执行 status、`/ai/` 与 SSE smoke。不要用 DNS 临时绕过安全边界。

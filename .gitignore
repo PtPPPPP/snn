@@ -40,7 +40,6 @@ next-env.d.ts
 /.sites-runtime/
 /outputs/
 /work/
-/ftp-upload/
 /.static-export-temp/
 /.vinext/
 .preview/
@@ -58,3 +57,5 @@ next-env.d.ts
 
 # WorkBuddy local workspace data (memory/logs)
 /.workbuddy/
+
+/graphify-out/

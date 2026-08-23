@@ -58,14 +58,10 @@ export class AiClientError extends Error {
 }
 
 function configuredBaseUrl(): string | undefined {
-  const staticBaseUrl =
-    typeof window === "undefined" ? undefined : window.__SNN_AI_API_BASE_URL__;
-  const buildBaseUrl =
-    typeof process === "undefined"
-      ? undefined
-      : process.env.NEXT_PUBLIC_SNN_AI_API_BASE_URL;
-
-  return staticBaseUrl ?? buildBaseUrl;
+  // Runtime injection via /ai-config.js is the only supported channel:
+  // Vite replaces process.env with an empty object literal in client
+  // bundles, so build-time NEXT_PUBLIC_* variables never resolve.
+  return typeof window === "undefined" ? undefined : window.__SNN_AI_API_BASE_URL__;
 }
 
 export function getAiApiBaseUrl(): string {
@@ -79,7 +75,7 @@ async function requestJson<T>(
   timeoutMs: number,
 ): Promise<T> {
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(`${getAiApiBaseUrl()}${path}`, {
@@ -107,7 +103,7 @@ async function requestJson<T>(
 
     throw new AiClientError("network");
   } finally {
-    window.clearTimeout(timeoutId);
+    globalThis.clearTimeout(timeoutId);
   }
 }
 

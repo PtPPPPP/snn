@@ -1,5 +1,5 @@
 // SNN AI 对话历史本地持久化层（IndexedDB）。
-// 供 React 版(app/ai/ai-chat.tsx)与 DOM 静态版(app/ai/ftp-chat.ts)共用。
+// 供 React 版(app/ai/ai-chat.tsx)使用。
 // 不保存敏感运行数据（API key / reasoning 原始内容 / 服务端日志）。
 
 import type { AiChatMessage } from "./ai-client";

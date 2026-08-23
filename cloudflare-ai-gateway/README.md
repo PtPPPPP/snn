@@ -1,5 +1,9 @@
 # SNN Cloudflare AI Gateway
 
+> **当前状态：不在生产请求路径中。**
+> 生产 AI 链路为 `api.snnai.cn` → Tunnel → ai-node 直连，不经过本 Worker。
+> 保留作为未来可选的限流/校验层。
+
 这是独立的 Cloudflare Worker，只暴露网站需要的两个接口：
 
 ```text
@@ -50,4 +54,4 @@ npm run test:ai-gateway
 3. 在同学模型电脑的 cloudflared Tunnel 中，将 `ai-origin.example.com` 指向 `http://127.0.0.1:8787`。
 4. 设置两个 Worker Secret，再部署 Worker。
 
-不要把正式网站、浏览器、FTP 资源或 Qwen Runtime 直接指向 AI Origin。
+不要把正式网站、浏览器或 Qwen Runtime 直接指向 AI Origin；所有 AI 请求必须经过 Gateway。

@@ -38,5 +38,5 @@ jobs:
       - name: Test production readiness rules
         run: npm run test:production-readiness
 
-      - name: Test rendered pages
-        run: npm run test:pages
+      - name: Test rendered HTML
+        run: npm run test:rendered-html

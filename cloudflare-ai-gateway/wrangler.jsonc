@@ -4,10 +4,12 @@
   "main": "src/index.mjs",
   "compatibility_date": "2026-08-17",
   "vars": {
-    // TODO(上线前): 替换为真实 ai-origin 域名（docs/ai-host-setup.md 第 3 步创建的命名 Tunnel 域名）
+    // Gateway 目前不在生产请求路径中（api.snnai.cn 走 Tunnel → ai-node 直连）。
+    // 以下配置为未来启用 Gateway 时的准备值。
+    // TODO(启用时): 替换为真实 ai-origin 域名（docs/ai-host-setup.md 第 3 步
+    // 创建的命名 Tunnel 域名）。当前值仅为占位符。
     "AI_ORIGIN_URL": "https://ai-origin.example.com",
-    // TODO(上线前): 替换为网站真实域名；保留 localhost 供本地开发调试
-    "ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:8765",
+    "ALLOWED_ORIGINS": "https://snnai.cn,http://localhost:5173,http://127.0.0.1:8765",
     "MAX_CHAT_BODY_BYTES": "65536",
     "AI_ORIGIN_CONNECT_TIMEOUT_MS": "45000",
     "AI_ORIGIN_STREAM_IDLE_TIMEOUT_MS": "60000"
@@ -15,7 +17,7 @@
   "ratelimits": [
     {
       "name": "AI_CHAT_RATE_LIMIT",
-      // TODO(上线前): 替换为 Cloudflare 后台创建的真实限流 namespace_id
+      // namespace_id 为示例值；真实值仅存在于 Dashboard，无法从代码验证。
       "namespace_id": "878701",
       "simple": {
         "limit": 10,
@@ -24,7 +26,6 @@
     },
     {
       "name": "AI_STATUS_RATE_LIMIT",
-      // TODO(上线前): 替换为 Cloudflare 后台创建的真实限流 namespace_id
       "namespace_id": "878702",
       "simple": {
         "limit": 60,

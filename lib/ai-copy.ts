@@ -1,6 +1,5 @@
 // AI 聊天界面共享文案。
-// 供 React 版(app/ai/ai-chat.tsx)、DOM 版(app/ai/ftp-chat.ts)、
-// 以及静态导出模板(scripts/export-static.mjs)复用，避免三处不同步。
+// 供 React 版(app/ai/ai-chat.tsx)与测试复用，避免多处不同步。
 
 export const STATUS_LABELS = {
   checking: "Checking AI Node...",

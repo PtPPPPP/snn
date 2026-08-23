@@ -9,14 +9,13 @@ Qwen Runtime          http://127.0.0.1:8000/v1
         ↑
 SNN AI Node           http://127.0.0.1:8787
         ↑
-cloudflared Tunnel    ai-origin.example.com
-        ↑
-Cloudflare Access
-        ↑
-Cloudflare AI Gateway
+cloudflared Tunnel    api.snnai.cn
 ```
 
 三项本地程序必须运行在同一台模型电脑上。Qwen Runtime 不得直接被 Tunnel 指向。
+
+> `cloudflare-ai-gateway/` Worker 目前**不在生产请求路径中**，保留作为未来可选的
+> 限流/校验层。如需启用，参见该目录 README。
 
 ## 1. 先运行并验证 Qwen Runtime
 
@@ -104,15 +103,19 @@ Service:  http://127.0.0.1:8787
 
 不要将 Tunnel 指向 `127.0.0.1:8000`。
 
-## 4. 保护 AI Origin
+## 4. 保护 AI Origin（可选，当前生产未启用 Gateway）
 
-在 Cloudflare Zero Trust 为 `ai-origin.example.com` 创建 Self-hosted Access Application：
+> 当前生产链路 `api.snnai.cn` 通过 Tunnel 直接指向 ai-node，
+> **不经过** `cloudflare-ai-gateway` Worker。以下步骤仅在启用
+> Gateway 层时需要执行。
+
+在 Cloudflare Zero Trust 为 AI Origin 域名创建 Self-hosted Access Application：
 
 - 创建只给 Gateway 使用的 Service Token
 - 添加 `Service Auth` Policy，仅允许这个 Service Token
 - 不要创建允许所有人的 Policy
 
-Worker 会在访问 Origin 时自动带上 Service Token；没有 Token 的直接 Origin 请求应被 Access 拒绝。
+Gateway Worker 会在访问 Origin 时自动带上 Service Token；没有 Token 的直接 Origin 请求应被 Access 拒绝。
 
 ## 5. 最终检查顺序
 
@@ -121,11 +124,8 @@ Worker 会在访问 Origin 时自动带上 Service Token；没有 Token 的直�
 3. AI Node `/api/ai/status` 为 Online。
 4. AI Node `/api/ai/chat` 能返回真实模型回复。
 5. Tunnel 显示 Healthy。
-6. 直接访问 AI Origin、没有 Service Token 时被拒绝。
-7. Gateway `/api/ai/status` 正常。
-8. Gateway `/api/ai/chat` 能返回真实模型回复。
-9. FTP 网站 `/ai/` 显示 Online 并能聊天。
-10. 关闭 AI Node 后，网站 `/ai/` 仍能打开且显示 Offline。
+6. 网站 `/ai/` 显示 Online 并能聊天。
+7. 关闭 AI Node 后，网站 `/ai/` 仍能打开且显示 Offline。
 
 ## 维护建议
 
