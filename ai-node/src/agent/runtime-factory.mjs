@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { DshClient } from "./dsh-client.mjs";
 import { DshRuntimeAdapter } from "./runtime-adapter.mjs";
 import { builtInToolMetadataFor } from "./built-in-tools.mjs";
+import { DEFAULT_DOCUMENT_LIMITS } from "./documents/limits.mjs";
 
 /** Build the server-owned bridge from configured values to the official SDK. */
 export async function createConfiguredAgentRuntime(agentConfig) {
@@ -39,6 +40,9 @@ async function createWorkspaceBridgeConfig(agentConfig) {
   const pluginPath = fileURLToPath(new URL("./workspace/dsh-workspace-read-plugin.mjs", import.meta.url));
   const configPath = join(directory, "cordis.yml");
   const quoted = (value) => JSON.stringify(value);
+  // Document limits are server-owned constants serialized into the overlay;
+  // the plugin clamps them again, so even a tampered overlay cannot widen bounds.
+  const documentLimits = JSON.stringify(agentConfig.documentLimits ?? DEFAULT_DOCUMENT_LIMITS);
   await writeFile(configPath, [
     "- id: base",
     "  name: cordis:include",
@@ -52,6 +56,7 @@ async function createWorkspaceBridgeConfig(agentConfig) {
     `            name: ${quoted(pathToFileURL(pluginPath).href)}`,
     "            config:",
     `              workspaceRoot: ${quoted(agentConfig.runtimeCwd)}`,
+    `              documentLimits: ${documentLimits}`,
     "",
   ].join("\n"), "utf8");
   return { configPath, dispose: () => rm(directory, { recursive: true, force: true }).catch(() => {}) };

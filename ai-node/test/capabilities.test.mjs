@@ -22,8 +22,16 @@ test("capability resolver grants only registered available safe reads", async ()
     const workspace = await manager.register(root);
     const resolver = createDefaultCapabilityResolver();
     const capability = resolver.resolve({ workspace });
-    assert.deepEqual(capability.allowedToolIds, ["workspace.read"]);
-    assert.deepEqual(capability.dshToolPolicy, { default: "deny", rules: [{ toolName: "workspace.read", decision: "allow" }] });
+    assert.deepEqual(capability.allowedToolIds, ["workspace.read", "workspace.extract"]);
+    assert.deepEqual(capability.dshToolPolicy, {
+      default: "deny",
+      rules: [
+        { toolName: "workspace.read", decision: "allow" },
+        { toolName: "workspace.extract", decision: "allow" },
+      ],
+    });
+    // Mutating tools stay unregistered from every grantable skill.
+    assert.equal(resolver.toolRegistry.get("workspace.write").risk, "mutating");
     assert.throws(() => resolver.resolve({ workspace, skillId: "workspace-writer" }), (error) => error.code === "SNN_SKILL_CAPABILITY_UNAVAILABLE");
     assert.throws(() => resolver.resolve({ workspace, skillId: "missing" }), (error) => error.code === "SNN_SKILL_NOT_FOUND");
   } finally { await rm(root, { recursive: true, force: true }); }
