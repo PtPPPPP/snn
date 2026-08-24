@@ -22,7 +22,7 @@ export function createDshToolPolicy(metadataEntries) {
       throw new TypeError("Tool metadata name must be a non-empty string");
     }
     return { toolName: metadata.name, decision: projectDefaultToolPolicy(metadata).decision };
-  });
+  }).filter((rule) => rule.decision === "allow");
   const names = new Set(rules.map((rule) => rule.toolName));
   if (names.size !== rules.length) throw new TypeError("Tool metadata names must be unique");
   return Object.freeze({ default: "deny", rules: Object.freeze(rules) });

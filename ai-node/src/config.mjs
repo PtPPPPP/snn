@@ -13,6 +13,68 @@ function readPositiveInteger(value, fallback, name) {
   return parsed;
 }
 
+function readBoolean(value, fallback, name) {
+  if (value === undefined || value === "") return fallback;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error(`${name} must be true or false`);
+}
+
+function readCsv(value, name) {
+  if (!value) return [];
+  const names = value.split(",").map((item) => item.trim()).filter(Boolean);
+  if (!names.every((item) => /^[A-Z][A-Z0-9_]*$/.test(item))) throw new Error(`${name} contains an invalid environment variable name`);
+  return [...new Set(names)];
+}
+
+function requireConfigString(value, name) {
+  if (typeof value !== "string" || value.trim() === "") throw new Error(`${name} is required when SNN_AGENT_INTERNAL_ENABLED=true`);
+  return value.trim();
+}
+
+function readJsonStringArray(value, name) {
+  if (!value) return [];
+  let parsed;
+  try { parsed = JSON.parse(value); } catch { throw new Error(`${name} must be a JSON string array`); }
+  if (!Array.isArray(parsed) || !parsed.every((item) => typeof item === "string" && item.length > 0)) {
+    throw new Error(`${name} must be a JSON string array`);
+  }
+  return parsed;
+}
+
+function loadAgentConfig(environment) {
+  const enabled = readBoolean(environment.SNN_AGENT_INTERNAL_ENABLED, false, "SNN_AGENT_INTERNAL_ENABLED");
+  const host = environment.SNN_AGENT_INTERNAL_HOST || "127.0.0.1";
+  if (host !== "127.0.0.1") throw new Error("SNN Agent Internal API must listen on 127.0.0.1 only");
+  const base = {
+    enabled,
+    host,
+    port: readPositiveInteger(environment.SNN_AGENT_INTERNAL_PORT, 8788, "SNN_AGENT_INTERNAL_PORT"),
+    maxBodyBytes: readPositiveInteger(environment.SNN_AGENT_INTERNAL_MAX_BODY_BYTES, 16_384, "SNN_AGENT_INTERNAL_MAX_BODY_BYTES"),
+    messageMaxLength: readPositiveInteger(environment.SNN_AGENT_INTERNAL_MESSAGE_MAX_LENGTH, 16_384, "SNN_AGENT_INTERNAL_MESSAGE_MAX_LENGTH"),
+  };
+  if (!enabled) return base;
+
+  const passthrough = readCsv(environment.SNN_AGENT_DSH_ENV_PASSTHROUGH, "SNN_AGENT_DSH_ENV_PASSTHROUGH");
+  const required = readCsv(environment.SNN_AGENT_DSH_ENV_REQUIRED, "SNN_AGENT_DSH_ENV_REQUIRED");
+  const missing = required.filter((name) => !environment[name]);
+  if (missing.length > 0) throw new Error(`Missing required DSH environment: ${missing.join(",")}`);
+  return {
+    ...base,
+    sdkPath: requireConfigString(environment.SNN_AGENT_DSH_SDK_PATH, "SNN_AGENT_DSH_SDK_PATH"),
+    toolHostPath: requireConfigString(environment.SNN_AGENT_DSH_TOOL_HOST_PATH, "SNN_AGENT_DSH_TOOL_HOST_PATH"),
+    runtimeExecutable: requireConfigString(environment.SNN_AGENT_DSH_RUNTIME_EXECUTABLE, "SNN_AGENT_DSH_RUNTIME_EXECUTABLE"),
+    runtimeArguments: readJsonStringArray(environment.SNN_AGENT_DSH_RUNTIME_ARGUMENTS, "SNN_AGENT_DSH_RUNTIME_ARGUMENTS"),
+    cordisConfig: requireConfigString(environment.SNN_AGENT_DSH_CORDIS_CONFIG, "SNN_AGENT_DSH_CORDIS_CONFIG"),
+    runtimeCwd: requireConfigString(environment.SNN_AGENT_DSH_RUNTIME_CWD, "SNN_AGENT_DSH_RUNTIME_CWD"),
+    provider: requireConfigString(environment.SNN_AGENT_DSH_PROVIDER, "SNN_AGENT_DSH_PROVIDER"),
+    model: requireConfigString(environment.SNN_AGENT_DSH_MODEL, "SNN_AGENT_DSH_MODEL"),
+    requestTimeoutMs: readPositiveInteger(environment.SNN_AGENT_DSH_REQUEST_TIMEOUT_MS, 120_000, "SNN_AGENT_DSH_REQUEST_TIMEOUT_MS"),
+    shutdownTimeoutMs: readPositiveInteger(environment.SNN_AGENT_DSH_SHUTDOWN_TIMEOUT_MS, 10_000, "SNN_AGENT_DSH_SHUTDOWN_TIMEOUT_MS"),
+    environment: Object.fromEntries(passthrough.map((name) => [name, environment[name]]).filter(([, value]) => value !== undefined)),
+  };
+}
+
 function normalizeUpstreamBaseUrl(value) {
   const parsed = new URL(value);
   if (parsed.protocol !== "http:" || parsed.hostname !== "127.0.0.1") {
@@ -84,5 +146,6 @@ export function loadConfig(environment = process.env) {
     ),
     systemPrompt:
       environment.AI_SYSTEM_PROMPT || "你是 SNN AI，由 SNN 社团提供的 AI 助手。",
+    agent: loadAgentConfig(environment),
   };
 }

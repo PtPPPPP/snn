@@ -40,7 +40,6 @@ test("SNN metadata translates to a generic DSH policy payload", () => {
     default: "deny",
     rules: [
       { toolName: "read", decision: "allow" },
-      { toolName: "write", decision: "deny" },
     ],
   });
 });

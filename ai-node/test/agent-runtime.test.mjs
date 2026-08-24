@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DshClient } from "../src/agent/dsh-client.mjs";
 import { DshRuntimeAdapter } from "../src/agent/runtime-adapter.mjs";
+import { AgentRuntimeManager } from "../src/agent/runtime-manager.mjs";
+import { AgentSessionController } from "../src/agent/session-controller.mjs";
 
 function deferred() {
   let resolve;
@@ -328,4 +330,87 @@ test("DSH client re-resume of a known session is local and sends no wire request
   assert.deepEqual(second, { sessionId: "warm-session" });
   assert.deepEqual(resumes, ["warm-session"]);
   await client.dispose();
+});
+
+test("DSH client maps a missing persisted session to the stable SNN error", async () => {
+  const client = new DshClient({
+    createHarness: () => ({
+      async start() {},
+      async close() {},
+      async resumeSession() { throw Object.assign(new Error("missing"), { code: "SESSION_NOT_FOUND" }); },
+    }),
+    harnessOptions: {},
+  });
+  await assert.rejects(
+    () => client.resumeSession({ sessionId: "missing-session" }),
+    (error) => error.code === "AGENT_SESSION_NOT_FOUND",
+  );
+  await client.dispose();
+});
+
+test("DSH client maps only the exact real-child missing-session JSON-RPC error", async () => {
+  const sessionId = "missing-session";
+  const missing = new DshClient({
+    createHarness: () => ({ async start() {}, async close() {}, async resumeSession() { throw Object.assign(new Error(`session "${sessionId}" not found`), { name: "JsonRpcResponseError", code: -32603 }); } }),
+    harnessOptions: {},
+  });
+  await assert.rejects(() => missing.resumeSession({ sessionId }), (error) => error.code === "AGENT_SESSION_NOT_FOUND");
+  await missing.dispose();
+  const generic = new DshClient({
+    createHarness: () => ({ async start() {}, async close() {}, async resumeSession() { throw Object.assign(new Error("session persistence is not configured"), { name: "JsonRpcResponseError", code: -32603 }); } }),
+    harnessOptions: {},
+  });
+  await assert.rejects(() => generic.resumeSession({ sessionId }), (error) => error.code !== "AGENT_SESSION_NOT_FOUND");
+  await generic.dispose();
+});
+
+test("runtime manager starts once, observes child failure, and permits one explicit recovery", async () => {
+  let creates = 0;
+  let disposals = 0;
+  let fail;
+  function runtime() {
+    return {
+      async createSession() {}, async resumeSession() {}, sendMessage() {}, async abort() {},
+      async dispose() { disposals += 1; },
+      onFailure(listener) { fail = listener; },
+    };
+  }
+  const manager = new AgentRuntimeManager({ createRuntime: async () => { creates += 1; return runtime(); } });
+  await Promise.all([manager.ensureReady(), manager.ensureReady()]);
+  assert.equal(creates, 1);
+  assert.equal(manager.state, "READY");
+  fail(Object.assign(new Error("child exited"), { code: "TRANSPORT_CLOSED" }));
+  assert.equal(manager.state, "FAILED");
+  await manager.ensureReady();
+  assert.equal(creates, 2);
+  assert.equal(disposals, 1);
+  await Promise.all([manager.dispose(), manager.dispose()]);
+  assert.equal(manager.state, "STOPPED");
+  assert.equal(disposals, 2);
+});
+
+test("session controller uses one server policy and isolates same-session ownership", async () => {
+  const calls = [];
+  const pending = deferred();
+  const manager = {
+    async ensureReady() {
+      return {
+        async createSession(input) { calls.push(["create", input]); },
+        async resumeSession(input) { calls.push(["resume", input]); },
+        sendMessage() { return { runId: "snn-run-00000000-0000-4000-8000-000000000001", events: pending.promise }; },
+        async abort(input) { calls.push(["abort", input]); },
+      };
+    },
+  };
+  const controller = new AgentSessionController({ manager, toolMetadata: [{ name: "read", risk: "READ" }, { name: "write", risk: "WRITE" }] });
+  const created = await controller.createSession();
+  const policy = calls[0][1].toolPolicy;
+  assert.equal(policy.default, "deny");
+  assert.deepEqual(policy.rules, [{ toolName: "read", decision: "allow" }]);
+  const run = await controller.startRun(created.sessionId, "hello");
+  await assert.rejects(() => controller.startRun(created.sessionId, "again"), (error) => error.code === "AGENT_RUN_CONFLICT");
+  await assert.rejects(() => controller.cancel(created.sessionId, "snn-run-00000000-0000-4000-8000-000000000002"), (error) => error.code === "STALE_AGENT_RUN");
+  await controller.cancel(created.sessionId, run.runId);
+  controller.finish(created.sessionId, run.runId);
+  assert.equal(controller.activeRunId(created.sessionId), undefined);
 });

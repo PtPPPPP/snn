@@ -13,6 +13,7 @@ export class DshRuntimeAdapter extends SnnAgentRuntime {
   #onDiagnostic;
   #disposed = false;
   #disposeTask;
+  #failureListeners = new Set();
 
   /** @param {{ client: object, now?: () => string, metadataFor?: (toolName: string) => Record<string, unknown> | undefined, onDiagnostic?: (diagnostic: Readonly<Record<string, unknown>>) => void, toolBridge?: ToolExecutionBridge }} options */
   constructor({ client, now = () => new Date().toISOString(), metadataFor, onDiagnostic = () => {}, toolBridge } = {}) {
@@ -73,6 +74,7 @@ export class DshRuntimeAdapter extends SnnAgentRuntime {
     })).then(
       () => stream.close(),
       (error) => {
+        if (isRuntimeTransportFailure(error)) this.#notifyFailure(error);
         this.#publishRunEvent(runId, sessionId, stream, createSnnAgentEvent({
           type: "run.failed",
           runId,
@@ -99,6 +101,12 @@ export class DshRuntimeAdapter extends SnnAgentRuntime {
     return this.#client.abort({ sessionId, runId });
   }
 
+  onFailure(listener) {
+    if (typeof listener !== "function") throw new TypeError("failure listener must be a function");
+    this.#failureListeners.add(listener);
+    return () => this.#failureListeners.delete(listener);
+  }
+
   /** Dispose the complete internal runtime. */
   dispose() {
     this.#disposeTask ??= (() => {
@@ -111,6 +119,12 @@ export class DshRuntimeAdapter extends SnnAgentRuntime {
 
   #assertActive() {
     if (this.#disposed) throw new Error("SNN Agent Runtime is disposed");
+  }
+
+  #notifyFailure(error) {
+    for (const listener of this.#failureListeners) {
+      try { listener(error); } catch { /* Failure observers must not alter a run. */ }
+    }
   }
 
   #publishRunEvent(runId, sessionId, stream, event) {
@@ -183,4 +197,8 @@ function normalizeRuntimeError(error) {
     code: typeof error?.code === "string" ? error.code : "DSH_RUNTIME_ERROR",
     message: error instanceof Error ? error.message : String(error),
   };
+}
+
+function isRuntimeTransportFailure(error) {
+  return ["TRANSPORT_CLOSED", "ECONNRESET", "EPIPE", "DSH_RUNTIME_CLOSED"].includes(error?.code);
 }

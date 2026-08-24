@@ -477,7 +477,7 @@ export default function AiChat() {
       invalidateNavigation: () => { ++navigationSequenceRef.current; },
       deleteConversation: deleteConv,
       listConversations,
-      selectConversation: async (next) => { setConversations(await listConversations()); await switchConversation(next.id); },
+      selectConversation: async (next: Conversation) => { setConversations(await listConversations()); await switchConversation(next.id); },
       selectEmpty: () => { setConversations([]); setActiveId(null); activeIdRef.current = null; setActiveConversationId(null); setMessages([]); },
     }).catch(() => setStorageNotice("本次对话未保存"));
   }

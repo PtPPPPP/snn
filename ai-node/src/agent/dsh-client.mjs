@@ -12,14 +12,20 @@ export class DshClient {
   #startTask;
   #sessions = new Map();
   #disposeTask;
+  #onInternalDiagnostic;
+  #onDispose;
 
   /**
    * @param {{ createHarness: (options: Record<string, unknown>) => object, harnessOptions: Record<string, unknown> }} options
    */
-  constructor({ createHarness, harnessOptions }) {
+  constructor({ createHarness, harnessOptions, onInternalDiagnostic = () => {}, onDispose = () => {} }) {
     if (typeof createHarness !== "function") throw new TypeError("createHarness must be a function");
+    if (typeof onInternalDiagnostic !== "function") throw new TypeError("onInternalDiagnostic must be a function");
+    if (typeof onDispose !== "function") throw new TypeError("onDispose must be a function");
     this.#createHarness = createHarness;
     this.#harnessOptions = { ...harnessOptions };
+    this.#onInternalDiagnostic = onInternalDiagnostic;
+    this.#onDispose = onDispose;
   }
 
   /** Start and initialize the official DSH runtime subprocess once. */
@@ -29,7 +35,7 @@ export class DshClient {
       this.#harness = this.#createHarness(this.#harnessOptions);
       if (typeof this.#harness?.start !== "function") throw new TypeError("Official DSH harness must provide start()");
       await this.#harness.start();
-    })();
+    })().catch((error) => { this.#diagnose("DSH_START_FAILED", error); throw error; });
     return this.#startTask;
   }
 
@@ -47,7 +53,15 @@ export class DshClient {
     await this.start();
     requireSessionId(sessionId);
     if (!this.#sessions.has(sessionId)) {
-      await this.#harness.resumeSession(sessionId, toolPolicy);
+      try {
+        await this.#harness.resumeSession(sessionId, toolPolicy);
+      } catch (error) {
+        this.#diagnose("DSH_RESUME_FAILED", error);
+        if (isDshSessionNotFound(error, sessionId)) {
+          throw new AgentSessionNotFoundError(sessionId);
+        }
+        throw error;
+      }
       this.#sessions.set(sessionId, toolPolicy);
     }
     return { sessionId };
@@ -74,11 +88,34 @@ export class DshClient {
   dispose() {
     this.#disposeTask ??= (async () => {
       if (this.#startTask) await this.#startTask.catch(() => {});
-      if (this.#harness?.close) await this.#harness.close();
-      this.#sessions.clear();
+      try { if (this.#harness?.close) await this.#harness.close(); }
+      finally { this.#sessions.clear(); await this.#onDispose(); }
     })();
     return this.#disposeTask;
   }
+
+  #diagnose(stage, error) {
+    try {
+      this.#onInternalDiagnostic(Object.freeze({
+        stage,
+        name: typeof error?.name === "string" ? error.name : typeof error,
+        ...(typeof error?.code === "string" || typeof error?.code === "number" ? { code: error.code } : {}),
+        ...(isRecord(error?.data) ? { dataKeys: Object.freeze(Object.keys(error.data).sort()) } : {}),
+        ...(typeof error?.message === "string" ? { message: error.message } : {}),
+      }));
+    } catch {
+      // Diagnostics are strictly observational.
+    }
+  }
+}
+
+function isRecord(value) { return typeof value === "object" && value !== null && !Array.isArray(value); }
+
+function isDshSessionNotFound(error, sessionId) {
+  if (error?.code === "SESSION_NOT_FOUND" || error?.code === "session-not-found") return true;
+  return error?.name === "JsonRpcResponseError"
+    && error.code === -32603
+    && error.message === `session "${sessionId}" not found`;
 }
 
 /** @param {unknown} sessionId */

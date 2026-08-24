@@ -71,7 +71,7 @@ export default function ChatInput({
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.nativeEvent.isComposing || event.isComposing) {
+    if (event.nativeEvent.isComposing || ("isComposing" in event && event.isComposing === true)) {
       return;
     }
     if (event.key === "Enter" && !event.shiftKey) {
