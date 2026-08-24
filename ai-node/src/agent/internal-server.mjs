@@ -29,7 +29,7 @@ async function handleRequest(request, response, { config, controller, manager, i
       sendJson(response, 200, {
         enabled: config.enabled,
         runtimeState: manager.state,
-        capabilities: { streaming: true, tools: true, toolPolicy: true, cancel: true, resume: true, persistence: true },
+        capabilities: { streaming: true, tools: true, toolPolicy: true, cancel: true, resume: true, persistence: true, attachments: true },
       });
       return;
     }
@@ -72,8 +72,8 @@ async function handleRequest(request, response, { config, controller, manager, i
     }
     if (action !== "runs" || runId) throw httpError(404, "NOT_FOUND", "route was not found");
     const body = await readJsonBody(request, config.maxBodyBytes);
-    if (!isExactMessageBody(body)) throw httpError(400, "INVALID_REQUEST", "request body must contain only message");
-    const run = await controller.startRun(sessionId, body.message);
+    if (!isExactMessageBody(body)) throw httpError(400, "INVALID_REQUEST", "request body must contain only message and an optional attachments array of file ids");
+    const run = await controller.startRun(sessionId, { message: body.message, attachments: body.attachments });
     streamRun(request, response, controller, sessionId, run);
   } catch (error) {
     sendError(response, error, logger, path);
@@ -149,7 +149,14 @@ async function readJsonBody(request, maxBodyBytes) {
 }
 
 function isExactMessageBody(body) {
-  return isRecord(body) && Object.keys(body).length === 1 && typeof body.message === "string";
+  if (!isRecord(body)) return false;
+  const keys = Object.keys(body);
+  // Strict contract: only the message and an optional attachments file id array.
+  if (keys.length < 1 || keys.length > 2) return false;
+  if (keys.some((key) => key !== "message" && key !== "attachments")) return false;
+  if (typeof body.message !== "string") return false;
+  if (body.attachments !== undefined && !Array.isArray(body.attachments)) return false;
+  return true;
 }
 
 function publicRunFailure(sessionId, run) {

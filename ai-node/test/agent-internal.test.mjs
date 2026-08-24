@@ -93,7 +93,7 @@ test("internal status has only the public capability contract", async () => {
     assert.deepEqual(await response.json(), {
       enabled: true,
       runtimeState: "STOPPED",
-      capabilities: { streaming: true, tools: true, toolPolicy: true, cancel: true, resume: true, persistence: true },
+      capabilities: { streaming: true, tools: true, toolPolicy: true, cancel: true, resume: true, persistence: true, attachments: true },
     });
   });
 });

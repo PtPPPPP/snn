@@ -22,12 +22,13 @@ test("capability resolver grants only registered available safe reads", async ()
     const workspace = await manager.register(root);
     const resolver = createDefaultCapabilityResolver();
     const capability = resolver.resolve({ workspace });
-    assert.deepEqual(capability.allowedToolIds, ["workspace.read", "workspace.extract"]);
+    assert.deepEqual(capability.allowedToolIds, ["workspace.read", "workspace.extract", "workspace.open"]);
     assert.deepEqual(capability.dshToolPolicy, {
       default: "deny",
       rules: [
         { toolName: "workspace.read", decision: "allow" },
         { toolName: "workspace.extract", decision: "allow" },
+        { toolName: "workspace.open", decision: "allow" },
       ],
     });
     // Mutating tools stay unregistered from every grantable skill.

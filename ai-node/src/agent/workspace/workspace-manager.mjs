@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep, win32 } from "node:path";
 
-const MAX_TEXT_BYTES = 256 * 1024;
+/** Server-owned ceiling for UTF-8 text reads; shared with the attachment open path. */
+export const MAX_WORKSPACE_TEXT_BYTES = 256 * 1024;
 const MAX_DIRECTORY_ENTRIES = 512;
 
 /** Server-owned workspace identities and canonical read-only filesystem boundary. */
@@ -43,7 +44,7 @@ export class WorkspaceManager {
     const path = await this.resolvePath(workspaceId, requestedPath);
     const entry = await lstat(path);
     if (!entry.isFile()) throw Object.assign(new Error("Workspace path is not a file"), { code: "SNN_WORKSPACE_NOT_FILE" });
-    if (entry.size > MAX_TEXT_BYTES) throw Object.assign(new Error("Workspace file exceeds read limit"), { code: "SNN_WORKSPACE_FILE_TOO_LARGE" });
+    if (entry.size > MAX_WORKSPACE_TEXT_BYTES) throw Object.assign(new Error("Workspace file exceeds read limit"), { code: "SNN_WORKSPACE_FILE_TOO_LARGE" });
     const bytes = await readFile(path);
     if (bytes.includes(0)) throw Object.assign(new Error("Workspace file is binary"), { code: "SNN_WORKSPACE_BINARY_FILE" });
     return bytes.toString("utf8");

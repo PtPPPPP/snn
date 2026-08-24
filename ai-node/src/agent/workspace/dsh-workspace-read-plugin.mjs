@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { WorkspaceManager } from "./workspace-manager.mjs";
+import { WorkspaceFileOpener } from "./workspace-file-opener.mjs";
 import { DocumentExtractionService } from "../documents/document-extraction-service.mjs";
 import { clampDocumentLimits } from "../documents/limits.mjs";
 
@@ -22,6 +23,7 @@ export function apply(ctx, config = {}) {
     workspaceRoot: root,
     limits: clampDocumentLimits(config.documentLimits),
   });
+  const opener = new WorkspaceFileOpener({ root, documents });
 
   ctx.tools.register(defineTool({
     name: "workspace.read",
@@ -41,6 +43,20 @@ export function apply(ctx, config = {}) {
     output: { schema: { type: "string" }, render: (_args, value) => [{ type: "text", text: value }] },
     async execute(args) {
       try { return await documents.extract(typeof args?.file_id === "string" ? args.file_id : ""); }
+      catch (error) {
+        // Only stable SNN error codes ever leave the tool boundary.
+        throw new Error(typeof error?.code === "string" && error.code.startsWith("AGENT_DOCUMENT_") ? error.code : "AGENT_DOCUMENT_INVALID");
+      }
+    },
+  }));
+
+  ctx.tools.register(defineTool({
+    name: "workspace.open",
+    description: "Open an attached or uploaded workspace file by its server-assigned file id. Returns bounded UTF-8 text for text files and extracted text for PDF, DOCX, or XLSX documents.",
+    parameters: { file_id: { type: "string", required: true, description: "Server-assigned file id of the attached or uploaded file." } },
+    output: { schema: { type: "string" }, render: (_args, value) => [{ type: "text", text: value }] },
+    async execute(args) {
+      try { return await opener.open(typeof args?.file_id === "string" ? args.file_id : ""); }
       catch (error) {
         // Only stable SNN error codes ever leave the tool boundary.
         throw new Error(typeof error?.code === "string" && error.code.startsWith("AGENT_DOCUMENT_") ? error.code : "AGENT_DOCUMENT_INVALID");

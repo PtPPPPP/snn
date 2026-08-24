@@ -9,6 +9,7 @@ import { WorkspaceManager } from "./agent/workspace/workspace-manager.mjs";
 import { createDefaultCapabilityResolver } from "./agent/capabilities/built-ins.mjs";
 import { SessionMetadataStore } from "./agent/session-metadata-store.mjs";
 import { FileIngestionService } from "./agent/workspace/file-ingestion-service.mjs";
+import { AttachmentContextResolver } from "./agent/attachments/attachment-context-resolver.mjs";
 import { WorkspaceRuntimeRegistry } from "./agent/workspace-runtime-registry.mjs";
 
 const config = loadConfig();
@@ -35,6 +36,7 @@ if (config.agent.enabled) {
   const defaultWorkspaceManager = {
     ensureReady: async () => (await runtimeRegistry.getOrCreate(workspace)).ensureReady(),
   };
+  const ingestionService = new FileIngestionService({ workspaceManager });
   const controller = new AgentSessionController({
     manager: defaultWorkspaceManager,
     toolMetadata: BUILT_IN_TOOL_METADATA,
@@ -44,8 +46,9 @@ if (config.agent.enabled) {
     workspaceManager,
     metadataStore: new SessionMetadataStore(config.agent.sessionMetadataRoot),
     runtimeRegistry,
+    attachmentContextResolver: new AttachmentContextResolver({ fileInventory: ingestionService }),
   });
-  internalServer = createAgentInternalServer({ config: config.agent, controller, manager: { get state() { return runtimeRegistry?.get(config.agent.workspaceId)?.state ?? "STOPPED"; } }, ingestionService: new FileIngestionService({ workspaceManager }) });
+  internalServer = createAgentInternalServer({ config: config.agent, controller, manager: { get state() { return runtimeRegistry?.get(config.agent.workspaceId)?.state ?? "STOPPED"; } }, ingestionService });
   await internalServer.listen();
   console.info(`SNN Agent Internal API listening on http://${config.agent.host}:${config.agent.port}`);
 }

@@ -17,4 +17,7 @@ export * from "./capabilities/capability-resolver.mjs";
 export * from "./capabilities/built-ins.mjs";
 export * from "./workspace/workspace-manager.mjs";
 export * from "./workspace/file-ingestion-service.mjs";
+export * from "./workspace/workspace-file-opener.mjs";
+export * from "./documents/file-access.mjs";
+export * from "./attachments/attachment-context-resolver.mjs";
 export * from "./skills/skill-registry.mjs";
