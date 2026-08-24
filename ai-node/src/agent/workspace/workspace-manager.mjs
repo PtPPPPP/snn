@@ -9,11 +9,13 @@ const MAX_DIRECTORY_ENTRIES = 512;
 export class WorkspaceManager {
   #workspaces = new Map();
 
-  async register(root) {
+  async register(root, { id = `snn-workspace-${randomUUID()}` } = {}) {
     const canonicalRoot = await realpath(root);
     const rootStat = await stat(canonicalRoot);
     if (!rootStat.isDirectory()) throw new TypeError("Workspace root must be a directory");
-    const workspace = Object.freeze({ id: `snn-workspace-${randomUUID()}`, root: canonicalRoot });
+    if (typeof id !== "string" || !/^snn-workspace-[a-z0-9-]{3,80}$/.test(id)) throw new TypeError("Workspace id is invalid");
+    if (this.#workspaces.has(id)) throw new Error("Workspace id already exists");
+    const workspace = Object.freeze({ id, root: canonicalRoot });
     this.#workspaces.set(workspace.id, workspace);
     return workspace;
   }
@@ -28,6 +30,7 @@ export class WorkspaceManager {
   async resolvePath(workspaceId, requestedPath) {
     const workspace = this.resolve(workspaceId);
     if (typeof requestedPath !== "string" || requestedPath.length === 0) throw invalidPath();
+    if (requestedPath.startsWith(".snn-")) throw invalidPath();
     if (isAbsolute(requestedPath) || win32.isAbsolute(requestedPath) || /^[a-z]:/i.test(requestedPath) || requestedPath.startsWith("\\\\")) throw invalidPath();
     const candidate = resolve(workspace.root, requestedPath);
     if (!contains(workspace.root, candidate)) throw invalidPath();

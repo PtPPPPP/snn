@@ -63,6 +63,8 @@ function loadAgentConfig(environment) {
     ...base,
     sdkPath: requireConfigString(environment.SNN_AGENT_DSH_SDK_PATH, "SNN_AGENT_DSH_SDK_PATH"),
     toolHostPath: requireConfigString(environment.SNN_AGENT_DSH_TOOL_HOST_PATH, "SNN_AGENT_DSH_TOOL_HOST_PATH"),
+    workspaceId: requireConfigString(environment.SNN_AGENT_WORKSPACE_ID, "SNN_AGENT_WORKSPACE_ID"),
+    sessionMetadataRoot: requireConfigString(environment.SNN_AGENT_SESSION_METADATA_ROOT, "SNN_AGENT_SESSION_METADATA_ROOT"),
     runtimeExecutable: requireConfigString(environment.SNN_AGENT_DSH_RUNTIME_EXECUTABLE, "SNN_AGENT_DSH_RUNTIME_EXECUTABLE"),
     runtimeArguments: readJsonStringArray(environment.SNN_AGENT_DSH_RUNTIME_ARGUMENTS, "SNN_AGENT_DSH_RUNTIME_ARGUMENTS"),
     cordisConfig: requireConfigString(environment.SNN_AGENT_DSH_CORDIS_CONFIG, "SNN_AGENT_DSH_CORDIS_CONFIG"),

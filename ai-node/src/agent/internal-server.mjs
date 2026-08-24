@@ -7,10 +7,10 @@ const SSE_EVENT_TYPES = new Set([
   "tool.completed", "tool.failed", "approval.required", "run.completed", "run.failed", "run.cancelled",
 ]);
 
-export function createAgentInternalServer({ config, controller, manager, logger = console }) {
+export function createAgentInternalServer({ config, controller, manager, ingestionService, logger = console }) {
   if (config.host !== "127.0.0.1") throw new Error("Agent Internal API must listen on 127.0.0.1 only");
   const server = createServer((request, response) => {
-    void handleRequest(request, response, { config, controller, manager, logger });
+    void handleRequest(request, response, { config, controller, manager, ingestionService, logger });
   });
   return {
     listen() { return new Promise((resolve) => server.listen(config.port, config.host, resolve)); },
@@ -22,7 +22,7 @@ export function createAgentInternalServer({ config, controller, manager, logger 
   };
 }
 
-async function handleRequest(request, response, { config, controller, manager, logger }) {
+async function handleRequest(request, response, { config, controller, manager, ingestionService, logger }) {
   const path = new URL(request.url || "/", "http://127.0.0.1").pathname;
   try {
     if (request.method === "GET" && path === "/internal/agent/status") {
@@ -34,9 +34,23 @@ async function handleRequest(request, response, { config, controller, manager, l
       return;
     }
     if (request.method === "POST" && path === "/internal/agent/sessions") {
-      await requireEmptyJsonBody(request, config.maxBodyBytes);
-      sendJson(response, 201, await controller.createSession());
+      sendJson(response, 201, await controller.createSession(await readSessionCreateBody(request, config.maxBodyBytes)));
       return;
+    }
+    const fileRoute = /^\/internal\/agent\/workspaces\/([^/]+)\/files(?:\/([^/]+))?$/.exec(path);
+    if (fileRoute) {
+      if (!ingestionService) throw httpError(404, "NOT_FOUND", "route was not found");
+      const [, workspaceId, fileId] = fileRoute;
+      if (request.method === "GET" && !fileId) { sendJson(response, 200, { files: await ingestionService.list(workspaceId) }); return; }
+      if (request.method === "DELETE" && fileId) { await ingestionService.remove({ workspaceId, fileId }); response.writeHead(204); response.end(); return; }
+      if (request.method === "POST" && !fileId) {
+        if (request.headers["content-type"]?.split(";", 1)[0].trim().toLowerCase() !== "application/octet-stream") throw httpError(400, "INVALID_CONTENT_TYPE", "content-type must be application/octet-stream");
+        const originalName = request.headers["x-snn-file-name"];
+        if (typeof originalName !== "string") throw httpError(400, "AGENT_FILE_INVALID", "x-snn-file-name is required");
+        sendJson(response, 201, { file: await ingestionService.ingest({ workspaceId, originalName, contentType: request.headers["x-snn-file-content-type"], body: request }) });
+        return;
+      }
+      throw httpError(405, "METHOD_NOT_ALLOWED", "method is not allowed");
     }
     if (path === "/internal/agent/status" || path === "/internal/agent/sessions") {
       throw httpError(405, "METHOD_NOT_ALLOWED", "method is not allowed");
@@ -105,6 +119,17 @@ async function requireEmptyJsonBody(request, maxBodyBytes) {
   const body = await readJsonBody(request, maxBodyBytes);
   if (body === undefined) return;
   if (!isRecord(body) || Object.keys(body).length !== 0) throw httpError(400, "INVALID_REQUEST", "request body must be empty");
+}
+
+function readSessionCreateBody(request, maxBodyBytes) {
+  return readJsonBody(request, maxBodyBytes).then((body) => {
+    if (body === undefined) return {};
+    if (!isRecord(body)) throw httpError(400, "INVALID_REQUEST", "request body is invalid");
+    const keys = Object.keys(body);
+    if (keys.length === 0) return {};
+    if (keys.length === 1 && keys[0] === "workspaceId" && typeof body.workspaceId === "string") return { workspaceId: body.workspaceId };
+    throw httpError(400, "INVALID_REQUEST", "request body must contain only workspaceId");
+  });
 }
 
 async function readJsonBody(request, maxBodyBytes) {

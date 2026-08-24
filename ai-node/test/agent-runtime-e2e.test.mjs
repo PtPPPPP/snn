@@ -21,28 +21,6 @@ const FIXTURE_BASE = join(DSH_ROOT, "examples/jsonrpc-agent");
 const hasRuntime = existsSync(CLIENT_LIB) && existsSync(BIN_JS) && existsSync(FIXTURE_BASE);
 const options = { skip: hasRuntime ? false : "requires the sibling deepseek-harness checkout with built SDK lib" };
 
-// A freshly exited child runtime can keep its cwd pinned for a while on
-// Windows; sweep what best-effort per-test cleanup had to leave behind.
-if (hasRuntime) {
-  import("node:fs/promises").then(async ({ readdir }) => {
-    const deadline = Date.now() + 120_000;
-    while (Date.now() < deadline) {
-      await new Promise((resolveTick) => setTimeout(resolveTick, 10_000));
-      try {
-        const stale = (await readdir(tmpdir(), { withFileTypes: true }))
-          .filter((entry) => entry.isDirectory() && entry.name.startsWith("snn-e2e-"))
-          .map((entry) => join(tmpdir(), entry.name));
-        if (stale.length === 0) return;
-        for (const dir of stale) {
-          await rm(dir, { recursive: true, force: true }).catch(() => {});
-        }
-      } catch {
-        // The sweep is best effort; the next tick retries.
-      }
-    }
-  });
-}
-
 async function makeTemp(prefix) {
   return mkdtemp(join(tmpdir(), prefix));
 }

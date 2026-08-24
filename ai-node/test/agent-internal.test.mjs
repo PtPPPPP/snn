@@ -79,7 +79,7 @@ test("Agent runtime config is disabled by default and loopback-only", () => {
   assert.throws(
     () => loadConfig({
       QWEN_UPSTREAM_BASE_URL: "http://127.0.0.1:8000/v1", SNN_AGENT_INTERNAL_ENABLED: "true",
-      SNN_AGENT_DSH_SDK_PATH: "sdk.mjs", SNN_AGENT_DSH_TOOL_HOST_PATH: "tool-host.mjs", SNN_AGENT_DSH_RUNTIME_EXECUTABLE: "node", SNN_AGENT_DSH_RUNTIME_ARGUMENTS: "not-json",
+      SNN_AGENT_DSH_SDK_PATH: "sdk.mjs", SNN_AGENT_DSH_TOOL_HOST_PATH: "tool-host.mjs", SNN_AGENT_WORKSPACE_ID: "snn-workspace-test", SNN_AGENT_SESSION_METADATA_ROOT: "metadata", SNN_AGENT_DSH_RUNTIME_EXECUTABLE: "node", SNN_AGENT_DSH_RUNTIME_ARGUMENTS: "not-json",
       SNN_AGENT_DSH_CORDIS_CONFIG: "cordis.yml", SNN_AGENT_DSH_RUNTIME_CWD: "runtime", SNN_AGENT_DSH_PROVIDER: "provider", SNN_AGENT_DSH_MODEL: "model",
     }),
     /SNN_AGENT_DSH_RUNTIME_ARGUMENTS must be a JSON string array/,
@@ -112,6 +112,18 @@ test("internal create derives the server tool policy and rejects client escalati
     assert.equal(policy.default, "deny");
     assert.equal(policy.rules.find((rule) => rule.toolName === "read").decision, "allow");
     for (const name of ["write", "execute", "fetch"]) assert.equal(policy.rules.some((rule) => rule.toolName === name), false);
+  });
+});
+
+test("internal create accepts only a workspace ID selector", async () => {
+  await withInternal(async ({ baseUrl, runtime }) => {
+    const selected = await json(`${baseUrl}/internal/agent/sessions`, { method: "POST", body: JSON.stringify({ workspaceId: "snn-workspace-a" }) });
+    assert.equal(selected.status, 201);
+    assert.match((await selected.json()).sessionId, /^snn-agent-[a-f0-9-]{36}$/);
+    assert.equal(runtime.calls.filter(([kind]) => kind === "create").length, 1);
+    const rejected = await json(`${baseUrl}/internal/agent/sessions`, { method: "POST", body: JSON.stringify({ workspaceId: "snn-workspace-a", cwd: "C:\\" }) });
+    assert.equal(rejected.status, 400);
+    assert.equal((await rejected.json()).error.code, "INVALID_REQUEST");
   });
 });
 

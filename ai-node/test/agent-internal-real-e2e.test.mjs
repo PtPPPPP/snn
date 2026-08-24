@@ -13,6 +13,12 @@ import { createAgentInternalServer } from "../src/agent/internal-server.mjs";
 import { createConfiguredAgentRuntime } from "../src/agent/runtime-factory.mjs";
 import { WorkspaceManager } from "../src/agent/workspace/workspace-manager.mjs";
 import { createDefaultCapabilityResolver } from "../src/agent/capabilities/built-ins.mjs";
+import { SessionMetadataStore } from "../src/agent/session-metadata-store.mjs";
+import { ToolRegistry } from "../src/agent/capabilities/tool-registry.mjs";
+import { SkillRegistry } from "../src/agent/skills/skill-registry.mjs";
+import { CapabilityResolver } from "../src/agent/capabilities/capability-resolver.mjs";
+import { FileIngestionService } from "../src/agent/workspace/file-ingestion-service.mjs";
+import { WorkspaceRuntimeRegistry } from "../src/agent/workspace-runtime-registry.mjs";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 const dshRoot = resolve(testDir, "../../../deepseek-harness");
@@ -75,8 +81,10 @@ async function removeTree(path) { await rm(path, { recursive: true, force: true 
 async function bootRealInternal(label, shared = {}) {
   const ownsWorkspace = shared.workspace === undefined;
   const ownsPersistence = shared.persistence === undefined;
+  const ownsMetadata = shared.metadata === undefined;
   const workspace = shared.workspace ?? await mkdtemp(join(tmpdir(), "snn-http-e2e-ws-"));
   const persistence = shared.persistence ?? await mkdtemp(join(tmpdir(), "snn-http-e2e-sessions-"));
+  const metadata = shared.metadata ?? await mkdtemp(join(tmpdir(), "snn-http-e2e-metadata-"));
   const fixture = join(fixtureBase, `.snn-http-e2e-${label}`);
   await mkdir(fixture, { recursive: true });
   const cordis = join(fixture, "cordis.yml");
@@ -100,19 +108,47 @@ async function bootRealInternal(label, shared = {}) {
     environment: { PATH: process.env.PATH, DEEPSEEK_API_KEY: "test-key", SNN_TEST_SECRET: "SNN_AGENT_SECRET_SENTINEL_8f93c1", DEEPSEEK_BASE_URL: llm.url, DSH_SESSION_ROOT: persistence, DSH_CWD: workspace, DSH_HOME: join(workspace, ".home"), DSH_AGENTS_HOME: join(workspace, ".agents") },
     onInternalDiagnostic: (event) => diagnostics.push(event),
   };
-  const manager = new AgentRuntimeManager({ createRuntime: () => createConfiguredAgentRuntime(config) });
-  const workspaceManager = new WorkspaceManager();
-  const workspaceRecord = await workspaceManager.register(workspace);
+  const workspaceManager = shared.workspaceManager ?? new WorkspaceManager();
+  const workspaceRecord = shared.registerWorkspace === false ? undefined : await workspaceManager.register(workspace, { id: "snn-workspace-e2e" });
+  const createManager = (resolvedWorkspace) => new AgentRuntimeManager({
+    createRuntime: () => createConfiguredAgentRuntime({
+      ...config,
+      runtimeCwd: resolvedWorkspace.root,
+      environment: {
+        ...config.environment,
+        DSH_CWD: resolvedWorkspace.root,
+        DSH_HOME: join(resolvedWorkspace.root, ".home"),
+        DSH_AGENTS_HOME: join(resolvedWorkspace.root, ".agents"),
+      },
+    }),
+  });
+  const manager = workspaceRecord ? createManager(workspaceRecord) : new AgentRuntimeManager({ createRuntime: () => createConfiguredAgentRuntime(config) });
+  const additionalWorkspaces = shared.additionalWorkspaces ?? [];
+  for (const additional of additionalWorkspaces) await workspaceManager.register(additional.root, { id: additional.id });
+  const managers = new Map(workspaceRecord ? [[workspaceRecord.id, manager]] : []);
+  const runtimeRegistry = additionalWorkspaces.length > 0 ? new WorkspaceRuntimeRegistry({
+    createManager: async (resolvedWorkspace) => {
+      const existing = managers.get(resolvedWorkspace.id);
+      if (existing) return existing;
+      const created = createManager(resolvedWorkspace);
+      managers.set(resolvedWorkspace.id, created);
+      return created;
+    },
+  }) : undefined;
   const controller = new AgentSessionController({
     manager,
     toolMetadata: BUILT_IN_TOOL_METADATA,
-    capabilityResolver: createDefaultCapabilityResolver(),
+    capabilityResolver: shared.capabilityResolver ?? createDefaultCapabilityResolver(),
     workspace: workspaceRecord,
+    workspaceManager,
+    metadataStore: new SessionMetadataStore(metadata),
+    runtimeRegistry,
   });
-  const listener = createAgentInternalServer({ config: { enabled: true, host: "127.0.0.1", port: 0, maxBodyBytes: 16_384 }, controller, manager, logger: { error() {} } });
+  const ingestion = new FileIngestionService({ workspaceManager });
+  const listener = createAgentInternalServer({ config: { enabled: true, host: "127.0.0.1", port: 0, maxBodyBytes: 16_384 }, controller, manager, ingestionService: ingestion, logger: { error() {} } });
   await listener.listen();
   const baseUrl = `http://127.0.0.1:${listener.address().port}`;
-  return { workspace, workspaceRecord, persistence, fixture, llm, manager, listener, baseUrl, diagnostics, async close() { await listener.close().catch(() => {}); await manager.dispose().catch(() => {}); await llm.close(); if (ownsWorkspace) await removeTree(workspace); if (ownsPersistence) await removeTree(persistence); await removeTree(fixture); } };
+  return { workspace, workspaceRecord, workspaceManager, persistence, metadata, fixture, llm, manager, managers, runtimeRegistry, listener, baseUrl, diagnostics, ingestion, async close() { await listener.close().catch(() => {}); await runtimeRegistry?.disposeAll().catch(() => {}); if (!runtimeRegistry) await manager.dispose().catch(() => {}); await llm.close(); if (ownsWorkspace) await removeTree(workspace); if (ownsPersistence) await removeTree(persistence); if (ownsMetadata) await removeTree(metadata); await removeTree(fixture); } };
 }
 
 async function post(url, body) { return fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }); }
@@ -170,6 +206,12 @@ function assertTerminal(events, expected = "run.completed") {
   const terminals = events.filter((event) => ["run.completed", "run.failed", "run.cancelled"].includes(event.type));
   assert.equal(terminals.length, 1, `terminal events: ${terminals.map((event) => event.type).join(",")}`);
   assert.equal(terminals[0].type, expected);
+}
+
+function resolverWith({ skill = true, readAvailable = true } = {}) {
+  const tools = new ToolRegistry([{ id: "workspace.read", name: "Read", description: "Read", category: "read", risk: "safe-read", dshToolName: "workspace.read", handlerId: "snn-workspace-read", available: () => readAvailable }]);
+  const skills = new SkillRegistry({ toolRegistry: tools, skills: skill ? [{ id: "workspace-reader", name: "Workspace Reader", description: "Read", instructions: "Read only", requiredTools: ["workspace.read"] }] : [] });
+  return new CapabilityResolver({ toolRegistry: tools, skillRegistry: skills });
 }
 
 test("real HTTP Internal API drives official SDK and child with sanitized READ/WRITE policy", options, async (t) => {
@@ -240,6 +282,121 @@ test("real workspace bridge rejects traversal and absolute paths before outside 
   assert.doesNotMatch(observed, /SNN_OUTSIDE_SECRET_SENTINEL/);
 });
 
+test("trusted ingestion makes uploaded text available to the session-bound real Agent", options, async (t) => {
+  const env = await bootRealInternal("upload-read");
+  t.after(() => env.close());
+  const uploaded = await env.ingestion.ingest({ workspaceId: env.workspaceRecord.id, originalName: "note.txt", contentType: "text/plain", body: (async function* () { yield Buffer.from("SNN_UPLOAD_TEXT_SENTINEL"); })() });
+  assert.deepEqual((await env.ingestion.list(env.workspaceRecord.id)).map((file) => file.fileId), [uploaded.fileId]);
+  const { sessionId } = await (await post(`${env.baseUrl}/internal/agent/sessions`, {})).json();
+  env.llm.set([{ match: "read note.txt", payloads: toolPayloads("upload-read", "workspace.read", { file_path: "note.txt" }) }, { payloads: textPayloads("uploaded content read") }]);
+  const stream = await sse(await post(`${env.baseUrl}/internal/agent/sessions/${sessionId}/runs`, { message: "read note.txt" }));
+  assert.ok(stream.events.some((event) => event.type === "tool.completed"));
+  assertTerminal(stream.events);
+  assert.match(JSON.stringify(env.llm.requests), /SNN_UPLOAD_TEXT_SENTINEL/);
+  assert.doesNotMatch(stream.body, /SNN_UPLOAD_TEXT_SENTINEL|\.snn-workspace-files|\.stage/);
+});
+
+test("real HTTP keeps workspace runtimes, uploaded files, and Agent reads strictly isolated", options, async (t) => {
+  const workspaceB = await mkdtemp(join(tmpdir(), "snn-http-e2e-workspace-b-"));
+  const workspaceBId = "snn-workspace-e2e-b";
+  const env = await bootRealInternal("workspace-isolation", { additionalWorkspaces: [{ id: workspaceBId, root: workspaceB }] });
+  t.after(async () => { await env.close(); await removeTree(workspaceB); });
+  const upload = async (workspaceId, filename, content) => {
+    const response = await fetch(`${env.baseUrl}/internal/agent/workspaces/${workspaceId}/files`, {
+      method: "POST",
+      headers: { "content-type": "application/octet-stream", "x-snn-file-name": filename, "x-snn-file-content-type": "text/plain" },
+      body: content,
+    });
+    assert.equal(response.status, 201, await response.text());
+  };
+  await upload(env.workspaceRecord.id, "secret-a.txt", "SNN_WORKSPACE_A_SECRET_7e1");
+  await upload(workspaceBId, "secret-b.txt", "SNN_WORKSPACE_B_SECRET_9d2");
+
+  const sessionA1 = await (await post(`${env.baseUrl}/internal/agent/sessions`, { workspaceId: env.workspaceRecord.id })).json();
+  const sessionA2 = await (await post(`${env.baseUrl}/internal/agent/sessions`, { workspaceId: env.workspaceRecord.id })).json();
+  const sessionB = await (await post(`${env.baseUrl}/internal/agent/sessions`, { workspaceId: workspaceBId })).json();
+  const managerA = env.managers.get(env.workspaceRecord.id);
+  const managerB = env.managers.get(workspaceBId);
+  assert.equal(env.managers.size, 2, "same workspace sessions must reuse their RuntimeManager");
+  assert.notEqual(managerA, managerB, "different workspaces must own separate RuntimeManagers");
+  assert.equal(managerA.state, "READY");
+  assert.equal(managerB.state, "READY");
+
+  env.llm.set([
+    { match: "read secret-a.txt", payloads: toolPayloads("workspace-a-read", "workspace.read", { file_path: "secret-a.txt" }) },
+    { match: "read secret-b.txt", payloads: toolPayloads("workspace-b-read", "workspace.read", { file_path: "secret-b.txt" }) },
+    { match: "cross a to b", payloads: toolPayloads("workspace-a-cross", "workspace.read", { file_path: "secret-b.txt" }) },
+    { match: "cross b to a", payloads: toolPayloads("workspace-b-cross", "workspace.read", { file_path: "secret-a.txt" }) },
+    { payloads: textPayloads("tool result handled") },
+    { payloads: textPayloads("tool result handled") },
+    { payloads: textPayloads("tool result handled") },
+    { payloads: textPayloads("tool result handled") },
+  ]);
+  const readA = await sse(await post(`${env.baseUrl}/internal/agent/sessions/${sessionA1.sessionId}/runs`, { message: "read secret-a.txt" }));
+  assert.ok(readA.events.some((event) => event.type === "tool.completed"));
+  assertTerminal(readA.events);
+  const readB = await sse(await post(`${env.baseUrl}/internal/agent/sessions/${sessionB.sessionId}/runs`, { message: "read secret-b.txt" }));
+  assert.ok(readB.events.some((event) => event.type === "tool.completed"));
+  assertTerminal(readB.events);
+  const firstTwo = JSON.stringify(env.llm.requests);
+  assert.match(firstTwo, /SNN_WORKSPACE_A_SECRET_7e1/);
+  assert.match(firstTwo, /SNN_WORKSPACE_B_SECRET_9d2/);
+
+  const beforeCrossA = env.llm.requests.length;
+  const crossA = await sse(await post(`${env.baseUrl}/internal/agent/sessions/${sessionA2.sessionId}/runs`, { message: "cross a to b" }));
+  assert.ok(crossA.events.some((event) => event.type === "tool.failed"));
+  assertTerminal(crossA.events);
+  assert.doesNotMatch(JSON.stringify(env.llm.requests.slice(beforeCrossA)), /SNN_WORKSPACE_B_SECRET_9d2/);
+  const beforeCrossB = env.llm.requests.length;
+  const crossB = await sse(await post(`${env.baseUrl}/internal/agent/sessions/${sessionB.sessionId}/runs`, { message: "cross b to a" }));
+  assert.ok(crossB.events.some((event) => event.type === "tool.failed"));
+  assertTerminal(crossB.events);
+  assert.doesNotMatch(JSON.stringify(env.llm.requests.slice(beforeCrossB)), /SNN_WORKSPACE_A_SECRET_7e1/);
+});
+
+test("loopback File API ingests, lists, and deletes without path leakage", options, async (t) => {
+  const env = await bootRealInternal("file-api");
+  t.after(() => env.close());
+  const url = `${env.baseUrl}/internal/agent/workspaces/${env.workspaceRecord.id}/files`;
+  const upload = await fetch(url, { method: "POST", headers: { "content-type": "application/octet-stream", "x-snn-file-name": "api-note.txt", "x-snn-file-content-type": "text/plain" }, body: "API_UPLOAD_SENTINEL" });
+  assert.equal(upload.status, 201);
+  const uploaded = (await upload.json()).file;
+  assert.match(uploaded.fileId, /^snn-file-/);
+  assert.equal("storedName" in uploaded, false);
+  const list = await fetch(url);
+  assert.deepEqual(await list.json(), { files: [uploaded] });
+  const bad = await fetch(url, { method: "POST", headers: { "content-type": "application/octet-stream", "x-snn-file-name": "../evil.txt" }, body: "x" });
+  assert.equal(bad.status, 500);
+  assert.doesNotMatch(await bad.text(), /evil\.txt|workspace|path/i);
+  const removed = await fetch(`${url}/${uploaded.fileId}`, { method: "DELETE" });
+  assert.equal(removed.status, 204);
+  assert.deepEqual(await (await fetch(url)).json(), { files: [] });
+});
+
+test("uploaded workspace file survives Runtime restart and remains read-only", options, async (t) => {
+  const workspace = await mkdtemp(join(tmpdir(), "snn-upload-resume-ws-"));
+  const persistence = await mkdtemp(join(tmpdir(), "snn-upload-resume-sessions-"));
+  const metadata = await mkdtemp(join(tmpdir(), "snn-upload-resume-metadata-"));
+  t.after(async () => { await removeTree(workspace); await removeTree(persistence); await removeTree(metadata); });
+  const runtimeA = await bootRealInternal("upload-resume-a", { workspace, persistence, metadata });
+  const uploaded = await runtimeA.ingestion.ingest({ workspaceId: runtimeA.workspaceRecord.id, originalName: "resume-note.txt", body: (async function* () { yield Buffer.from("SNN_UPLOAD_RESUME_SENTINEL"); })() });
+  const { sessionId } = await (await post(`${runtimeA.baseUrl}/internal/agent/sessions`, {})).json();
+  runtimeA.llm.set([{ payloads: textPayloads("persist session") }]);
+  assertTerminal((await sse(await post(`${runtimeA.baseUrl}/internal/agent/sessions/${sessionId}/runs`, { message: "persist session" }))).events);
+  await runtimeA.close();
+  const runtimeB = await bootRealInternal("upload-resume-b", { workspace, persistence, metadata });
+  t.after(() => runtimeB.close());
+  assert.deepEqual(await runtimeB.ingestion.list(runtimeB.workspaceRecord.id), [uploaded]);
+  assert.equal((await post(`${runtimeB.baseUrl}/internal/agent/sessions/${sessionId}/resume`, {})).status, 200);
+  runtimeB.llm.set([{ match: "read resume-note.txt", payloads: toolPayloads("resume-upload-read", "workspace.read", { file_path: "resume-note.txt" }) }, { payloads: textPayloads("resumed upload read") }]);
+  const read = await sse(await post(`${runtimeB.baseUrl}/internal/agent/sessions/${sessionId}/runs`, { message: "read resume-note.txt" }));
+  assertTerminal(read.events);
+  assert.match(JSON.stringify(runtimeB.llm.requests), /SNN_UPLOAD_RESUME_SENTINEL/);
+  runtimeB.llm.set([{ match: "write resume-note.txt", payloads: toolPayloads("resume-upload-write", "write", { file_path: "resume-note.txt", content: "no" }) }, { payloads: textPayloads("write denied") }]);
+  const write = await sse(await post(`${runtimeB.baseUrl}/internal/agent/sessions/${sessionId}/runs`, { message: "write resume-note.txt" }));
+  assert.equal(write.events.some((event) => event.type === "tool.started"), false);
+});
+
 test("real Runtime maps a missing persisted HTTP session without leaking DSH details", options, async (t) => {
   const env = await bootRealInternal("missing");
   t.after(() => env.close());
@@ -249,7 +406,7 @@ test("real Runtime maps a missing persisted HTTP session without leaking DSH det
   const response = await post(`${env.baseUrl}/internal/agent/sessions/${missingId}/resume`, {});
   const body = await response.text();
   assert.equal(response.status, 404, body);
-  assert.deepEqual(env.diagnostics.map((event) => ({ name: event.name, code: event.code })), [{ name: "JsonRpcResponseError", code: -32603 }]);
+  assert.deepEqual(env.diagnostics, []);
   assert.match(body, /AGENT_SESSION_NOT_FOUND/);
   for (const forbidden of ["JsonRpcResponseError", "-32603", env.workspace, env.persistence, sdkPath, env.fixture, "SNN_AGENT_SECRET_SENTINEL_8f93c1"]) assert.doesNotMatch(body, new RegExp(forbidden.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
@@ -300,13 +457,14 @@ test("real HTTP stale cancel and run conflict leave the active child run unaffec
 test("HTTP cross-runtime resume restores one session and reapplies READ-only policy", options, async (t) => {
   const workspace = await mkdtemp(join(tmpdir(), "snn-http-resume-ws-"));
   const persistence = await mkdtemp(join(tmpdir(), "snn-http-resume-sessions-"));
-  t.after(async () => { await removeTree(workspace); await removeTree(persistence); });
-  const runtimeA = await bootRealInternal("resume-a", { workspace, persistence });
+  const metadata = await mkdtemp(join(tmpdir(), "snn-http-resume-metadata-"));
+  t.after(async () => { await removeTree(workspace); await removeTree(persistence); await removeTree(metadata); });
+  const runtimeA = await bootRealInternal("resume-a", { workspace, persistence, metadata });
   const { sessionId } = await (await post(`${runtimeA.baseUrl}/internal/agent/sessions`, {})).json();
   runtimeA.llm.set([{ payloads: textPayloads("stored marker") }]);
   assertTerminal((await sse(await post(`${runtimeA.baseUrl}/internal/agent/sessions/${sessionId}/runs`, { message: "remember MARKER-ALPHA" }))).events);
   await runtimeA.close();
-  const runtimeB = await bootRealInternal("resume-b", { workspace, persistence });
+  const runtimeB = await bootRealInternal("resume-b", { workspace, persistence, metadata });
   t.after(() => runtimeB.close());
   assert.notEqual(runtimeA.manager, runtimeB.manager);
   const resumed = await post(`${runtimeB.baseUrl}/internal/agent/sessions/${sessionId}/resume`, {});
@@ -322,6 +480,52 @@ test("HTTP cross-runtime resume restores one session and reapplies READ-only pol
   assert.equal(write.events.some((event) => event.type === "tool.started"), false);
   assertTerminal(write.events);
   assert.equal(existsSync(join(workspace, "forbidden-resumed.txt")), false);
+});
+
+test("resume fails closed when current workspace, skill, or capability state no longer resolves", options, async () => {
+  for (const scenario of ["workspace", "skill", "capability"]) {
+    const workspace = await mkdtemp(join(tmpdir(), `snn-session-${scenario}-ws-`));
+    const persistence = await mkdtemp(join(tmpdir(), `snn-session-${scenario}-sessions-`));
+    const metadata = await mkdtemp(join(tmpdir(), `snn-session-${scenario}-metadata-`));
+    const runtimeA = await bootRealInternal(`session-${scenario}-a`, { workspace, persistence, metadata });
+    const { sessionId } = await (await post(`${runtimeA.baseUrl}/internal/agent/sessions`, {})).json();
+    await runtimeA.close();
+    const runtimeB = await bootRealInternal(`session-${scenario}-b`, {
+      workspace,
+      persistence,
+      metadata,
+      ...(scenario === "workspace" ? { registerWorkspace: false } : {}),
+      ...(scenario === "skill" ? { capabilityResolver: resolverWith({ skill: false }) } : {}),
+      ...(scenario === "capability" ? { capabilityResolver: resolverWith({ readAvailable: false }) } : {}),
+    });
+    const response = await post(`${runtimeB.baseUrl}/internal/agent/sessions/${sessionId}/resume`, {});
+    assert.equal(response.status, 500);
+    const body = await response.text();
+    assert.doesNotMatch(body, new RegExp(workspace.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.doesNotMatch(body, /workspace-reader|workspace\.read/);
+    await runtimeB.close();
+    await removeTree(workspace); await removeTree(persistence); await removeTree(metadata);
+  }
+});
+
+test("resume fails closed for missing, corrupt, and orphan session capability metadata", options, async (t) => {
+  const env = await bootRealInternal("metadata-integrity");
+  t.after(() => env.close());
+  const { sessionId } = await (await post(`${env.baseUrl}/internal/agent/sessions`, {})).json();
+  const metadataPath = join(env.metadata, `${sessionId}.json`);
+  const persisted = JSON.parse(await (await import("node:fs/promises")).readFile(metadataPath, "utf8"));
+  assert.deepEqual(persisted, { schemaVersion: 1, workspaceId: "snn-workspace-e2e", skillId: "workspace-reader" });
+  await rm(metadataPath);
+  const missing = await post(`${env.baseUrl}/internal/agent/sessions/${sessionId}/resume`, {});
+  assert.equal(missing.status, 404);
+  await writeFile(metadataPath, "{bad-json");
+  const corrupt = await post(`${env.baseUrl}/internal/agent/sessions/${sessionId}/resume`, {});
+  assert.equal(corrupt.status, 500);
+  assert.doesNotMatch(await corrupt.text(), /bad-json|snn-workspace-e2e/);
+  const orphanId = "snn-agent-00000000-0000-4000-8000-000000000099";
+  await writeFile(join(env.metadata, `${orphanId}.json`), JSON.stringify(persisted));
+  const orphan = await post(`${env.baseUrl}/internal/agent/sessions/${orphanId}/resume`, {});
+  assert.equal(orphan.status, 404);
 });
 
 test("real HTTP SSE disconnect cancels the child run without leaving zombie ownership", options, async (t) => {
