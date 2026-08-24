@@ -47,7 +47,7 @@ function createRuntime() {
 async function withInternal(run) {
   const runtime = createRuntime();
   const manager = new AgentRuntimeManager({ createRuntime: async () => runtime });
-  const controller = new AgentSessionController({ manager, toolMetadata: BUILT_IN_TOOL_METADATA.filter((tool) => tool.name !== "workspace.read"), maxMessageLength: 32 });
+  const controller = new AgentSessionController({ manager, toolMetadata: BUILT_IN_TOOL_METADATA, maxMessageLength: 32 });
   const server = createAgentInternalServer({
     config: { enabled: true, host: "127.0.0.1", port: 0, maxBodyBytes: 64 },
     controller,
@@ -110,8 +110,10 @@ test("internal create derives the server tool policy and rejects client escalati
     assert.match(body.sessionId, /^snn-agent-[a-f0-9-]{36}$/);
     const policy = runtime.calls.find(([kind]) => kind === "create")[1].toolPolicy;
     assert.equal(policy.default, "deny");
-    assert.equal(policy.rules.find((rule) => rule.toolName === "read").decision, "allow");
-    for (const name of ["write", "execute", "fetch"]) assert.equal(policy.rules.some((rule) => rule.toolName === name), false);
+    assert.equal(policy.rules.find((rule) => rule.toolName === "workspace.read").decision, "allow");
+    assert.equal(policy.rules.find((rule) => rule.toolName === "workspace.write").decision, "allow");
+    assert.equal(policy.rules.find((rule) => rule.toolName === "workspace.execute").decision, "allow");
+    assert.equal(policy.rules.find((rule) => rule.toolName === "workspace.fetch").decision, "allow");
   });
 });
 

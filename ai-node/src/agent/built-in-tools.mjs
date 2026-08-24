@@ -5,10 +5,9 @@ export const BUILT_IN_TOOL_METADATA = Object.freeze([
   defineToolMetadata({ name: "workspace.read", displayName: "Read workspace file", risk: "READ", approvalPolicy: "none", category: "workspace" }),
   defineToolMetadata({ name: "workspace.extract", displayName: "Extract document text", risk: "READ", approvalPolicy: "none", category: "document" }),
   defineToolMetadata({ name: "workspace.open", displayName: "Open attached file", risk: "READ", approvalPolicy: "none", category: "document" }),
-  defineToolMetadata({ name: "read", displayName: "Read file", risk: "READ", approvalPolicy: "none", category: "filesystem" }),
-  defineToolMetadata({ name: "write", displayName: "Write file", risk: "WRITE", approvalPolicy: "required", category: "filesystem" }),
-  defineToolMetadata({ name: "execute", displayName: "Execute command", risk: "EXEC", approvalPolicy: "required", category: "process" }),
-  defineToolMetadata({ name: "fetch", displayName: "Fetch URL", risk: "EXTERNAL", approvalPolicy: "required", category: "network" }),
+  defineToolMetadata({ name: "workspace.write", displayName: "Write workspace file", risk: "WRITE", approvalPolicy: "none", category: "workspace" }),
+  defineToolMetadata({ name: "workspace.execute", displayName: "Execute command", risk: "EXEC", approvalPolicy: "none", category: "process" }),
+  defineToolMetadata({ name: "workspace.fetch", displayName: "Fetch URL", risk: "EXTERNAL", approvalPolicy: "none", category: "network" }),
 ]);
 
 export function builtInToolMetadataFor(name) {

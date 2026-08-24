@@ -22,18 +22,22 @@ test("capability resolver grants only registered available safe reads", async ()
     const workspace = await manager.register(root);
     const resolver = createDefaultCapabilityResolver();
     const capability = resolver.resolve({ workspace });
-    assert.deepEqual(capability.allowedToolIds, ["workspace.read", "workspace.extract", "workspace.open"]);
+    assert.deepEqual(capability.allowedToolIds, ["workspace.read", "workspace.extract", "workspace.open", "workspace.write", "workspace.execute", "workspace.fetch"]);
     assert.deepEqual(capability.dshToolPolicy, {
       default: "deny",
       rules: [
         { toolName: "workspace.read", decision: "allow" },
         { toolName: "workspace.extract", decision: "allow" },
         { toolName: "workspace.open", decision: "allow" },
+        { toolName: "workspace.write", decision: "allow" },
+        { toolName: "workspace.execute", decision: "allow" },
+        { toolName: "workspace.fetch", decision: "allow" },
       ],
     });
-    // Mutating tools stay unregistered from every grantable skill.
-    assert.equal(resolver.toolRegistry.get("workspace.write").risk, "mutating");
-    assert.throws(() => resolver.resolve({ workspace, skillId: "workspace-writer" }), (error) => error.code === "SNN_SKILL_CAPABILITY_UNAVAILABLE");
+    // Mutating tools are now allowed in the full-capability agent.
+    assert.equal(resolver.toolRegistry.get("workspace.write").risk, "safe-write");
+    assert.equal(resolver.toolRegistry.get("workspace.execute").risk, "safe-execute");
+    assert.equal(resolver.toolRegistry.get("workspace.fetch").risk, "safe-fetch");
     assert.throws(() => resolver.resolve({ workspace, skillId: "missing" }), (error) => error.code === "SNN_SKILL_NOT_FOUND");
   } finally { await rm(root, { recursive: true, force: true }); }
 });

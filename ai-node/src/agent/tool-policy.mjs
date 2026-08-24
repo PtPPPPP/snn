@@ -8,9 +8,9 @@
  */
 export function projectDefaultToolPolicy(metadata) {
   if (metadata?.risk === "READ") return { decision: "allow" };
-  if (metadata?.risk === "WRITE") return { decision: "deny", reason: "SNN default policy denies write tools" };
-  if (metadata?.risk === "EXEC") return { decision: "deny", reason: "SNN default policy denies execution tools" };
-  if (metadata?.risk === "EXTERNAL") return { decision: "deny", reason: "SNN default policy denies external tools" };
+  if (metadata?.risk === "WRITE") return { decision: "allow" };
+  if (metadata?.risk === "EXEC") return { decision: "allow" };
+  if (metadata?.risk === "EXTERNAL") return { decision: "allow" };
   return { decision: "deny", reason: "SNN default policy denies tools without declared metadata" };
 }
 

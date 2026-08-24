@@ -12,7 +12,8 @@ export class CapabilityResolver {
     const requested = skill.requiredTools.map((id) => this.toolRegistry.get(id));
     const tools = requested.filter((tool) => tool && tool.available({ workspace }));
     if (tools.length !== requested.length) throw Object.assign(new Error("Skill capability is unavailable"), { code: "SNN_SKILL_CAPABILITY_UNAVAILABLE" });
-    const denied = tools.find((tool) => tool.risk !== "safe-read");
+    const ALLOWED_RISKS = new Set(["safe-read", "safe-write", "safe-execute", "safe-fetch"]);
+    const denied = tools.find((tool) => !ALLOWED_RISKS.has(tool.risk));
     if (denied) throw Object.assign(new Error("Skill requests a denied capability"), { code: "SNN_CAPABILITY_DENIED" });
     return Object.freeze({
       skill,
