@@ -21,7 +21,7 @@ export function adaptDshNotification(notification, context, { onDiagnostic = () 
   return adaptSessionEvent(notification.params.event, context, onDiagnostic);
 }
 
-const KNOWN_NOTIFICATION_METHODS = new Set(["session.status", "subagent.started", "subagent.finished"]);
+const KNOWN_NOTIFICATION_METHODS = new Set(["session.status", "subagent.started", "subagent.finished", "tool.execution.started"]);
 const IGNORED_SESSION_EVENTS = new Set([
   "approval/decided",
   "agent/inbox/spliced",

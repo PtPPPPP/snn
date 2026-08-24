@@ -38,6 +38,18 @@ export class ToolExecutionBridge {
    * @returns {Readonly<Record<string, unknown>>[]}
    */
   observeDshNotification(notification, context) {
+    if (notification?.method === "tool.execution.started" && isRecord(notification.params)) {
+      const params = notification.params;
+      if (params.sessionId !== context.sessionId
+        || typeof params.callId !== "string"
+        || typeof params.toolName !== "string") return [];
+      return this.observeToolExecutionStarted({
+        runId: context.runId,
+        sessionId: context.sessionId,
+        toolCallId: params.callId,
+        toolName: params.toolName,
+      });
+    }
     if (notification?.method !== "session.event" || !isRecord(notification.params)) return [];
     if (notification.params.sessionId !== context.sessionId || !isRecord(notification.params.event)) return [];
     const event = notification.params.event;

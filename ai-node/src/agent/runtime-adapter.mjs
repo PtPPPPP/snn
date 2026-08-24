@@ -49,7 +49,7 @@ export class DshRuntimeAdapter extends SnnAgentRuntime {
     if (existingRunId) throw new Error(`Agent session already has an active run: ${existingRunId}`);
     const runId = `snn-run-${randomUUID()}`;
     const stream = new AsyncEventStream();
-    this.#activeRuns.set(runId, { sessionId, stream });
+    this.#activeRuns.set(runId, { sessionId, stream, terminal: undefined });
     this.#activeSessionRuns.set(sessionId, runId);
     this.#toolBridge.beginRun({ runId, sessionId });
     stream.push(createSnnAgentEvent({
@@ -68,22 +68,18 @@ export class DshRuntimeAdapter extends SnnAgentRuntime {
           stream.push(toolEvent);
         }
         const event = adaptDshNotification(notification, { runId, sessionId, now: this.#now }, { onDiagnostic: this.#onDiagnostic });
-        if (event) stream.push(event);
-        if (event && isRunTerminal(event.type)) {
-          this.#toolBridge.endRun({ runId, sessionId, outcome: event.type });
-        }
+        if (event) this.#publishRunEvent(runId, sessionId, stream, event);
       },
     })).then(
       () => stream.close(),
       (error) => {
-        stream.push(createSnnAgentEvent({
+        this.#publishRunEvent(runId, sessionId, stream, createSnnAgentEvent({
           type: "run.failed",
           runId,
           sessionId,
           timestamp: this.#now(),
           error: normalizeRuntimeError(error),
         }));
-        this.#toolBridge.endRun({ runId, sessionId, outcome: "run.failed" });
         stream.fail(error instanceof Error ? error : new Error(String(error)));
       },
     ).finally(() => {
@@ -115,6 +111,25 @@ export class DshRuntimeAdapter extends SnnAgentRuntime {
 
   #assertActive() {
     if (this.#disposed) throw new Error("SNN Agent Runtime is disposed");
+  }
+
+  #publishRunEvent(runId, sessionId, stream, event) {
+    if (!isRunTerminal(event.type)) {
+      stream.push(event);
+      return;
+    }
+    const active = this.#activeRuns.get(runId);
+    if (!active || active.terminal !== undefined) {
+      try {
+        this.#onDiagnostic(Object.freeze({ code: "SNN_RUN_DUPLICATE_TERMINAL", runId, sessionId, terminal: event.type }));
+      } catch {
+        // Diagnostics are observational and must not alter the run outcome.
+      }
+      return;
+    }
+    active.terminal = event.type;
+    stream.push(event);
+    this.#toolBridge.endRun({ runId, sessionId, outcome: event.type });
   }
 }
 

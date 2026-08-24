@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { defineToolMetadata, riskFromDshCallKind } from "../src/agent/tool-metadata.mjs";
-import { projectDefaultToolPolicy } from "../src/agent/tool-policy.mjs";
+import { createDshToolPolicy, projectDefaultToolPolicy } from "../src/agent/tool-policy.mjs";
 
 test("tool metadata is product-only immutable data", () => {
   const metadata = defineToolMetadata({
@@ -30,4 +30,17 @@ test("default tool policy allows only READ metadata", () => {
     assert.equal(projectDefaultToolPolicy({ risk }).decision, "deny");
   }
   assert.equal(projectDefaultToolPolicy(undefined).decision, "deny");
+});
+
+test("SNN metadata translates to a generic DSH policy payload", () => {
+  assert.deepEqual(createDshToolPolicy([
+    { name: "read", risk: "READ" },
+    { name: "write", risk: "WRITE" },
+  ]), {
+    default: "deny",
+    rules: [
+      { toolName: "read", decision: "allow" },
+      { toolName: "write", decision: "deny" },
+    ],
+  });
 });

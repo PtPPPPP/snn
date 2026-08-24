@@ -14,3 +14,16 @@ export function projectDefaultToolPolicy(metadata) {
   return { decision: "deny", reason: "SNN default policy denies tools without declared metadata" };
 }
 
+/** Convert SNN metadata into the generic per-session DSH SDK policy payload. */
+export function createDshToolPolicy(metadataEntries) {
+  if (!Array.isArray(metadataEntries)) throw new TypeError("metadataEntries must be an array");
+  const rules = metadataEntries.map((metadata) => {
+    if (!metadata || typeof metadata.name !== "string" || metadata.name.length === 0) {
+      throw new TypeError("Tool metadata name must be a non-empty string");
+    }
+    return { toolName: metadata.name, decision: projectDefaultToolPolicy(metadata).decision };
+  });
+  const names = new Set(rules.map((rule) => rule.toolName));
+  if (names.size !== rules.length) throw new TypeError("Tool metadata names must be unique");
+  return Object.freeze({ default: "deny", rules: Object.freeze(rules) });
+}

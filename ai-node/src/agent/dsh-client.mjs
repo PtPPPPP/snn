@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { AgentSessionNotFoundError, DshExtensionRequiredError } from "./contract.mjs";
+import { AgentSessionNotFoundError } from "./contract.mjs";
 
 /**
  * Private wrapper around the official `@deepseek-ai/dsh-sdk-client` API.
@@ -10,7 +10,7 @@ export class DshClient {
   #harnessOptions;
   #harness;
   #startTask;
-  #sessions = new Set();
+  #sessions = new Map();
   #disposeTask;
 
   /**
@@ -34,23 +34,21 @@ export class DshClient {
   }
 
   /** Reserve an SDK session identity; official DSH creates it lazily on first prompt. */
-  async createSession({ sessionId = `snn-session-${randomUUID()}` } = {}) {
+  async createSession({ sessionId = `snn-session-${randomUUID()}`, toolPolicy } = {}) {
     await this.start();
     requireSessionId(sessionId);
     if (this.#sessions.has(sessionId)) throw new Error(`Agent session already exists: ${sessionId}`);
-    this.#sessions.add(sessionId);
+    this.#sessions.set(sessionId, toolPolicy);
     return { sessionId };
   }
 
   /** Reopen a session known by this process; cold persisted resume is not on the official SDK wire. */
-  async resumeSession({ sessionId }) {
+  async resumeSession({ sessionId, toolPolicy }) {
     await this.start();
     requireSessionId(sessionId);
     if (!this.#sessions.has(sessionId)) {
-      throw new DshExtensionRequiredError(
-        `resume persisted session "${sessionId}"`,
-        "add a typed session/resume JSON-RPC request that calls ctx.agents.resume(...) in packages/sdk/server",
-      );
+      await this.#harness.resumeSession(sessionId, toolPolicy);
+      this.#sessions.set(sessionId, toolPolicy);
     }
     return { sessionId };
   }
@@ -62,17 +60,14 @@ export class DshClient {
     if (!Array.isArray(contentBlocks)) throw new TypeError("contentBlocks must be an array");
     if (!this.#sessions.has(sessionId)) throw new AgentSessionNotFoundError(sessionId);
     const session = this.#harness.session(sessionId);
-    return session.run(contentBlocks, { onNotification });
+    return session.run(contentBlocks, { onNotification, toolPolicy: this.#sessions.get(sessionId) });
   }
 
-  /** Official SDK 0.0.1 has no per-session or per-run cancel request. */
-  async abort({ sessionId, runId }) {
+  /** Official SDK per-session cancel request for one known live session. */
+  async abort({ sessionId }) {
     requireSessionId(sessionId);
     if (!this.#sessions.has(sessionId)) throw new AgentSessionNotFoundError(sessionId);
-    throw new DshExtensionRequiredError(
-      `abort run "${runId}" in session "${sessionId}"`,
-      "add a typed session/cancel JSON-RPC request that calls Agent.cancel({ kind: 'user' })",
-    );
+    return this.#harness.session(sessionId).cancel();
   }
 
   /** Shut down and reap the owned runtime subprocess. */

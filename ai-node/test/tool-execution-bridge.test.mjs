@@ -63,6 +63,19 @@ test("emits one strict lifecycle for a verified tool execution", () => {
   assert.deepEqual(diagnostics, []);
 });
 
+test("consumes the official typed execution-start notification", () => {
+  const { bridge } = bridgeWithDiagnostics();
+  bridge.observeDshNotification(requested(), { runId: "run-1", sessionId: "session-1" });
+
+  const started = bridge.observeDshNotification({
+    method: "tool.execution.started",
+    params: { sessionId: "session-1", callId: "call-1", toolName: "read" },
+  }, { runId: "run-1", sessionId: "session-1" });
+  const completed = bridge.observeDshNotification(result(), { runId: "run-1", sessionId: "session-1" });
+
+  assert.deepEqual([...started, ...completed].map((event) => event.type), ["tool.started", "tool.completed"]);
+});
+
 test("maps a DSH tool error to a stable public failure", () => {
   const { bridge } = bridgeWithDiagnostics();
   bridge.observeDshNotification(requested(), { runId: "run-1", sessionId: "session-1" });
