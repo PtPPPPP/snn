@@ -23,6 +23,28 @@ AI_GATEWAY_URL=https://api.snnai.cn/api/ai
 QWEN_UPSTREAM_API_KEY=<AI Node Secret，如需要>
 ```
 
+## Agent BFF 生产配置
+
+生产启用 Agent 浏览器功能时，AI Node 环境必须设置：
+
+```text
+SNN_AGENT_INTERNAL_ENABLED=true
+SNN_AGENT_PUBLIC_ENABLED=true
+SNN_AGENT_PUBLIC_COOKIE_SECURE=true
+SNN_AI_ALLOWED_ORIGINS=https://snnai.cn
+SNN_AGENT_PUBLIC_WORKSPACE_BASE=<server-owned directory>
+SNN_AGENT_PUBLIC_OWNERSHIP_ROOT=<server-owned directory>
+# 以及 Phase 2 所需的 DSH SDK/Runtime/Cordis 配置
+```
+
+验证清单：
+
+- `SNN_AGENT_PUBLIC_COOKIE_SECURE=true`（生产必须，HTTPS 下使用 Secure cookie）
+- `SNN_AI_ALLOWED_ORIGINS` 必须精确包含 `https://snnai.cn`，不得使用 `*`
+- `SNN_AGENT_PUBLIC_WORKSPACE_BASE` 和 `SNN_AGENT_PUBLIC_OWNERSHIP_ROOT` 指向服务器专用目录
+- Internal Agent listener (`SNN_AGENT_INTERNAL_HOST`) 仍然是 `127.0.0.1`
+- Agent 关闭时：`/ai/` 正常对话不受影响，ModeSwitch 显示 "Agent · 不可用"
+
 运行：
 
 ```bash

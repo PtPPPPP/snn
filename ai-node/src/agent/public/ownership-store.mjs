@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { link, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const VERSION = 1;
@@ -46,17 +46,16 @@ export class PublicAgentOwnershipStore {
     const target = this.#path(sessionId);
     const tmp = `${target}.${process.pid}.${Date.now()}.tmp`;
     try {
+      // Atomic create: write to temp, then hard-link to target (fails if target exists).
       await writeFile(tmp, JSON.stringify(record), { encoding: "utf8", flag: "wx" });
-      // atomic link not available on all fs, use rename with existence check
       try {
-        await writeFile(target, JSON.stringify(record), { encoding: "utf8", flag: "wx" });
-        await rm(tmp, { force: true });
-      } catch (e) {
-        // if target already exists via wx, clean tmp
+        await link(tmp, target);
+      } catch (error) {
         await rm(tmp, { force: true }).catch(() => {});
-        if (e?.code === "EEXIST") throw Object.assign(new Error("Ownership already exists"), { code: "AGENT_OWNERSHIP_EXISTS" });
-        throw e;
+        if (error?.code === "EEXIST") throw Object.assign(new Error("Ownership already exists"), { code: "AGENT_OWNERSHIP_EXISTS" });
+        throw error;
       }
+      await rm(tmp, { force: true });
     } catch (error) {
       await rm(tmp, { force: true }).catch(() => {});
       if (error?.code === "AGENT_OWNERSHIP_EXISTS") throw error;
@@ -111,7 +110,15 @@ export class PublicAgentOwnershipStore {
     try { record = await this.get(sessionId); }
     catch { return; }
     const updated = { ...record, lastAccessAt: new Date().toISOString() };
-    try { await writeFile(this.#path(sessionId), JSON.stringify(updated), { encoding: "utf8" }); } catch {}
+    // Atomic write: temp file + rename so concurrent readers never see a partial file.
+    const target = this.#path(sessionId);
+    const tmp = `${target}.${process.pid}.${Date.now()}.touch.tmp`;
+    try {
+      await writeFile(tmp, JSON.stringify(updated), { encoding: "utf8" });
+      await rename(tmp, target);
+    } catch {
+      await rm(tmp, { force: true }).catch(() => {});
+    }
   }
 
   async delete(sessionId) {

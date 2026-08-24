@@ -345,7 +345,7 @@ export function createPublicAgentBff({
         return true;
       }
       try { await verifyOwnership(sessionId, token); } catch (e) { sendError(response, e, originInfo, path); return true; }
-      ownershipStore.touch(sessionId).catch(() => {});
+      await ownershipStore.touch(sessionId).catch(() => {});
       await maybeSweep();
 
       if (sub === "files") {

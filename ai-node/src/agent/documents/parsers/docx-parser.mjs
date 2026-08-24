@@ -109,7 +109,6 @@ export function extractBlocks(xml, limits) {
     // Word tags carry the `w:` prefix (`w:p`, `w:tbl`); other namespaces in the
     // body (r:, wp:) wrap non-text content and are ignored by name anyway.
     const tag = match[1].replace(/^w:/, "");
-    console.error("EV", JSON.stringify(match[0]), "tag:", tag);
     switch (`${closing ? "/" : ""}${tag}`) {
       case "tbl": {
         if (tableDepth === 0) {
@@ -133,14 +132,12 @@ export function extractBlocks(xml, limits) {
       }
       case "tr":
       case "/tr": {
-        console.error("TR", JSON.stringify({ closing, tableDepth }));
         if (!closing && tableDepth === 1 && currentTable) { currentRow = []; currentTable.rows.push(currentRow); }
         if (closing) currentRow = null;
         continue;
       }
       case "tc":
       case "/tc": {
-        console.error("TC", JSON.stringify({ closing, tableDepth, inCell, cellParagraphs }));
         if (!closing && tableDepth === 1 && currentRow) { inCell = true; cellParagraphs = []; continue; }
         if (closing && tableDepth === 1 && currentRow) {
           currentRow.push(cellParagraphs.join(" ").trim());
