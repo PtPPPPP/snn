@@ -380,7 +380,7 @@ export function createPublicAgentBff({
               const boundaryMatch = request.headers["content-type"].match(/boundary=([^;]+)/);
               if (!boundaryMatch) throw Object.assign(new Error("Invalid multipart"), { status: 400, code: "INVALID_REQUEST" });
               const boundary = boundaryMatch[1].replace(/^"|"$/g, "");
-              const fileData = await parseMultipartFile(request, boundary, 2 * 1024 * 1024);
+              const fileData = await parseMultipartFile(request, boundary, 10 * 1024 * 1024);
               if (!fileData) throw Object.assign(new Error("File is required"), { status: 400, code: "AGENT_FILE_INVALID" });
               const result = await ingestionService.ingest({ workspaceId: workspace.id, originalName: fileData.filename, contentType: fileData.contentType, body: (async function*(){ yield fileData.data; })() });
               sendJson(response, 201, { file: result }, originInfo);

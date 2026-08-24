@@ -121,10 +121,11 @@ export async function listAgentFiles(sessionId: string): Promise<AgentFile[]> {
 }
 
 export async function uploadAgentFile(sessionId: string, file: File): Promise<AgentFile> {
+  const formData = new FormData();
+  formData.append("file", file, file.name);
   const res = await agentFetch(`/sessions/${encodeURIComponent(sessionId)}/files`, {
     method: "POST",
-    headers: { "content-type": "application/octet-stream", "x-snn-file-name": file.name, "x-snn-file-content-type": file.type || "application/octet-stream" },
-    body: file,
+    body: formData,
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
