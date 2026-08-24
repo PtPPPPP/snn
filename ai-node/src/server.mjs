@@ -296,12 +296,36 @@ async function forwardSse(upstreamResponse, response, config, requestId, upstrea
   }
 }
 
-export function createAiNodeServer(config, { fetchImpl = fetch, logger = console } = {}) {
+export function createAiNodeServer(config, { fetchImpl = fetch, logger = console, publicBff = null } = {}) {
   return createServer(async (request, response) => {
     const startedAt = Date.now();
     const requestId = randomUUID();
     const { allowed, origin } = requestOrigin(request, config);
     const path = new URL(request.url || "/", "http://127.0.0.1").pathname;
+    // Public Agent BFF is the only Internet-facing agent boundary; it must handle before generic fallback
+    if (publicBff && publicBff.isPublicAgentPath(path)) {
+      // Enforce feature flag already at BFF level, but double-check
+      if (!config.publicAgent?.enabled) {
+        sendJson(response, 404, { error: "Not found", requestId }, origin);
+        logRequest(logger, { requestId, endpoint: path, status: 404, durationMs: Date.now() - startedAt, upstreamStatus: null });
+        return;
+      }
+      try {
+        const handled = await publicBff.handlePublicRequest(request, response);
+        // If BFF handled, we have already sent response; just log and return
+        if (handled) {
+          logRequest(logger, { requestId, endpoint: path, status: response.statusCode, durationMs: Date.now() - startedAt, upstreamStatus: null });
+          return;
+        }
+      } catch {
+        // BFF should have handled errors internally, but fallback sanitize
+        if (!response.headersSent) sendJson(response, 500, { error: "Agent service is unavailable", requestId }, origin);
+        else if (!response.writableEnded) response.end();
+        logRequest(logger, { requestId, endpoint: path, status: response.statusCode, durationMs: Date.now() - startedAt, upstreamStatus: null });
+        return;
+      }
+      // If not handled, fall through to 404 below
+    }
     const isStatus = path === "/api/ai/status";
     const isChat = path === "/api/ai/chat";
     const isChatStream = path === "/api/ai/chat/stream";
@@ -331,17 +355,19 @@ export function createAiNodeServer(config, { fetchImpl = fetch, logger = console
       if (request.method === "GET" && isStatus) {
         try {
           const online = await runtimeReady(config, fetchImpl);
+          const agentCaps = config.agent?.enabled && config.publicAgent?.enabled ? { agent: true, attachments: true } : { agent: false };
           sendJson(
             response,
             200,
             online
-              ? { online: true, model: config.model, status: "ready", capabilities: { thinking: true, webSearch: Boolean(config.webSearch) } }
-              : { online: false, model: null, status: "offline", capabilities: { thinking: false, webSearch: false } },
+              ? { online: true, model: config.model, status: "ready", capabilities: { thinking: true, webSearch: Boolean(config.webSearch), ...agentCaps } }
+              : { online: false, model: null, status: "offline", capabilities: { thinking: false, webSearch: false, ...agentCaps } },
             origin,
           );
         } catch (error) {
           upstreamStatus = error.status ?? null;
-          sendJson(response, 200, { online: false, model: null, status: "offline", capabilities: { thinking: false, webSearch: false } }, origin);
+          const agentCaps = config.agent?.enabled && config.publicAgent?.enabled ? { agent: true, attachments: true } : { agent: false };
+          sendJson(response, 200, { online: false, model: null, status: "offline", capabilities: { thinking: false, webSearch: false, ...agentCaps } }, origin);
         }
         return;
       }

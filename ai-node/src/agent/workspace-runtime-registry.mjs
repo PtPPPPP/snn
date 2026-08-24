@@ -42,4 +42,7 @@ export class WorkspaceRuntimeRegistry {
     const failure = results.find((result) => result.status === "rejected");
     if (failure) throw failure.reason;
   }
+
+  get size() { return this.#entries.size; }
+  listIds() { return [...this.#entries.keys()]; }
 }

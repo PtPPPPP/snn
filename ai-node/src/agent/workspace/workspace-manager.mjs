@@ -56,6 +56,12 @@ export class WorkspaceManager {
     if (entries.length > MAX_DIRECTORY_ENTRIES) throw Object.assign(new Error("Workspace directory exceeds list limit"), { code: "SNN_WORKSPACE_DIRECTORY_TOO_LARGE" });
     return Object.freeze(entries.map((entry) => Object.freeze({ name: entry.name, type: entry.isDirectory() ? "directory" : entry.isFile() ? "file" : "other" })));
   }
+
+  delete(workspaceId) {
+    this.#workspaces.delete(workspaceId);
+  }
+
+  get size() { return this.#workspaces.size; }
 }
 
 function contains(root, path) {

@@ -77,6 +77,31 @@ function loadAgentConfig(environment) {
   };
 }
 
+function loadPublicAgentConfig(environment, agentConfig) {
+  const enabled = readBoolean(environment.SNN_AGENT_PUBLIC_ENABLED, false, "SNN_AGENT_PUBLIC_ENABLED");
+  const base = {
+    enabled,
+    // public API uses same host/port as public AI Node (no separate daemon)
+    workspaceBase: environment.SNN_AGENT_PUBLIC_WORKSPACE_BASE || "",
+    ownershipRoot: environment.SNN_AGENT_PUBLIC_OWNERSHIP_ROOT || "",
+    cookieName: environment.SNN_AGENT_PUBLIC_COOKIE_NAME || "snn_agent_owner",
+    cookieSecure: readBoolean(environment.SNN_AGENT_PUBLIC_COOKIE_SECURE, false, "SNN_AGENT_PUBLIC_COOKIE_SECURE"),
+    sessionTtlMs: readPositiveInteger(environment.SNN_AGENT_PUBLIC_SESSION_TTL_MS, 24 * 60 * 60 * 1000, "SNN_AGENT_PUBLIC_SESSION_TTL_MS"),
+    limits: {
+      maxSessionsGlobal: readPositiveInteger(environment.SNN_AGENT_PUBLIC_MAX_SESSIONS_GLOBAL, 100, "SNN_AGENT_PUBLIC_MAX_SESSIONS_GLOBAL"),
+      maxSessionsPerOwner: readPositiveInteger(environment.SNN_AGENT_PUBLIC_MAX_SESSIONS_PER_OWNER, 10, "SNN_AGENT_PUBLIC_MAX_SESSIONS_PER_OWNER"),
+      maxActiveRunsGlobal: readPositiveInteger(environment.SNN_AGENT_PUBLIC_MAX_ACTIVE_RUNS_GLOBAL, 20, "SNN_AGENT_PUBLIC_MAX_ACTIVE_RUNS_GLOBAL"),
+      maxActiveRunsPerOwner: readPositiveInteger(environment.SNN_AGENT_PUBLIC_MAX_ACTIVE_RUNS_PER_OWNER, 3, "SNN_AGENT_PUBLIC_MAX_ACTIVE_RUNS_PER_OWNER"),
+      maxActiveWorkspaces: readPositiveInteger(environment.SNN_AGENT_PUBLIC_MAX_WORKSPACES, 100, "SNN_AGENT_PUBLIC_MAX_WORKSPACES"),
+    },
+  };
+  if (!enabled) return base;
+  if (!agentConfig.enabled) throw new Error("SNN_AGENT_PUBLIC_ENABLED requires SNN_AGENT_INTERNAL_ENABLED=true");
+  if (!base.workspaceBase) throw new Error("SNN_AGENT_PUBLIC_WORKSPACE_BASE is required when SNN_AGENT_PUBLIC_ENABLED=true");
+  if (!base.ownershipRoot) throw new Error("SNN_AGENT_PUBLIC_OWNERSHIP_ROOT is required when SNN_AGENT_PUBLIC_ENABLED=true");
+  return base;
+}
+
 function normalizeUpstreamBaseUrl(value) {
   const parsed = new URL(value);
   if (parsed.protocol !== "http:" || parsed.hostname !== "127.0.0.1") {
@@ -111,6 +136,8 @@ export function loadConfig(environment = process.env) {
     throw new Error("QWEN web search requires base URL, API key, and model");
   }
 
+  const agent = loadAgentConfig(environment);
+  const publicAgent = loadPublicAgentConfig(environment, agent);
   return {
     host,
     port: readPositiveInteger(environment.SNN_AI_NODE_PORT, 8787, "SNN_AI_NODE_PORT"),
@@ -148,6 +175,7 @@ export function loadConfig(environment = process.env) {
     ),
     systemPrompt:
       environment.AI_SYSTEM_PROMPT || "你是 SNN AI，由 SNN 社团提供的 AI 助手。",
-    agent: loadAgentConfig(environment),
+    agent,
+    publicAgent,
   };
 }

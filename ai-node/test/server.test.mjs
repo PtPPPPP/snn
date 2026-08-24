@@ -80,7 +80,7 @@ test("status is offline when the runtime is unreachable", async () => {
         online: false,
         model: null,
         status: "offline",
-        capabilities: { thinking: false, webSearch: false },
+        capabilities: { thinking: false, webSearch: false, agent: false },
       });
     },
   );
@@ -96,7 +96,7 @@ test("status reports ready only after upstream models responds", async () => {
         online: true,
         model: "Qwen3-test",
         status: "ready",
-        capabilities: { thinking: true, webSearch: false },
+        capabilities: { thinking: true, webSearch: false, agent: false },
       });
     },
   );

@@ -2,7 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: ["**/browser-smoke.spec.mjs", "**/mobile-browser-smoke.spec.mjs"],
+  testMatch: ["**/browser-smoke.spec.mjs", "**/mobile-browser-smoke.spec.mjs", "**/browser-agent-smoke.spec.mjs"],
   timeout: 30_000,
   expect: { timeout: 5_000 },
   outputDir: ".preview/frontend-smoke/test-results",

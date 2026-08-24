@@ -30,6 +30,12 @@ import DeleteConversationDialog from "./delete-conversation-dialog";
 import styles from "./ai-chat.module.css";
 import { buildConversationSnapshot, canApplyGeneration, canApplyNavigation } from "../../lib/ai-conversation-state.mjs";
 import { deleteConversationLifecycle, saveConversationWithNotice } from "../../lib/ai-conversation-lifecycle.mjs";
+import ModeSwitch, { type ChatMode } from "./mode-switch";
+import { useAgent } from "./use-agent";
+import AgentComposer from "./agent-composer";
+import AgentFilesPanel from "./agent-files-panel";
+import AgentMessage from "./agent-message";
+import AgentToolActivity from "./agent-tool-activity";
 
 type AiNodeState = "checking" | "offline" | "online";
 const THINKING_STORAGE_KEY = "snn-ai-thinking-mode";
@@ -118,6 +124,21 @@ export default function AiChat() {
   const webSearchMode = useSyncExternalStore(webSearchPreference.subscribe, webSearchPreference.getSnapshot, webSearchPreference.getServerSnapshot);
   const [webSearchAvailable, setWebSearchAvailable] = useState(false);
   const [isThinkingRequest, setIsThinkingRequest] = useState(false);
+  const [mode, setMode] = useState<ChatMode>("chat");
+  const agent = useAgent();
+
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("snn-chat-mode");
+      if (v === "chat" || v === "agent") {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate persisted mode once on mount
+        setMode(v);
+      }
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem("snn-chat-mode", mode); } catch {}
+  }, [mode]);
 
   const messagesRef = useRef<HTMLDivElement>(null);
   const chatPanelRef = useRef<HTMLDivElement>(null);
@@ -469,6 +490,11 @@ export default function AiChat() {
     const id = confirmDeleteId;
     if (!id) return;
     setConfirmDeleteId(null);
+    // Agent sessions use BFF ownership; Chat uses IndexedDB
+    if (id.startsWith("snn-agent-")) {
+      void agent.deleteSession(id).catch(() => setStorageNotice("本次对话未保存"));
+      return;
+    }
     void deleteConversationLifecycle({
       targetConversationId: id,
       activeConversationId: activeIdRef.current,
@@ -489,6 +515,21 @@ export default function AiChat() {
     aiNodeState === "checking" ? STATUS_DETAILS.checking
       : aiNodeState === "online" ? modelName ?? STATUS_DETAILS.ready : STATUS_DETAILS.offline;
 
+  // Agent mode derived sidebar data (mapped to Conversation shape for reuse)
+  const agentConversations: Conversation[] = agent.sessions.map((s) => ({
+    id: s.sessionId,
+    title: `Agent ${s.sessionId.slice(-6)}`,
+    createdAt: s.createdAt ? Date.parse(s.createdAt) : 0,
+    updatedAt: s.lastAccessAt ? Date.parse(s.lastAccessAt) : 0,
+    messages: [],
+    version: 1,
+  }));
+  const effectiveConversations = mode === "agent" ? agentConversations : conversations;
+  const effectiveActiveId = mode === "agent" ? agent.activeSessionId : activeId;
+  const handleNew = mode === "agent" ? agent.startNewSession : startNewConversation;
+  const handleSelect = mode === "agent" ? agent.selectSession : switchConversation;
+  const handleDeleteForMode = handleDelete;
+
   return (
     <main className={styles.page}>
       <header className={styles.header}>
@@ -497,6 +538,7 @@ export default function AiChat() {
           <span>SNN AI<small>SMART NEURAL NETWORK</small></span>
         </Link>
         <div className={styles.headerRight}>
+          <ModeSwitch mode={mode} onChange={setMode} agentAvailable={agent.isAgentAvailable} />
           <button
             className={styles.sidebarToggle}
             type="button"
@@ -512,52 +554,115 @@ export default function AiChat() {
       </header>
 
       <section className={`${styles.chatShell} ${sidebarOpen ? styles.chatShellShifted : ""}`} aria-label="SNN AI Chat">
-        <ConversationSidebar id="conversation-sidebar" conversations={conversations} activeId={activeId} statusLabel={statusLabel} statusDetail={statusDetail} nodeState={aiNodeState} onOpenChange={setSidebarOpen} onNew={startNewConversation} onSelect={switchConversation} onDelete={handleDelete} />
+        <ConversationSidebar
+          id="conversation-sidebar"
+          conversations={effectiveConversations}
+          activeId={effectiveActiveId}
+          statusLabel={mode === "agent" ? (agent.isAgentAvailable ? "AGENT · READY" : agent.isAgentAvailable === false ? "AGENT · UNAVAILABLE" : statusLabel) : statusLabel}
+          statusDetail={mode === "agent" ? (agent.isAgentAvailable === false ? "Agent 暂不可用，普通对话仍可使用" : agent.isAgentAvailable ? "Agent 已就绪，可上传文件" : statusDetail) : statusDetail}
+          nodeState={aiNodeState}
+          onOpenChange={setSidebarOpen}
+          onNew={handleNew}
+          onSelect={handleSelect}
+          onDelete={handleDeleteForMode}
+        />
 
         {sidebarOpen ? <div className={styles.backdrop} onClick={() => setSidebarOpen(false)} aria-hidden="true" /> : null}
 
-        <div className={styles.chatPanel} ref={chatPanelRef}>
+        <div className={styles.chatPanel} ref={chatPanelRef} id={mode === "agent" ? "agent-panel" : "chat-panel"}>
           <div className={styles.panelHeader}>
-            <span>CHAT / HTTP READY</span>
+            <span>{mode === "agent" ? "AGENT / WORKSPACE READY" : "CHAT / HTTP READY"}</span>
             <span>{aiNodeState === "online" ? NODE_STATES.ready : NODE_STATES.offline}</span>
           </div>
-          <div className={styles.messages} ref={messagesRef} onScroll={handleMessagesScroll} aria-live="polite">
-            <div className={styles.conversationRail}>
-              {!loaded ? null : messages.length === 0 ? (
-                <div className={styles.emptyState}>
-                  <span className={styles.emptyMark}>{EMPTY_STATE.mark}</span>
-                  <h2>{EMPTY_STATE.title}</h2>
-                  <p>{EMPTY_STATE.description}</p>
-                </div>
-              ) : (
-                messages.map((message) => <ChatMessage key={message.id} message={message} />)
-              )}
-              {isResponding && !isThinkingRequest ? (
-                <div className={styles.typing}><span>SNN AI 正在准备回复</span><i /><i /><i /></div>
+          {mode === "agent" ? (
+            <>
+              {agent.files.length > 0 || agent.pendingAttachments.length > 0 ? (
+                <AgentFilesPanel files={agent.files} onAttach={agent.attachExisting} onDelete={agent.deleteFile} pendingIds={new Set(agent.pendingAttachments.map((f) => f.fileId))} />
               ) : null}
-              {streamNotice ? <p className={styles.streamNotice}>{streamNotice}</p> : null}
-              {storageNotice ? <p className={styles.streamNotice}>{storageNotice}</p> : null}
-            </div>
-          </div>
-          <div className={styles.composerDock}>
-            {showScrollToBottom ? (
-              <button className={styles.scrollToBottom} type="button" onClick={scrollToBottom} aria-label="回到底部" title="回到底部">
-                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M12 4v15M6 13l6 6 6-6" />
-                </svg>
-              </button>
-            ) : null}
-            <ChatInput
-              isStreaming={isResponding}
-              thinking={thinkingMode}
-              webSearch={webSearchMode}
-              webSearchAvailable={webSearchAvailable}
-              onSend={sendMessage}
-              onStop={stopGeneration}
-              onThinkingChange={handleThinkingChange}
-              onWebSearchChange={handleWebSearchChange}
-            />
-          </div>
+              <div className={styles.messages} ref={messagesRef} onScroll={handleMessagesScroll} aria-live="polite">
+                <div className={styles.conversationRail}>
+                  {!agent.loaded ? null : agent.messages.length === 0 ? (
+                    <div className={styles.emptyState} data-testid="agent-empty">
+                      <span className={styles.emptyMark}>AGENT / WORKSPACE</span>
+                      <h2>Agent 可以读取 Workspace 中的文件</h2>
+                      <p>上传文本、PDF、DOCX 或 XLSX，使用安全工具完成任务。Agent 仅能通过 workspace.open 读取你附加的文件，不具备联网、Shell 或写入能力。</p>
+                    </div>
+                  ) : (
+                    agent.messages.map((m) => <AgentMessage key={m.id} message={m} toolActivity={m.role === "assistant" && agent.toolActivity.length > 0 && m.id === agent.messages[agent.messages.length - 1].id ? agent.toolActivity : undefined} />)
+                  )}
+                  {(agent.runState === "streaming" || agent.runState === "starting") ? (
+                    <div className={styles.typing}><span>Agent 正在处理</span><i /><i /><i /></div>
+                  ) : null}
+                  {agent.toolActivity.length > 0 && agent.runState !== "idle" && agent.messages.length > 0 && agent.messages[agent.messages.length - 1].role === "assistant" ? null : agent.toolActivity.length > 0 ? <AgentToolActivity items={agent.toolActivity} /> : null}
+                  {agent.error ? <p className={styles.streamNotice} role="alert">{agent.error}</p> : null}
+                  {agent.runState === "failed" && !agent.error ? <p className={styles.streamNotice}>Agent 运行失败，请重试。</p> : null}
+                  {agent.runState === "cancelled" ? <p className={styles.streamNotice}>已停止生成。</p> : null}
+                </div>
+              </div>
+              <div className={styles.composerDock}>
+                {showScrollToBottom ? (
+                  <button className={styles.scrollToBottom} type="button" onClick={scrollToBottom} aria-label="回到底部" title="回到底部">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M12 4v15M6 13l6 6 6-6" />
+                    </svg>
+                  </button>
+                ) : null}
+                {agent.isAgentAvailable === false ? (
+                  <p className={styles.streamNotice}>Agent 暂不可用，普通对话仍可使用。</p>
+                ) : (
+                  <AgentComposer
+                    isStreaming={agent.runState === "streaming" || agent.runState === "starting" || agent.runState === "cancelling"}
+                    pendingAttachments={agent.pendingAttachments}
+                    uploadState={agent.uploadState}
+                    onSend={(content) => void agent.sendMessage(content)}
+                    onStop={() => void agent.cancelRun()}
+                    onUpload={(file) => agent.uploadFile(file)}
+                    onRemovePending={agent.removePending}
+                  />
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className={styles.messages} ref={messagesRef} onScroll={handleMessagesScroll} aria-live="polite">
+                <div className={styles.conversationRail}>
+                  {!loaded ? null : messages.length === 0 ? (
+                    <div className={styles.emptyState}>
+                      <span className={styles.emptyMark}>{EMPTY_STATE.mark}</span>
+                      <h2>{EMPTY_STATE.title}</h2>
+                      <p>{EMPTY_STATE.description}</p>
+                    </div>
+                  ) : (
+                    messages.map((message) => <ChatMessage key={message.id} message={message} />)
+                  )}
+                  {isResponding && !isThinkingRequest ? (
+                    <div className={styles.typing}><span>SNN AI 正在准备回复</span><i /><i /><i /></div>
+                  ) : null}
+                  {streamNotice ? <p className={styles.streamNotice}>{streamNotice}</p> : null}
+                  {storageNotice ? <p className={styles.streamNotice}>{storageNotice}</p> : null}
+                </div>
+              </div>
+              <div className={styles.composerDock}>
+                {showScrollToBottom ? (
+                  <button className={styles.scrollToBottom} type="button" onClick={scrollToBottom} aria-label="回到底部" title="回到底部">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M12 4v15M6 13l6 6 6-6" />
+                    </svg>
+                  </button>
+                ) : null}
+                <ChatInput
+                  isStreaming={isResponding}
+                  thinking={thinkingMode}
+                  webSearch={webSearchMode}
+                  webSearchAvailable={webSearchAvailable}
+                  onSend={sendMessage}
+                  onStop={stopGeneration}
+                  onThinkingChange={handleThinkingChange}
+                  onWebSearchChange={handleWebSearchChange}
+                />
+              </div>
+            </>
+          )}
         </div>
       </section>
 
