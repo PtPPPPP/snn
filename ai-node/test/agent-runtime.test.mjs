@@ -406,7 +406,10 @@ test("session controller uses one server policy and isolates same-session owners
   const created = await controller.createSession();
   const policy = calls[0][1].toolPolicy;
   assert.equal(policy.default, "deny");
-  assert.deepEqual(policy.rules, [{ toolName: "read", decision: "allow" }]);
+  assert.deepEqual(policy.rules, [
+    { toolName: "read", decision: "allow" },
+    { toolName: "write", decision: "allow" },
+  ]);
   const run = await controller.startRun(created.sessionId, "hello");
   await assert.rejects(() => controller.startRun(created.sessionId, "again"), (error) => error.code === "AGENT_RUN_CONFLICT");
   await assert.rejects(() => controller.cancel(created.sessionId, "snn-run-00000000-0000-4000-8000-000000000002"), (error) => error.code === "STALE_AGENT_RUN");
