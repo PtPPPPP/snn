@@ -19,10 +19,10 @@ function StopIcon() {
     </svg>
   );
 }
-function PaperclipIcon() {
+function PlusIcon() {
   return (
     <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false">
-      <path d="M7 10.5a3.5 3.5 0 0 1 3.5-3.5H14a2 2 0 1 1 0 4H9.5a1 1 0 0 0 0 2H13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M10 4v12M4 10h12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
@@ -132,7 +132,7 @@ export default function AgentComposer({
           disabled={isStreaming}
           data-testid="agent-upload-button"
         >
-          <PaperclipIcon />
+          <PlusIcon />
         </button>
         <span className={styles.agentUploadHintInline} aria-hidden="true">
           {pendingAttachments.length > 0 ? `${pendingAttachments.length}/8` : null}
