@@ -25,7 +25,9 @@ SNN 是一支面向 AI / 机器人 / 创客方向的学生技术社团。本站�
 
 ### 环境要求
 
-- **Node.js** `>= 22.13.0`
+- **Canonical Node.js** `24.16.x`（`.nvmrc` 固定为 `24.16.0`）
+- **兼容 Node.js** `>= 22.19.0`（pinned DSH 最低支持版本）
+- **不支持** `22.13.x`（无法启动 pinned DSH）
 - **npm** `>= 10`
 - **bash** — 脚本依赖 shell（Windows 请使用 Git Bash / WSL）
 

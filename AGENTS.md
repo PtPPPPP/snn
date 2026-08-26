@@ -101,7 +101,9 @@ The current stack includes:
 Node.js requirement:
 
 ```text
->= 22.13.0
+canonical: 24.16.x
+compatible: >=22.19.0
+unsupported for pinned DSH: 22.13.x
 ```
 
 Do not replace the existing stack without an explicit task requiring it.
