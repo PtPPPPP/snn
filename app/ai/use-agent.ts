@@ -40,6 +40,7 @@ const MAX_ATTACHMENTS = 8;
 const LOCAL_ACTIVE_KEY = "snn-agent-active-session";
 
 function uploadErrorMessage(error: AgentClientError): string {
+  if (error.detail === "AGENT_ATTACHMENT_LIMIT") return `最多只能附加 ${MAX_ATTACHMENTS} 个文件`;
   if (error.code === "network" || error.code === "http") return "文件上传失败，请重试。";
   if (error.code === "limit") return "当前 Agent 资源已达到限制，请稍后再试。";
   switch (error.detail) {
@@ -88,20 +89,35 @@ export function useAgent() {
   const currentRunIdRef = useRef<string | null>(null);
   const messagesRef = useRef<AgentMessage[]>([]);
   const generationRef = useRef(0);
+  const sessionGenerationRef = useRef(0);
+  const filesRevisionRef = useRef(0);
+  const pendingAttachmentsRef = useRef<AgentFile[]>([]);
+  const uploadsInFlightBySessionRef = useRef<Record<string, number>>({});
+  const uploadSequenceRef = useRef(0);
 
   useEffect(() => { activeSessionIdRef.current = activeSessionId; try { if (activeSessionId) localStorage.setItem(LOCAL_ACTIVE_KEY, activeSessionId); else localStorage.removeItem(LOCAL_ACTIVE_KEY); } catch {} }, [activeSessionId]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
+  const replacePendingAttachments = useCallback((next: AgentFile[] | ((current: AgentFile[]) => AgentFile[])) => {
+    const resolved = typeof next === "function" ? next(pendingAttachmentsRef.current) : next;
+    pendingAttachmentsRef.current = resolved;
+    setPendingAttachments(resolved);
+  }, []);
+
   const refreshSessions = useCallback(async () => {
+    const sessionIdAtRequest = activeSessionIdRef.current;
     try {
       const list = await listAgentSessions();
       setSessions(list.sort((a, b) => (b.lastAccessAt ?? "").localeCompare(a.lastAccessAt ?? "")));
       // if active session no longer exists, clear
-      if (activeSessionIdRef.current && !list.find((s) => s.sessionId === activeSessionIdRef.current)) {
+      if (sessionIdAtRequest && activeSessionIdRef.current === sessionIdAtRequest && !list.find((s) => s.sessionId === sessionIdAtRequest)) {
+        sessionGenerationRef.current += 1;
+        activeSessionIdRef.current = null;
+        filesRevisionRef.current += 1;
         setActiveSessionId(null);
         setMessages([]);
         setFiles([]);
-        setPendingAttachments([]);
+        replacePendingAttachments([]);
       } else if (!activeSessionIdRef.current && list.length > 0) {
         // do not auto-select, let user choose
       }
@@ -110,14 +126,24 @@ export function useAgent() {
       if ((e as AgentClientError).code === "auth") setSessions([]);
       setLoaded(true);
     }
-  }, []);
+  }, [replacePendingAttachments]);
 
   const refreshFiles = useCallback(async (sessionId: string) => {
+    const sessionGeneration = sessionGenerationRef.current;
+    const filesRevision = filesRevisionRef.current;
     try {
       const list = await listAgentFiles(sessionId);
-      setFiles(list);
+      if (
+        activeSessionIdRef.current === sessionId &&
+        sessionGenerationRef.current === sessionGeneration &&
+        filesRevisionRef.current === filesRevision
+      ) {
+        setFiles(list);
+      }
     } catch {
-      setFiles([]);
+      if (activeSessionIdRef.current === sessionId && sessionGenerationRef.current === sessionGeneration) {
+        setFiles([]);
+      }
     }
   }, []);
 
@@ -154,6 +180,8 @@ export function useAgent() {
     const created = await createAgentSession();
     const sid = created.sessionId;
     setSessions((prev) => [{ sessionId: sid, createdAt: new Date().toISOString(), lastAccessAt: new Date().toISOString() }, ...prev]);
+    activeSessionIdRef.current = sid;
+    sessionGenerationRef.current += 1;
     setActiveSessionId(sid);
     // title will be derived from first message locally
     return sid;
@@ -162,99 +190,147 @@ export function useAgent() {
   const selectSession = useCallback((id: string) => {
     if (id === activeSessionIdRef.current) return;
     runAbortRef.current?.abort();
+    generationRef.current += 1;
+    sessionGenerationRef.current += 1;
+    activeSessionIdRef.current = id;
+    filesRevisionRef.current += 1;
     setActiveSessionId(id);
     setMessages([]);
-    setPendingAttachments([]);
+    replacePendingAttachments([]);
     setToolActivity([]);
     setError(null);
     setRunState("idle");
+    setUploadState({});
     void refreshFiles(id);
-  }, [refreshFiles]);
+  }, [refreshFiles, replacePendingAttachments]);
 
   const startNewSession = useCallback(() => {
     runAbortRef.current?.abort();
+    generationRef.current += 1;
+    sessionGenerationRef.current += 1;
+    activeSessionIdRef.current = null;
+    filesRevisionRef.current += 1;
     setActiveSessionId(null);
     setMessages([]);
     setFiles([]);
-    setPendingAttachments([]);
+    replacePendingAttachments([]);
     setToolActivity([]);
     setError(null);
     setRunState("idle");
-  }, []);
+    setUploadState({});
+  }, [replacePendingAttachments]);
 
   const deleteSession = useCallback(async (id: string) => {
     await deleteAgentSession(id);
     setSessions((prev) => prev.filter((s) => s.sessionId !== id));
     if (activeSessionIdRef.current === id) {
+      generationRef.current += 1;
+      sessionGenerationRef.current += 1;
+      activeSessionIdRef.current = null;
+      filesRevisionRef.current += 1;
       setActiveSessionId(null);
       setMessages([]);
       setFiles([]);
-      setPendingAttachments([]);
+      replacePendingAttachments([]);
       setRunState("idle");
       setToolActivity([]);
+      setUploadState({});
     }
-  }, []);
+  }, [replacePendingAttachments]);
 
   const uploadFile = useCallback(async (file: File) => {
-    const sid = await ensureSession();
-    const tempId = `upload-${file.name}-${Date.now()}`;
-    setUploadState((prev) => ({ ...prev, [tempId]: "uploading" }));
-    setError(null);
+    const tempId = `upload-${++uploadSequenceRef.current}`;
+    let sid: string | null = null;
+    let sessionGeneration = sessionGenerationRef.current;
+    let uploadReserved = false;
     try {
-      if (pendingAttachments.length >= MAX_ATTACHMENTS) throw new AgentClientError("invalid", 400, "Too many attachments");
+      sid = await ensureSession();
+      sessionGeneration = sessionGenerationRef.current;
+      const inFlight = uploadsInFlightBySessionRef.current[sid] ?? 0;
+      if (pendingAttachmentsRef.current.length + inFlight >= MAX_ATTACHMENTS) {
+        setError(`最多只能附加 ${MAX_ATTACHMENTS} 个文件`);
+        throw new AgentClientError("limit", 400, "AGENT_ATTACHMENT_LIMIT");
+      }
+      uploadsInFlightBySessionRef.current[sid] = inFlight + 1;
+      uploadReserved = true;
+      if (activeSessionIdRef.current === sid) {
+        setUploadState((prev) => ({ ...prev, [tempId]: "uploading" }));
+        setError(null);
+      }
       const uploaded = await uploadAgentFile(sid, file);
-      setFiles((prev) => [...prev, uploaded]);
-      setPendingAttachments((prev) => {
-        if (prev.length >= MAX_ATTACHMENTS) return prev;
-        // avoid duplicate fileId
-        if (prev.find((p) => p.fileId === uploaded.fileId)) return prev;
-        return [...prev, uploaded];
-      });
-      setUploadState((prev) => ({ ...prev, [tempId]: "ready" }));
+      if (activeSessionIdRef.current === sid && sessionGenerationRef.current === sessionGeneration) {
+        filesRevisionRef.current += 1;
+        setFiles((prev) => prev.some((item) => item.fileId === uploaded.fileId) ? prev : [...prev, uploaded]);
+        replacePendingAttachments((prev) => {
+          if (prev.length >= MAX_ATTACHMENTS || prev.some((item) => item.fileId === uploaded.fileId)) return prev;
+          return [...prev, uploaded];
+        });
+        setUploadState((prev) => ({ ...prev, [tempId]: "ready" }));
+      }
       return uploaded;
     } catch (e) {
-      setUploadState((prev) => ({ ...prev, [tempId]: "error" }));
+      if (sid && activeSessionIdRef.current === sid && sessionGenerationRef.current === sessionGeneration) {
+        setUploadState((prev) => ({ ...prev, [tempId]: "error" }));
+      }
       const err = e as AgentClientError;
-      setError(uploadErrorMessage(err));
+      if (!sid || (activeSessionIdRef.current === sid && sessionGenerationRef.current === sessionGeneration)) {
+        setError(uploadErrorMessage(err));
+      }
       throw e;
     } finally {
-      setTimeout(() => setUploadState((prev) => { const n = { ...prev }; delete n[tempId]; return n; }), 3000);
+      if (sid && uploadReserved) {
+        uploadsInFlightBySessionRef.current[sid] = Math.max(0, (uploadsInFlightBySessionRef.current[sid] ?? 1) - 1);
+      }
+      if (sid && activeSessionIdRef.current === sid && sessionGenerationRef.current === sessionGeneration) {
+        setTimeout(() => {
+          if (activeSessionIdRef.current !== sid || sessionGenerationRef.current !== sessionGeneration) return;
+          setUploadState((prev) => {
+            const next = { ...prev };
+            delete next[tempId];
+            return next;
+          });
+        }, 3000);
+      }
     }
-  }, [ensureSession, pendingAttachments.length]);
+  }, [ensureSession, replacePendingAttachments]);
 
   const removePending = useCallback((fileId: string) => {
-    setPendingAttachments((prev) => prev.filter((f) => f.fileId !== fileId));
-  }, []);
+    replacePendingAttachments((prev) => prev.filter((file) => file.fileId !== fileId));
+  }, [replacePendingAttachments]);
 
   const attachExisting = useCallback((file: AgentFile) => {
-    setPendingAttachments((prev) => {
+    replacePendingAttachments((prev) => {
       if (prev.find((p) => p.fileId === file.fileId)) return prev;
-      if (prev.length >= MAX_ATTACHMENTS) {
+      const uploadsInFlight = activeSessionIdRef.current ? (uploadsInFlightBySessionRef.current[activeSessionIdRef.current] ?? 0) : 0;
+      if (prev.length + uploadsInFlight >= MAX_ATTACHMENTS) {
         setError(`最多只能附加 ${MAX_ATTACHMENTS} 个文件`);
         return prev;
       }
       return [...prev, file];
     });
-  }, []);
+  }, [replacePendingAttachments]);
 
   const deleteFile = useCallback(async (fileId: string) => {
     const sid = activeSessionIdRef.current;
     if (!sid) return;
     await deleteAgentFile(sid, fileId);
+    if (activeSessionIdRef.current !== sid) return;
+    filesRevisionRef.current += 1;
     setFiles((prev) => prev.filter((f) => f.fileId !== fileId));
-    setPendingAttachments((prev) => prev.filter((f) => f.fileId !== fileId));
-  }, []);
+    replacePendingAttachments((prev) => prev.filter((file) => file.fileId !== fileId));
+  }, [replacePendingAttachments]);
 
   const sendMessage = useCallback(async (content: string) => {
-    if (!content.trim() && pendingAttachments.length === 0) return;
+    const attachmentsSnapshot = pendingAttachmentsRef.current;
+    if (!content.trim() && attachmentsSnapshot.length === 0) return;
     if (runState === "streaming" || runState === "starting") return;
     const sid = await ensureSession();
-    const attachments = pendingAttachments.map((f) => f.fileId);
-    const userMsg: AgentMessage = { id: nowId("user"), role: "user", content: content.trim(), attachments: [...pendingAttachments] };
+    const attachments = attachmentsSnapshot.map((file) => file.fileId);
+    const userMsg: AgentMessage = { id: nowId("user"), role: "user", content: content.trim(), attachments: [...attachmentsSnapshot] };
     const assistantMsg: AgentMessage = { id: nowId("assistant"), role: "assistant", content: "" };
     const nextMessages = [...messagesRef.current, userMsg, assistantMsg];
     setMessages(nextMessages);
-    setPendingAttachments([]);
+    replacePendingAttachments([]);
     setToolActivity([]);
     setError(null);
     setRunState("starting");
@@ -297,8 +373,11 @@ export function useAgent() {
         },
       }).then((res) => { currentRunIdRef.current = res.runId; });
       // Wait for stream to complete, runState already set via onDone
-      setRunState((prev) => (prev === "streaming" || prev === "starting" ? "completed" : prev));
+      if (generationRef.current === gen && activeSessionIdRef.current === sid) {
+        setRunState((prev) => (prev === "streaming" || prev === "starting" ? "completed" : prev));
+      }
     } catch (e) {
+      if (generationRef.current !== gen || activeSessionIdRef.current !== sid) return;
       const err = e as AgentClientError;
       if (err.code === "aborted") {
         setRunState("cancelled");
@@ -312,16 +391,18 @@ export function useAgent() {
         if (err.code === "not_found") void refreshSessions();
       }
     } finally {
-      if (generationRef.current === gen) {
+      if (generationRef.current === gen && activeSessionIdRef.current === sid) {
         runAbortRef.current = null;
         currentRunIdRef.current = null;
-        setTimeout(() => setRunState("idle"), 1500);
+        setTimeout(() => {
+          if (generationRef.current === gen && activeSessionIdRef.current === sid) setRunState("idle");
+        }, 1500);
         // refresh files list as session lastAccess updated
         void refreshFiles(sid);
         void refreshSessions();
       }
     }
-  }, [pendingAttachments, runState, ensureSession, refreshFiles, refreshSessions]);
+  }, [runState, ensureSession, refreshFiles, refreshSessions, replacePendingAttachments]);
 
   const cancelRun = useCallback(async () => {
     if (runState !== "streaming" && runState !== "starting") return;
@@ -334,7 +415,10 @@ export function useAgent() {
     }
     // BFF will propagate disconnect → real cancel; we set UI to cancelled
     setRunState("cancelled");
-    setTimeout(() => setRunState("idle"), 1000);
+    const generation = generationRef.current;
+    setTimeout(() => {
+      if (generationRef.current === generation && activeSessionIdRef.current === sid) setRunState("idle");
+    }, 1000);
   }, [runState]);
 
   // Handle browser disconnect / switch: abort on unmount or session switch is already via runAbortRef

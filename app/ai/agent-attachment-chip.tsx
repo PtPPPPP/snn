@@ -32,7 +32,7 @@ export function AgentAttachmentChip({
   return (
     <span className={styles.agentChip} data-testid="attachment-chip">
       <span aria-hidden="true">{kindIcon(file.kind)}</span>
-      <span className={styles.agentChipName}>{file.originalName}</span>
+      <span className={styles.agentChipName} title={file.originalName}>{file.originalName}</span>
       <span className={styles.agentChipKind}>{kindLabel(file.kind)}</span>
       {typeof file.size === "number" ? <span className={styles.agentChipSize}>{formatSize(file.size)}</span> : null}
       {removable && onRemove ? (

@@ -156,3 +156,139 @@ test("Agent cancel and reload resume", async ({ page }) => {
   // Session list should still contain the session
   await expect(page.getByText(`Agent ${sessionId.slice(-6)}`)).toBeVisible({ timeout: 3000 });
 });
+
+test("Agent limits a multi-file selection to eight pending uploads", async ({ page }) => {
+  const sessionId = "snn-agent-88888888-8888-4888-8888-888888888888";
+  let uploads = 0;
+  await mockAgentStatus(page, true);
+  await page.route("**/api/agent/sessions", async (route) => {
+    if (route.request().method() === "POST") return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ sessionId, status: "created" }) });
+    if (route.request().method() === "GET") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ sessions: [{ sessionId }] }) });
+    return route.continue();
+  });
+  await page.route(`**/api/agent/sessions/${sessionId}/files`, async (route) => {
+    if (route.request().method() === "POST") {
+      uploads += 1;
+      return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ file: { fileId: `file-${uploads}`, originalName: `附件-${uploads}.txt`, size: uploads, kind: "text" } }) });
+    }
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ files: [] }) });
+  });
+
+  await page.goto("/ai/", { waitUntil: "networkidle" });
+  await page.getByRole("tab", { name: /Agent/ }).click();
+  await page.getByTestId("agent-file-input").setInputFiles(
+    Array.from({ length: 9 }, (_, index) => ({ name: `附件-${index + 1}.txt`, mimeType: "text/plain", buffer: Buffer.from(String(index)) })),
+  );
+
+  await expect(page.getByTestId("attachment-chip")).toHaveCount(8);
+  expect(uploads).toBe(8);
+  await expect(page.getByText("最多只能附加 8 个文件")).toBeVisible();
+});
+
+test("Removing a pending attachment preserves the workspace file; deleting it removes both", async ({ page }) => {
+  const sessionId = "snn-agent-99999999-9999-4999-8999-999999999999";
+  const file = { fileId: "remove-delete-file", originalName: "项目报告.pdf", size: 42, kind: "pdf" };
+  let deletes = 0;
+  await mockAgentStatus(page, true);
+  await page.route("**/api/agent/sessions", async (route) => {
+    if (route.request().method() === "POST") return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ sessionId, status: "created" }) });
+    return route.continue();
+  });
+  await page.route(`**/api/agent/sessions/${sessionId}/files/${file.fileId}`, async (route) => {
+    if (route.request().method() === "DELETE") {
+      deletes += 1;
+      return route.fulfill({ status: 204 });
+    }
+    return route.continue();
+  });
+  await page.route(`**/api/agent/sessions/${sessionId}/files`, async (route) => {
+    if (route.request().method() === "POST") return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ file }) });
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ files: [file] }) });
+  });
+
+  await page.goto("/ai/", { waitUntil: "networkidle" });
+  await page.getByRole("tab", { name: /Agent/ }).click();
+  await page.getByTestId("agent-file-input").setInputFiles({ name: file.originalName, mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4") });
+  await expect(page.getByTestId("attachment-chip")).toBeVisible();
+  await page.getByRole("button", { name: `移除附件 ${file.originalName}` }).click();
+  await expect(page.getByTestId("attachment-chip")).toHaveCount(0);
+  expect(deletes).toBe(0);
+  await expect(page.getByTestId("files-panel")).toContainText(file.originalName);
+
+  await page.getByRole("button", { name: `删除文件 ${file.originalName}` }).click();
+  expect(deletes).toBe(1);
+  await expect(page.getByTestId("files-panel")).toHaveCount(0);
+});
+
+test("A late upload result cannot leak into a newly selected session", async ({ page }) => {
+  const sessionA = "snn-agent-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const sessionB = "snn-agent-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  let finishUpload;
+  const uploadFinished = new Promise((resolve) => { finishUpload = resolve; });
+  await mockAgentStatus(page, true);
+  await page.route("**/api/agent/sessions", async (route) => {
+    if (route.request().method() === "GET") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ sessions: [{ sessionId: sessionA }, { sessionId: sessionB }] }) });
+    return route.continue();
+  });
+  await page.route(`**/api/agent/sessions/${sessionA}/files`, async (route) => {
+    if (route.request().method() === "POST") {
+      await uploadFinished;
+      return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ file: { fileId: "late-file", originalName: "学校泳池项目合作意向书(1).docx", size: 12, kind: "docx" } }) });
+    }
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ files: [] }) });
+  });
+  await page.route(`**/api/agent/sessions/${sessionB}/files`, async (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ files: [] }) }));
+
+  await page.goto("/ai/", { waitUntil: "networkidle" });
+  await page.getByRole("tab", { name: /Agent/ }).click();
+  await page.getByRole("button", { name: new RegExp(`^Agent ${sessionA.slice(-6)}`) }).click();
+  await page.getByTestId("agent-file-input").setInputFiles({ name: "学校泳池项目合作意向书(1).docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", buffer: Buffer.from("docx") });
+  await expect(page.getByText("正在上传…")).toBeVisible();
+  await page.getByRole("button", { name: new RegExp(`^Agent ${sessionB.slice(-6)}`) }).click();
+  finishUpload();
+
+  await expect(page.getByTestId("attachment-chip")).toHaveCount(0);
+  await expect(page.getByTestId("files-panel")).toHaveCount(0);
+});
+
+test("Upload failure leaves no ghost chip and long Unicode names stay within a mobile viewport", async ({ page }) => {
+  const sessionId = "snn-agent-cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const longName = "2026 年 SNN Agent 文档理解测试最终版本 FINAL (2).pdf";
+  let attempts = 0;
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockAgentStatus(page, true);
+  await page.route("**/api/agent/sessions", async (route) => {
+    if (route.request().method() === "POST") return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ sessionId, status: "created" }) });
+    return route.continue();
+  });
+  await page.route(`**/api/agent/sessions/${sessionId}/files`, async (route) => {
+    if (route.request().method() === "POST") {
+      attempts += 1;
+      if (attempts === 1) return route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: { code: "AGENT_FILE_INVALID" } }) });
+      return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ file: { fileId: "unicode-file", originalName: longName, size: 512, kind: "pdf" } }) });
+    }
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ files: [] }) });
+  });
+
+  await page.goto("/ai/", { waitUntil: "networkidle" });
+  await page.getByRole("tab", { name: /Agent/ }).click();
+  const fileInput = page.getByTestId("agent-file-input");
+  await fileInput.setInputFiles({ name: longName, mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4") });
+  await expect(page.getByTestId("attachment-chip")).toHaveCount(0);
+  await expect(page.getByText("文件名无效，请修改后重试。")).toBeVisible();
+  await fileInput.setInputFiles({ name: longName, mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4") });
+  const chip = page.getByTestId("attachment-chip");
+  await expect(chip).toBeVisible();
+  await expect(chip.locator("[title]").filter({ hasText: longName })).toHaveAttribute("title", longName);
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 1024, height: 768 },
+    { width: 900, height: 844 },
+    { width: 390, height: 844 },
+    { width: 844, height: 390 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+    expect(hasHorizontalOverflow).toBe(false);
+  }
+});

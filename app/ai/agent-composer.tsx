@@ -37,14 +37,16 @@ export default function AgentComposer({
   onStop,
   onUpload,
   onRemovePending,
+  onAttachmentLimit,
 }: {
   isStreaming: boolean;
   pendingAttachments: AgentFile[];
   uploadState: Record<string, string>;
-  onSend: (content: string, attachments: AgentFile[]) => void;
+  onSend: (content: string) => void;
   onStop: () => void;
   onUpload: (file: File) => Promise<unknown>;
   onRemovePending: (fileId: string) => void;
+  onAttachmentLimit: () => void;
 }) {
   const [value, setValue] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -59,7 +61,7 @@ export default function AgentComposer({
     if (!content && pendingAttachments.length === 0) return;
     // require non-empty message per backend contract first version
     if (!content) return;
-    onSend(content, pendingAttachments);
+    onSend(content);
     setValue("");
   }
 
@@ -82,15 +84,16 @@ export default function AgentComposer({
 
   async function handleFiles(files: FileList | null) {
     if (!files) return;
-    for (const file of Array.from(files)) {
-      // client early hint, server is final
-      if (pendingAttachments.length >= 8) break;
+    const selectedFiles = Array.from(files);
+    const availableSlots = Math.max(0, 8 - pendingAttachments.length);
+    for (const file of selectedFiles.slice(0, availableSlots)) {
       try {
         await onUpload(file);
       } catch {
         // error is shown via hook's error state
       }
     }
+    if (selectedFiles.length > availableSlots) onAttachmentLimit();
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -121,7 +124,7 @@ export default function AgentComposer({
           aria-label="选择附件"
           data-testid="agent-file-input"
           onChange={(e) => void handleFiles(e.target.files)}
-          disabled={isStreaming}
+          disabled={isStreaming || isUploading}
         />
         <button
           type="button"
@@ -129,7 +132,7 @@ export default function AgentComposer({
           aria-label="添加附件"
           title="添加附件"
           onClick={() => fileInputRef.current?.click()}
-          disabled={isStreaming}
+          disabled={isStreaming || isUploading}
           data-testid="agent-upload-button"
         >
           <PlusIcon />
@@ -140,7 +143,7 @@ export default function AgentComposer({
         <button
           className={`${styles.sendButton} ${isStreaming ? styles.sendButtonStop : ""}`}
           type="submit"
-          disabled={!isStreaming && !value.trim()}
+          disabled={!isStreaming && (!value.trim() || isUploading)}
           aria-label={isStreaming ? "停止生成" : "发送"}
           title={isStreaming ? "停止生成" : "发送"}
           data-testid="agent-send-button"

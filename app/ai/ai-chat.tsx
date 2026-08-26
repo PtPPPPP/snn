@@ -576,11 +576,11 @@ export default function AiChat() {
           </div>
           {mode === "agent" ? (
             <>
-              {agent.files.length > 0 || agent.pendingAttachments.length > 0 ? (
-                <AgentFilesPanel files={agent.files} onAttach={agent.attachExisting} onDelete={agent.deleteFile} pendingIds={new Set(agent.pendingAttachments.map((f) => f.fileId))} />
-              ) : null}
-              <div className={styles.messages} ref={messagesRef} onScroll={handleMessagesScroll} aria-live="polite">
+              <div className={styles.messages} ref={messagesRef} onScroll={handleMessagesScroll} aria-live="off">
                 <div className={styles.conversationRail}>
+                  {agent.files.length > 0 || agent.pendingAttachments.length > 0 ? (
+                    <AgentFilesPanel files={agent.files} onAttach={agent.attachExisting} onDelete={agent.deleteFile} pendingIds={new Set(agent.pendingAttachments.map((file) => file.fileId))} />
+                  ) : null}
                   {!agent.loaded ? null : agent.messages.length === 0 ? (
                     <div className={styles.emptyState} data-testid="agent-empty">
                       <span className={styles.emptyMark}>AGENT / WORKSPACE</span>
@@ -618,6 +618,7 @@ export default function AiChat() {
                     onStop={() => void agent.cancelRun()}
                     onUpload={(file) => agent.uploadFile(file)}
                     onRemovePending={agent.removePending}
+                    onAttachmentLimit={() => agent.setError("最多只能附加 8 个文件")}
                   />
                 )}
               </div>
