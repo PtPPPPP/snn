@@ -365,7 +365,6 @@ test("DSH client maps only the exact real-child missing-session JSON-RPC error",
 });
 
 test("runtime manager starts once, observes child failure, and permits one explicit recovery", async () => {
-  let creates = 0;
   let disposals = 0;
   let fail;
   function runtime() {
@@ -385,6 +384,23 @@ test("runtime manager starts once, observes child failure, and permits one expli
   assert.equal(creates, 2);
   assert.equal(disposals, 1);
   await Promise.all([manager.dispose(), manager.dispose()]);
+  assert.equal(manager.state, "STOPPED");
+  assert.equal(disposals, 2);
+});
+
+test("runtime manager disposes a fresh runtime after a stopped-manager restart", async () => {
+  let creates = 0;
+  let disposals = 0;
+  const manager = new AgentRuntimeManager({
+    createRuntime: async () => ({
+      async createSession() {}, async resumeSession() {}, sendMessage() {}, async abort() {},
+      async dispose() { disposals += 1; },
+    }),
+  });
+  await manager.ensureReady();
+  await manager.dispose();
+  await manager.ensureReady();
+  await manager.dispose();
   assert.equal(manager.state, "STOPPED");
   assert.equal(disposals, 2);
 });

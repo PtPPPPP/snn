@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WorkspaceManager } from "../src/agent/workspace/workspace-manager.mjs";
@@ -45,4 +46,45 @@ test("manifest-managed text mutation preserves fileId and rejects stale or escap
   await assert.rejects(() => service.writeEditableText({ workspaceId: workspace.id, virtualPath: "notes.md", content: "new", expected: { kind: "createIfAbsent" } }), (error) => error.code === "AGENT_FILE_EXISTS");
   await service.ingest({ workspaceId: workspace.id, originalName: "report.pdf", contentType: "application/pdf", body: body("%PDF-1.4") });
   await assert.rejects(() => service.writeEditableText({ workspaceId: workspace.id, virtualPath: "report.pdf", content: "corrupt", expected: undefined }), (error) => error.code === "AGENT_FILE_NOT_EDITABLE");
+});
+
+test("a v1 manifest upgrades to v2 on mutation and survives a fresh service reload", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "snn-v1-migrate-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const manager = new WorkspaceManager();
+  const workspace = await manager.register(root, { id: "snn-workspace-v1-migrate" });
+  const fileId = "snn-file-11111111-1111-4111-8111-111111111111";
+  const storedName = ".snn-upload-11111111-1111-4111-8111-111111111111";
+  const original = Buffer.from("legacy version", "utf8");
+  await writeFile(join(root, storedName), original);
+  await writeFile(join(root, ".snn-workspace-files.json"), JSON.stringify({ schemaVersion: 1, files: [{ fileId, originalName: "legacy.md", storedName, size: original.length, contentType: "text/markdown", kind: "text", sha256: createHash("sha256").update(original).digest("hex") }] }));
+  const service = new FileIngestionService({ workspaceManager: manager, maxUploadBytes: 64 });
+  const before = await service.readEditableText({ workspaceId: workspace.id, virtualPath: "legacy.md" });
+  await service.writeEditableText({ workspaceId: workspace.id, virtualPath: "legacy.md", content: "migrated version", expected: { kind: "replaceIfVersion", version: before.version } });
+  const manifest = JSON.parse(await readFile(join(root, ".snn-workspace-files.json"), "utf8"));
+  assert.equal(manifest.schemaVersion, 2);
+  assert.equal(manifest.files[0].fileId, fileId);
+  assert.equal(manifest.files[0].virtualPath, "legacy.md");
+  const reloaded = new FileIngestionService({ workspaceManager: manager, maxUploadBytes: 64 });
+  assert.equal((await reloaded.readEditableText({ workspaceId: workspace.id, virtualPath: "legacy.md" })).content, "migrated version");
+});
+
+test("copy-on-write keeps the prior manifest authoritative across storage failure windows", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "snn-cow-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const manager = new WorkspaceManager();
+  const workspace = await manager.register(root, { id: "snn-workspace-cow-test" });
+  const base = new FileIngestionService({ workspaceManager: manager, maxUploadBytes: 64 });
+  await base.ingest({ workspaceId: workspace.id, originalName: "notes.md", contentType: "text/markdown", body: body("old") });
+  const old = await base.readEditableText({ workspaceId: workspace.id, virtualPath: "notes.md" });
+  const failBlob = new FileIngestionService({ workspaceManager: manager, maxUploadBytes: 64, io: { writeFile: async (path, ...args) => { if (String(path).endsWith(".stage")) throw new Error("blob write failed"); return writeFile(path, ...args); } } });
+  await assert.rejects(() => failBlob.writeEditableText({ workspaceId: workspace.id, virtualPath: "notes.md", content: "new", expected: { kind: "replaceIfVersion", version: old.version } }));
+  assert.equal((await base.readEditableText({ workspaceId: workspace.id, virtualPath: "notes.md" })).content, "old");
+  const failManifest = new FileIngestionService({ workspaceManager: manager, maxUploadBytes: 64, io: { rename: async (from, to) => { if (String(to).endsWith(".snn-workspace-files.json")) throw new Error("manifest publish failed"); return rename(from, to); } } });
+  await assert.rejects(() => failManifest.writeEditableText({ workspaceId: workspace.id, virtualPath: "notes.md", content: "new", expected: { kind: "replaceIfVersion", version: old.version } }));
+  assert.equal((await base.readEditableText({ workspaceId: workspace.id, virtualPath: "notes.md" })).content, "old");
+  const oldStored = (await base.resolveVirtualPath({ workspaceId: workspace.id, virtualPath: "notes.md" })).file.storedName;
+  const cleanupFailure = new FileIngestionService({ workspaceManager: manager, maxUploadBytes: 64, io: { rm: async (path, options) => { if (String(path).endsWith(oldStored)) throw new Error("old cleanup failed"); return rm(path, options); } } });
+  await cleanupFailure.writeEditableText({ workspaceId: workspace.id, virtualPath: "notes.md", content: "new", expected: { kind: "replaceIfVersion", version: old.version } });
+  assert.equal((await base.readEditableText({ workspaceId: workspace.id, virtualPath: "notes.md" })).content, "new");
 });

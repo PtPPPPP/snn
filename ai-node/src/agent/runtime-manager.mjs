@@ -19,6 +19,9 @@ export class AgentRuntimeManager {
     if (this.#state === "READY") return this.#runtime;
     if (this.#state === "STARTING") return this.#startTask;
     if (this.#state === "STOPPING") throw new Error("Agent runtime is stopping");
+    // A disposed manager may be restarted for a persisted session. Its prior
+    // dispose promise is already settled and must not own the new runtime.
+    if (this.#state === "STOPPED") this.#disposeTask = undefined;
     if (this.#state === "FAILED") {
       if (this.#runtime) await this.#runtime.dispose().catch(() => {});
       this.#runtime = undefined;

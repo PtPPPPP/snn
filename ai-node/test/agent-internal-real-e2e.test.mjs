@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createServer } from "node:http";
 import { existsSync } from "node:fs";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,6 +31,14 @@ const fixtureBase = join(dshRoot, "examples/jsonrpc-agent");
 const hasRuntime = existsSync(sdkPath) && existsSync(runnerPath) && existsSync(fixtureBase);
 const options = { skip: hasRuntime ? false : "requires sibling DSH built SDK and jsonrpc fixture", timeout: 180_000 };
 
+if (process.env.TEST_DEBUG_HANDLES === "1") {
+  test.after(() => {
+    const handles = process._getActiveHandles().map((handle) => handle?.constructor?.name ?? typeof handle);
+    const requests = process._getActiveRequests().map((request) => request?.constructor?.name ?? typeof request);
+    console.error(`TEST_DEBUG_HANDLES ${JSON.stringify({ handles, requests })}`);
+  });
+}
+
 function textPayloads(text) {
   return [
     JSON.stringify({ choices: [{ delta: { role: "assistant", content: null } }] }),
@@ -53,11 +61,11 @@ function mockLlm() {
   const server = createServer((request, response) => {
     let body = "";
     request.on("data", (chunk) => { body += chunk; });
-    request.on("end", () => {
+    request.on("end", async () => {
       requests.push(JSON.parse(body));
       const lower = body.toLowerCase();
       const entry = scripts.find((candidate) => !candidate.used && (!candidate.match || lower.includes(candidate.match.toLowerCase())));
-      if (entry) entry.used = true;
+      if (entry) { entry.used = true; await entry.onUse?.(); }
       response.writeHead(200, { "content-type": "text/event-stream" });
       response.write(": open\n\n");
       if (entry?.hang) {
@@ -272,6 +280,85 @@ test("real pinned DSH child creates an inventory-backed text file", options, asy
   const created = await env.ingestion.readEditableText({ workspaceId: env.workspaceRecord.id, virtualPath: "summary.md" });
   assert.equal(created.content, "SNN Agent edit smoke passed");
   assert.ok((await env.ingestion.list(env.workspaceRecord.id)).some((file) => file.virtualPath === "summary.md"));
+});
+
+test("real pinned DSH child extracts an attached PDF and writes its summary", options, async (t) => {
+  const env = await bootRealInternal("pdf-summary", { skillId: "workspace-editor" });
+  t.after(() => env.close());
+  const pdf = buildTestPdf({ pages: [["SNN PDF SUMMARY FACT"]] });
+  const uploaded = await env.ingestion.ingest({ workspaceId: env.workspaceRecord.id, originalName: "source.pdf", contentType: "application/pdf", body: (async function* () { yield pdf; })() });
+  const pdfEntry = await env.ingestion.resolveVirtualPath({ workspaceId: env.workspaceRecord.id, virtualPath: "source.pdf" });
+  const create = await post(`${env.baseUrl}/internal/agent/sessions`, {});
+  const { sessionId } = await create.json();
+  env.llm.set([
+    { match: "pdf summary", payloads: toolPayloads("open-pdf", "workspace.open", { file_id: uploaded.fileId }) },
+    { payloads: toolPayloads("write-summary", "write", { file_path: "summary.md", content: "SNN PDF SUMMARY FACT" }) },
+    { payloads: textPayloads("summary created") },
+  ]);
+  const response = await post(`${env.baseUrl}/internal/agent/sessions/${sessionId}/runs`, { message: "pdf summary", attachments: [uploaded.fileId] });
+  const stream = await sse(response);
+  assertTerminal(stream.events);
+  assert.equal((await env.ingestion.readEditableText({ workspaceId: env.workspaceRecord.id, virtualPath: "summary.md" })).content, "SNN PDF SUMMARY FACT");
+  const pdfAfter = await env.ingestion.resolveVirtualPath({ workspaceId: env.workspaceRecord.id, virtualPath: "source.pdf" });
+  assert.equal(pdfAfter.file.fileId, uploaded.fileId);
+  assert.equal(pdfAfter.file.sha256, pdfEntry.file.sha256);
+  assert.deepEqual(await readFile(join(env.workspace, pdfAfter.file.storedName)), pdf);
+});
+
+test("real pinned DSH observation policy rejects a stale edit", options, async (t) => {
+  const env = await bootRealInternal("native-stale", { skillId: "workspace-editor" });
+  t.after(() => env.close());
+  const uploaded = await env.ingestion.ingest({ workspaceId: env.workspaceRecord.id, originalName: "stale.md", contentType: "text/markdown", body: (async function* () { yield Buffer.from("version one"); })() });
+  const create = await post(`${env.baseUrl}/internal/agent/sessions`, {});
+  const { sessionId } = await create.json();
+  env.llm.set([
+    { match: "stale edit", payloads: toolPayloads("stale-read", "read", { file_path: "stale.md" }) },
+    { onUse: async () => { await env.ingestion.writeEditableText({ workspaceId: env.workspaceRecord.id, virtualPath: "stale.md", content: "version two", expected: undefined }); }, payloads: toolPayloads("stale-edit", "edit", { file_path: "stale.md", old_string: "version one", new_string: "version three" }) },
+    { payloads: textPayloads("stale rejected") },
+  ]);
+  const response = await post(`${env.baseUrl}/internal/agent/sessions/${sessionId}/runs`, { message: "stale edit" });
+  const stream = await sse(response);
+  assertTerminal(stream.events);
+  const final = await env.ingestion.readEditableText({ workspaceId: env.workspaceRecord.id, virtualPath: "stale.md" });
+  assert.equal(final.content, "version two", stream.body);
+  assert.equal((await env.ingestion.resolveVirtualPath({ workspaceId: env.workspaceRecord.id, virtualPath: "stale.md" })).file.fileId, uploaded.fileId);
+  assert.ok(stream.events.some((event) => event.type === "tool.failed"), stream.body);
+});
+
+test("real pinned DSH observation policy prevents a create race overwrite", options, async (t) => {
+  const env = await bootRealInternal("native-create-race", { skillId: "workspace-editor" });
+  t.after(() => env.close());
+  const create = await post(`${env.baseUrl}/internal/agent/sessions`, {});
+  const { sessionId } = await create.json();
+  env.llm.set([
+    { match: "create race", onUse: async () => { await env.ingestion.writeEditableText({ workspaceId: env.workspaceRecord.id, virtualPath: "race.md", content: "winner content", expected: { kind: "createIfAbsent" } }); }, payloads: toolPayloads("race-write", "write", { file_path: "race.md", content: "agent content" }) },
+    { payloads: textPayloads("race handled") },
+  ]);
+  const response = await post(`${env.baseUrl}/internal/agent/sessions/${sessionId}/runs`, { message: "create race" });
+  const stream = await sse(response);
+  assertTerminal(stream.events);
+  assert.equal((await env.ingestion.readEditableText({ workspaceId: env.workspaceRecord.id, virtualPath: "race.md" })).content, "winner content", stream.body);
+  assert.ok(stream.events.some((event) => event.type === "tool.failed"), stream.body);
+});
+
+test("real pinned DSH session resumes after runtime disposal with persisted workspace edits", options, async (t) => {
+  const env = await bootRealInternal("native-resume", { skillId: "workspace-editor" });
+  t.after(() => env.close());
+  const create = await post(`${env.baseUrl}/internal/agent/sessions`, {});
+  const { sessionId } = await create.json();
+  env.llm.set([{ match: "create persistent", payloads: toolPayloads("resume-write", "write", { file_path: "notes.md", content: "persisted version" }) }, { payloads: textPayloads("created") }]);
+  assertTerminal((await sse(await post(`${env.baseUrl}/internal/agent/sessions/${sessionId}/runs`, { message: "create persistent" }))).events);
+  const before = await env.ingestion.readEditableText({ workspaceId: env.workspaceRecord.id, virtualPath: "notes.md" });
+  await env.manager.dispose();
+  assert.equal(env.manager.state, "STOPPED");
+  const resumed = await post(`${env.baseUrl}/internal/agent/sessions/${sessionId}/resume`, {});
+  assert.equal(resumed.status, 200);
+  env.llm.set([{ match: "read persisted", payloads: toolPayloads("resume-read", "read", { file_path: "notes.md" }) }, { payloads: toolPayloads("resume-edit", "edit", { file_path: "notes.md", old_string: "persisted version", new_string: "resumed version" }) }, { payloads: textPayloads("resumed") }]);
+  assertTerminal((await sse(await post(`${env.baseUrl}/internal/agent/sessions/${sessionId}/runs`, { message: "read persisted" }))).events);
+  const after = await env.ingestion.readEditableText({ workspaceId: env.workspaceRecord.id, virtualPath: "notes.md" });
+  assert.equal(after.content, "resumed version");
+  assert.equal((await env.ingestion.resolveVirtualPath({ workspaceId: env.workspaceRecord.id, virtualPath: "notes.md" })).file.fileId, before.file.fileId);
+  assert.notEqual(after.version, before.version);
 });
 
 test("real HTTP Internal API drives official SDK and child with sanitized READ/WRITE policy", options, async (t) => {

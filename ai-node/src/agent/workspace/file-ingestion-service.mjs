@@ -12,11 +12,12 @@ const MAX_FILENAME_BYTES = 240;
 
 /** Trusted server ingestion path. It is deliberately not an Agent tool. */
 export class FileIngestionService {
-  constructor({ workspaceManager, maxUploadBytes = 1_048_576, maxFiles = 100, maxTotalBytes = 10_485_760 }) {
+  constructor({ workspaceManager, maxUploadBytes = 1_048_576, maxFiles = 100, maxTotalBytes = 10_485_760, io = {} }) {
     this.workspaceManager = workspaceManager;
     this.maxUploadBytes = maxUploadBytes;
     this.maxFiles = maxFiles;
     this.maxTotalBytes = maxTotalBytes;
+    this.io = { writeFile, rename, rm, ...io };
   }
 
   async ingest({ workspaceId, originalName, contentType = "application/octet-stream", body }) {
@@ -33,12 +34,12 @@ export class FileIngestionService {
     const kind = bytes.includes(0) ? "opaque" : "text";
     const file = Object.freeze({ fileId, originalName: safeName, virtualPath: safeName, storedName, size: bytes.length, contentType: normalizeType(contentType), kind, sha256: createHash("sha256").update(bytes).digest("hex") });
     try {
-      await writeFile(stage, bytes, { flag: "wx" });
-      await rename(stage, target);
+      await this.io.writeFile(stage, bytes, { flag: "wx" });
+      await this.io.rename(stage, target);
       await this.#save(workspace, { schemaVersion: VERSION, files: [...manifest.files, file] });
     } catch (error) {
-      await rm(stage, { force: true }).catch(() => {});
-      await rm(target, { force: true }).catch(() => {});
+      await this.io.rm(stage, { force: true }).catch(() => {});
+      await this.io.rm(target, { force: true }).catch(() => {});
       throw error;
     }
     return publicFile(file);
@@ -79,15 +80,15 @@ export class FileIngestionService {
     const stage = join(resolved.workspace.root, `.${fileId}.stage`);
     const target = join(resolved.workspace.root, storedName);
     try {
-      await writeFile(stage, bytes, { flag: "wx" });
-      await rename(stage, target);
+      await this.io.writeFile(stage, bytes, { flag: "wx" });
+      await this.io.rename(stage, target);
       await this.#save(resolved.workspace, { schemaVersion: VERSION, files: [...manifest.files.filter((item) => item.fileId !== fileId), next] });
     } catch (error) {
-      await rm(stage, { force: true }).catch(() => {});
-      await rm(target, { force: true }).catch(() => {});
+      await this.io.rm(stage, { force: true }).catch(() => {});
+      await this.io.rm(target, { force: true }).catch(() => {});
       throw error;
     }
-    if (current) await rm(join(resolved.workspace.root, current.storedName), { force: true }).catch(() => {});
+    if (current) await this.io.rm(join(resolved.workspace.root, current.storedName), { force: true }).catch(() => {});
     return { operation: current ? "update" : "create", file: next, before, after: content, version: next.sha256 };
   }
   async remove({ workspaceId, fileId }) {
@@ -101,7 +102,7 @@ export class FileIngestionService {
     try { return normalize(JSON.parse(await readFile(join(workspace.root, MANIFEST), "utf8"))); }
     catch (error) { if (error?.code === "ENOENT") return { schemaVersion: VERSION, files: [] }; if (error?.code?.startsWith("AGENT_")) throw error; throw code("AGENT_FILE_MANIFEST_INVALID", "Workspace file inventory is invalid"); }
   }
-  async #save(workspace, manifest) { const temp = join(workspace.root, `${MANIFEST}.${process.pid}.${Date.now()}.tmp`); try { await writeFile(temp, JSON.stringify(manifest), { flag: "wx" }); await rename(temp, join(workspace.root, MANIFEST)); } finally { await rm(temp, { force: true }).catch(() => {}); } }
+  async #save(workspace, manifest) { const temp = join(workspace.root, `${MANIFEST}.${process.pid}.${Date.now()}.tmp`); try { await this.io.writeFile(temp, JSON.stringify(manifest), { flag: "wx" }); await this.io.rename(temp, join(workspace.root, MANIFEST)); } finally { await this.io.rm(temp, { force: true }).catch(() => {}); } }
 }
 
 async function readBounded(body, max) { const chunks = []; let size = 0; for await (const chunk of body) { size += chunk.length; if (size > max) throw code("AGENT_FILE_TOO_LARGE", "File exceeds upload limit"); chunks.push(chunk); } return Buffer.concat(chunks); }

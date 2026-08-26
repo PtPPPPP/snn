@@ -292,3 +292,31 @@ test("Upload failure leaves no ghost chip and long Unicode names stay within a m
     expect(hasHorizontalOverflow).toBe(false);
   }
 });
+
+test("Files Panel refreshes the authoritative inventory after an Agent file mutation", async ({ page }) => {
+  const sessionId = "snn-agent-dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+  const notes = { fileId: "notes-file", originalName: "notes.md", size: 11, kind: "text" };
+  const summary = { fileId: "summary-file", originalName: "summary.md", size: 27, kind: "text" };
+  let completed = false;
+  await mockAgentStatus(page, true);
+  await page.route("**/api/agent/sessions", async (route) => {
+    if (route.request().method() === "POST") return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ sessionId, status: "created" }) });
+    return route.continue();
+  });
+  await page.route(`**/api/agent/sessions/${sessionId}/files`, async (route) => {
+    if (route.request().method() === "POST") return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ file: notes }) });
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ files: completed ? [{ ...notes, size: 12 }, summary] : [notes] }) });
+  });
+  await page.route(`**/api/agent/sessions/${sessionId}/runs`, async (route) => {
+    completed = true;
+    const body = `event: run.started\ndata: {"runId":"run-refresh"}\n\nevent: tool.started\ndata: {"runId":"run-refresh","payload":{"name":"edit"}}\n\nevent: tool.completed\ndata: {"runId":"run-refresh","payload":{"name":"write"}}\n\nevent: run.completed\ndata: {"runId":"run-refresh"}\n\n`;
+    return route.fulfill({ status: 200, headers: { "content-type": "text/event-stream" }, body });
+  });
+  await page.goto("/ai/", { waitUntil: "networkidle" });
+  await page.getByRole("tab", { name: /Agent/ }).click();
+  await page.getByTestId("agent-file-input").setInputFiles({ name: "notes.md", mimeType: "text/markdown", buffer: Buffer.from("version one") });
+  await page.getByTestId("agent-input").fill("edit notes and create summary");
+  await page.getByTestId("agent-send-button").click();
+  await expect(page.getByTestId("files-panel")).toContainText("summary.md");
+  await expect(page.getByTestId("files-panel")).toContainText("12 B");
+});

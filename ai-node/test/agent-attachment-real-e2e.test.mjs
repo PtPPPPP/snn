@@ -152,6 +152,7 @@ async function bootRealInternal(label, shared = {}) {
     toolMetadata: BUILT_IN_TOOL_METADATA,
     capabilityResolver: shared.capabilityResolver ?? createDefaultCapabilityResolver(),
     workspace: workspaceRecord,
+    ...(shared.skillId ? { skillId: shared.skillId } : {}),
     workspaceManager,
     metadataStore: new SessionMetadataStore(metadata),
     runtimeRegistry,
@@ -248,6 +249,30 @@ test("text attachment reaches the real Agent through server context and workspac
   assertRawToolOutputContained(events, "SNN_ATTACH_TEXT_SENTINEL_1010");
   assert.match(body, /SNN_ATTACH_TEXT_SENTINEL_1010/);
   assertNoLeaks(env, body);
+});
+
+test("an attached text file is reopened with its current manifest content after native DSH edit", options, async (t) => {
+  const env = await bootRealInternal("attach-after-edit", { skillId: "workspace-editor" });
+  t.after(() => env.close());
+  const fileId = await uploadFile(env, "notes.md", Buffer.from("version one"), "text/markdown");
+  const sessionId = await createSession(env);
+  env.llm.set([
+    { match: "edit attached notes", payloads: toolPayloads("attach-open", "workspace.open", { file_id: fileId }) },
+    { payloads: toolPayloads("attach-read", "read", { file_path: "notes.md" }) },
+    { payloads: toolPayloads("attach-edit", "edit", { file_path: "notes.md", old_string: "version one", new_string: "version two" }) },
+    { payloads: textPayloads("updated version two") },
+  ]);
+  const edited = await sse(await post(`${env.baseUrl}/internal/agent/sessions/${sessionId}/runs`, { message: "edit attached notes", attachments: [fileId] }));
+  assertTerminal(edited.events);
+  assert.deepEqual(toolNames(edited.events), ["workspace.open", "read", "edit"]);
+  env.llm.set([
+    { match: "read current notes", payloads: toolPayloads("attach-open-current", "workspace.open", { file_id: fileId }) },
+    { payloads: textPayloads("current content is version two") },
+  ]);
+  const followUp = await sse(await post(`${env.baseUrl}/internal/agent/sessions/${sessionId}/runs`, { message: "read current notes", attachments: [fileId] }));
+  assertTerminal(followUp.events);
+  assert.match(deltaText(followUp.events), /version two/);
+  assert.doesNotMatch(deltaText(followUp.events), /version one/);
 });
 
 test("PDF attachment drives automatic extraction through workspace.open", options, async (t) => {
