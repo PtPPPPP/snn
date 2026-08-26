@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createServer } from "node:http";
+import { createHook } from "node:async_hooks";
 import { existsSync } from "node:fs";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -32,10 +33,21 @@ const hasRuntime = existsSync(sdkPath) && existsSync(runnerPath) && existsSync(f
 const options = { skip: hasRuntime ? false : "requires sibling DSH built SDK and jsonrpc fixture", timeout: 180_000 };
 
 if (process.env.TEST_DEBUG_HANDLES === "1") {
+  const pendingFs = new Map();
+  const hook = createHook({
+    init(asyncId, type) {
+      if (type === "FSREQCALLBACK" || type === "FSREQPROMISE") {
+        pendingFs.set(asyncId, { type, stack: new Error().stack?.split("\n").slice(2, 7) });
+      }
+    },
+    destroy(asyncId) { pendingFs.delete(asyncId); },
+  });
+  hook.enable();
   test.after(() => {
     const handles = process._getActiveHandles().map((handle) => handle?.constructor?.name ?? typeof handle);
     const requests = process._getActiveRequests().map((request) => request?.constructor?.name ?? typeof request);
-    console.error(`TEST_DEBUG_HANDLES ${JSON.stringify({ handles, requests })}`);
+    console.error(`TEST_DEBUG_HANDLES ${JSON.stringify({ handles, requests, pendingFs: [...pendingFs.values()] })}`);
+    hook.disable();
   });
 }
 
@@ -91,7 +103,7 @@ async function removeTree(path) {
   const deadline = Date.now() + 10_000;
   for (;;) {
     try {
-      await rm(path, { recursive: true, force: true });
+      await trackedRm(path);
       return;
     } catch (error) {
       if (Date.now() > deadline) {
@@ -102,6 +114,19 @@ async function removeTree(path) {
       }
       await new Promise((resolveWait) => setTimeout(resolveWait, 250));
     }
+  }
+}
+
+async function trackedRm(path) {
+  const trace = process.env.SNN_TEST_DEBUG_FS === "1";
+  const startedAt = Date.now();
+  if (trace) console.error(`SNN_TEST_DEBUG_FS ${JSON.stringify({ operation: "rm", pathCategory: "temp-root", state: "start" })}`);
+  try {
+    await rm(path, { recursive: true, force: true, maxRetries: 2, retryDelay: 50 });
+    if (trace) console.error(`SNN_TEST_DEBUG_FS ${JSON.stringify({ operation: "rm", pathCategory: "temp-root", state: "complete", elapsedMs: Date.now() - startedAt })}`);
+  } catch (error) {
+    if (trace) console.error(`SNN_TEST_DEBUG_FS ${JSON.stringify({ operation: "rm", pathCategory: "temp-root", state: "reject", code: error?.code, elapsedMs: Date.now() - startedAt })}`);
+    throw error;
   }
 }
 
@@ -523,7 +548,6 @@ test("uploaded workspace file survives Runtime restart and remains read-only", o
   const workspace = await mkdtemp(join(tmpdir(), "snn-upload-resume-ws-"));
   const persistence = await mkdtemp(join(tmpdir(), "snn-upload-resume-sessions-"));
   const metadata = await mkdtemp(join(tmpdir(), "snn-upload-resume-metadata-"));
-  t.after(async () => { await removeTree(workspace); await removeTree(persistence); await removeTree(metadata); });
   const runtimeA = await bootRealInternal("upload-resume-a", { workspace, persistence, metadata });
   const uploaded = await runtimeA.ingestion.ingest({ workspaceId: runtimeA.workspaceRecord.id, originalName: "resume-note.txt", body: (async function* () { yield Buffer.from("SNN_UPLOAD_RESUME_SENTINEL"); })() });
   const { sessionId } = await (await post(`${runtimeA.baseUrl}/internal/agent/sessions`, {})).json();
@@ -531,7 +555,12 @@ test("uploaded workspace file survives Runtime restart and remains read-only", o
   assertTerminal((await sse(await post(`${runtimeA.baseUrl}/internal/agent/sessions/${sessionId}/runs`, { message: "persist session" }))).events);
   await runtimeA.close();
   const runtimeB = await bootRealInternal("upload-resume-b", { workspace, persistence, metadata });
-  t.after(() => runtimeB.close());
+  t.after(async () => {
+    await runtimeB.close();
+    await removeTree(workspace);
+    await removeTree(persistence);
+    await removeTree(metadata);
+  });
   assert.deepEqual(await runtimeB.ingestion.list(runtimeB.workspaceRecord.id), [uploaded]);
   assert.equal((await post(`${runtimeB.baseUrl}/internal/agent/sessions/${sessionId}/resume`, {})).status, 200);
   runtimeB.llm.set([{ match: "read resume-note.txt", payloads: toolPayloads("resume-upload-read", "workspace.open", { file_id: uploaded.fileId }) }, { payloads: textPayloads("resumed upload read") }]);
@@ -604,14 +633,18 @@ test("HTTP cross-runtime resume restores one session and reapplies READ-only pol
   const workspace = await mkdtemp(join(tmpdir(), "snn-http-resume-ws-"));
   const persistence = await mkdtemp(join(tmpdir(), "snn-http-resume-sessions-"));
   const metadata = await mkdtemp(join(tmpdir(), "snn-http-resume-metadata-"));
-  t.after(async () => { await removeTree(workspace); await removeTree(persistence); await removeTree(metadata); });
   const runtimeA = await bootRealInternal("resume-a", { workspace, persistence, metadata });
   const { sessionId } = await (await post(`${runtimeA.baseUrl}/internal/agent/sessions`, {})).json();
   runtimeA.llm.set([{ payloads: textPayloads("stored marker") }]);
   assertTerminal((await sse(await post(`${runtimeA.baseUrl}/internal/agent/sessions/${sessionId}/runs`, { message: "remember MARKER-ALPHA" }))).events);
   await runtimeA.close();
   const runtimeB = await bootRealInternal("resume-b", { workspace, persistence, metadata });
-  t.after(() => runtimeB.close());
+  t.after(async () => {
+    await runtimeB.close();
+    await removeTree(workspace);
+    await removeTree(persistence);
+    await removeTree(metadata);
+  });
   assert.notEqual(runtimeA.manager, runtimeB.manager);
   const resumed = await post(`${runtimeB.baseUrl}/internal/agent/sessions/${sessionId}/resume`, {});
   assert.equal(resumed.status, 200);
@@ -902,7 +935,6 @@ test("documents survive a real Runtime restart and resume recomputes the documen
   const workspace = await mkdtemp(join(tmpdir(), "snn-doc-resume-ws-"));
   const persistence = await mkdtemp(join(tmpdir(), "snn-doc-resume-sessions-"));
   const metadata = await mkdtemp(join(tmpdir(), "snn-doc-resume-metadata-"));
-  t.after(async () => { await removeTree(workspace); await removeTree(persistence); await removeTree(metadata); });
 
   const runtimeA = await bootRealInternal("doc-resume-a", { workspace, persistence, metadata });
   const pdf = buildTestPdf({ pages: [["SNN_DOC_RESUME_MARKER_9042"], ["second page survives restart"]] });
@@ -919,7 +951,12 @@ test("documents survive a real Runtime restart and resume recomputes the documen
   await runtimeA.close();
 
   const runtimeB = await bootRealInternal("doc-resume-b", { workspace, persistence, metadata });
-  t.after(() => runtimeB.close());
+  t.after(async () => {
+    await runtimeB.close();
+    await removeTree(workspace);
+    await removeTree(persistence);
+    await removeTree(metadata);
+  });
   const resumed = await post(`${runtimeB.baseUrl}/internal/agent/sessions/${sessionId}/resume`, {});
   assert.equal(resumed.status, 200);
   assert.deepEqual(await resumed.json(), { sessionId, status: "resumed" });

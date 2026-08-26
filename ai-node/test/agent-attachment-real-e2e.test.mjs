@@ -515,7 +515,6 @@ test("attachment context persists across turns, restart, and resume; deletion fa
   const workspace = await mkdtemp(join(tmpdir(), "snn-attach-resume-ws-"));
   const persistence = await mkdtemp(join(tmpdir(), "snn-attach-resume-sessions-"));
   const metadata = await mkdtemp(join(tmpdir(), "snn-attach-resume-metadata-"));
-  t.after(async () => { await removeTree(workspace); await removeTree(persistence); await removeTree(metadata); });
 
   const runtimeA = await bootRealInternal("attach-resume-a", { workspace, persistence, metadata });
   const fileId = await uploadFile(runtimeA, "carry.pdf", buildTestPdf({ pages: [["SNN_RESUME_PDF_MARKER_9090"]] }));
@@ -534,7 +533,12 @@ test("attachment context persists across turns, restart, and resume; deletion fa
   // in the persisted conversation, so a follow-up without new attachments can
   // still find and reopen the file by its server-validated id.
   const runtimeB = await bootRealInternal("attach-resume-b", { workspace, persistence, metadata });
-  t.after(() => runtimeB.close());
+  t.after(async () => {
+    await runtimeB.close();
+    await removeTree(workspace);
+    await removeTree(persistence);
+    await removeTree(metadata);
+  });
   const resumed = await post(`${runtimeB.baseUrl}/internal/agent/sessions/${sessionId}/resume`, {});
   assert.equal(resumed.status, 200);
 
@@ -567,7 +571,6 @@ test("current policy always wins: shrunken workspace.open availability fails clo
   const workspace = await mkdtemp(join(tmpdir(), "snn-attach-shrink-ws-"));
   const persistence = await mkdtemp(join(tmpdir(), "snn-attach-shrink-sessions-"));
   const metadata = await mkdtemp(join(tmpdir(), "snn-attach-shrink-metadata-"));
-  t.after(async () => { await removeTree(workspace); await removeTree(persistence); await removeTree(metadata); });
 
   const runtimeA = await bootRealInternal("attach-shrink-a", { workspace, persistence, metadata });
   const fileId = await uploadFile(runtimeA, "history.txt", Buffer.from("SNN_SHRINK_MARKER\n"), "text/plain");
@@ -589,7 +592,12 @@ test("current policy always wins: shrunken workspace.open availability fails clo
     workspace, persistence, metadata,
     capabilityResolver: new CapabilityResolver({ toolRegistry: shrunkTools, skillRegistry: shrunkSkills }),
   });
-  t.after(() => runtimeB.close());
+  t.after(async () => {
+    await runtimeB.close();
+    await removeTree(workspace);
+    await removeTree(persistence);
+    await removeTree(metadata);
+  });
 
   const baselineRequests = 0;
   const response = await post(`${runtimeB.baseUrl}/internal/agent/sessions/${sessionId}/runs`, { message: "use the old attachment", attachments: [] });

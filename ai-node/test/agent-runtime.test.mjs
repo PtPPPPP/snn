@@ -365,6 +365,7 @@ test("DSH client maps only the exact real-child missing-session JSON-RPC error",
 });
 
 test("runtime manager starts once, observes child failure, and permits one explicit recovery", async () => {
+  let creates = 0;
   let disposals = 0;
   let fail;
   function runtime() {
@@ -389,7 +390,6 @@ test("runtime manager starts once, observes child failure, and permits one expli
 });
 
 test("runtime manager disposes a fresh runtime after a stopped-manager restart", async () => {
-  let creates = 0;
   let disposals = 0;
   const manager = new AgentRuntimeManager({
     createRuntime: async () => ({
