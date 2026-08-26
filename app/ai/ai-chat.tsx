@@ -579,13 +579,13 @@ export default function AiChat() {
               <div className={styles.messages} ref={messagesRef} onScroll={handleMessagesScroll} aria-live="off">
                 <div className={styles.conversationRail}>
                   {agent.files.length > 0 || agent.pendingAttachments.length > 0 ? (
-                    <AgentFilesPanel files={agent.files} onAttach={agent.attachExisting} onDelete={agent.deleteFile} pendingIds={new Set(agent.pendingAttachments.map((file) => file.fileId))} />
+                    <AgentFilesPanel sessionId={agent.activeSessionId} files={agent.files} onAttach={agent.attachExisting} onDelete={agent.deleteFile} pendingIds={new Set(agent.pendingAttachments.map((file) => file.fileId))} />
                   ) : null}
                   {!agent.loaded ? null : agent.messages.length === 0 ? (
                     <div className={styles.emptyState} data-testid="agent-empty">
                       <span className={styles.emptyMark}>AGENT / WORKSPACE</span>
                       <h2>Agent 可以读取 Workspace 中的文件</h2>
-                      <p>上传文本、PDF、DOCX 或 XLSX，使用安全工具完成任务。Agent 仅能通过 workspace.open 读取你附加的文件，不具备联网、Shell 或写入能力。</p>
+                      <p>上传文本、PDF、DOCX 或 XLSX，使用安全工具完成任务。文本文件可以编辑或生成，PDF、DOCX 和 XLSX 可以读取和提取；Agent 不具备联网或 Shell 能力。</p>
                     </div>
                   ) : (
                     agent.messages.map((m) => <AgentMessage key={m.id} message={m} toolActivity={m.role === "assistant" && agent.toolActivity.length > 0 && m.id === agent.messages[agent.messages.length - 1].id ? agent.toolActivity : undefined} />)

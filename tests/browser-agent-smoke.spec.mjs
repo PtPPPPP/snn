@@ -295,8 +295,8 @@ test("Upload failure leaves no ghost chip and long Unicode names stay within a m
 
 test("Files Panel refreshes the authoritative inventory after an Agent file mutation", async ({ page }) => {
   const sessionId = "snn-agent-dddddddd-dddd-4ddd-8ddd-dddddddddddd";
-  const notes = { fileId: "notes-file", originalName: "notes.md", size: 11, kind: "text" };
-  const summary = { fileId: "summary-file", originalName: "summary.md", size: 27, kind: "text" };
+  const notes = { fileId: "notes-file", originalName: "notes.md", size: 11, kind: "text", downloadUrl: `/api/agent/sessions/${sessionId}/files/notes-file` };
+  const summary = { fileId: "summary-file", originalName: "summary.md", size: 27, kind: "text", downloadUrl: `/api/agent/sessions/${sessionId}/files/summary-file` };
   let completed = false;
   await mockAgentStatus(page, true);
   await page.route("**/api/agent/sessions", async (route) => {
@@ -319,4 +319,7 @@ test("Files Panel refreshes the authoritative inventory after an Agent file muta
   await page.getByTestId("agent-send-button").click();
   await expect(page.getByTestId("files-panel")).toContainText("summary.md");
   await expect(page.getByTestId("files-panel")).toContainText("12 B");
+  const download = page.getByRole("link", { name: "下载 notes.md" });
+  await expect(download).toHaveAttribute("href", `/api/agent/sessions/${sessionId}/files/${notes.fileId}`);
+  await expect(download).toHaveAttribute("download", "notes.md");
 });

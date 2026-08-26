@@ -91,6 +91,7 @@ export function createPublicAgentBff({
 
   function publicErrorStatus(code) {
     if (["AGENT_SESSION_NOT_FOUND", "AGENT_ATTACHMENT_NOT_FOUND", "AGENT_FILE_NOT_FOUND"].includes(code)) return 404;
+    if (code === "AGENT_FILE_MUTATED") return 409;
     if (["AGENT_FILE_INVALID", "AGENT_FILE_REQUIRED", "AGENT_FILE_CONFLICT", "AGENT_ATTACHMENT_UNSUPPORTED"].includes(code)) return 400;
     if (["AGENT_FILE_TOO_LARGE", "AGENT_WORKSPACE_QUOTA_EXCEEDED", "REQUEST_TOO_LARGE"].includes(code)) return 413;
     if (code === "AGENT_RUNTIME_INCOMPATIBLE") return 503;
@@ -100,6 +101,13 @@ export function createPublicAgentBff({
 
   function getOwnerToken(request) {
     return getOwnerTokenFromRequest(request, cookieName);
+  }
+
+  function publicFileForSession(sessionId, file) {
+    return {
+      ...file,
+      downloadUrl: `/api/agent/sessions/${encodeURIComponent(sessionId)}/files/${encodeURIComponent(file.fileId)}`,
+    };
   }
 
   function issueOwnerToken(response) {
@@ -362,7 +370,24 @@ export function createPublicAgentBff({
           try {
             const { workspace } = await resolveWorkspaceForSession(sessionId);
             const files = await ingestionService.list(workspace.id);
-            sendJson(response, 200, { files }, originInfo);
+            sendJson(response, 200, { files: files.map((file) => publicFileForSession(sessionId, file)) }, originInfo);
+          } catch (e) { sendError(response, e, originInfo, path); }
+          return true;
+        }
+        if (method === "GET" && subId) {
+          try {
+            const { workspace } = await resolveWorkspaceForSession(sessionId);
+            const { file, bytes } = await ingestionService.readFile({ workspaceId: workspace.id, fileId: subId });
+            const fallbackName = file.originalName.replace(/[^\x20-\x7e]/g, "_").replace(/[\\\"]+/g, "_") || "download";
+            const disposition = `attachment; filename="${fallbackName}"; filename*=UTF-8''${encodeURIComponent(file.originalName)}`;
+            response.writeHead(200, {
+              "content-type": file.contentType || "application/octet-stream",
+              "content-length": String(bytes.length),
+              "content-disposition": disposition,
+              "cache-control": "no-store",
+              ...corsHeaders(originInfo.origin, originInfo.allowed),
+            });
+            response.end(bytes);
           } catch (e) { sendError(response, e, originInfo, path); }
           return true;
         }
@@ -384,7 +409,7 @@ export function createPublicAgentBff({
               const originalName = request.headers["x-snn-file-name"];
               if (typeof originalName !== "string" || originalName.length === 0) throw Object.assign(new Error("Filename is required"), { status: 400, code: "AGENT_FILE_INVALID" });
               const result = await ingestionService.ingest({ workspaceId: workspace.id, originalName, contentType: request.headers["x-snn-file-content-type"], body: request });
-              sendJson(response, 201, { file: result }, originInfo);
+              sendJson(response, 201, { file: publicFileForSession(sessionId, result) }, originInfo);
             } else if (contentType?.startsWith("multipart/form-data")) {
               const boundaryMatch = request.headers["content-type"].match(/boundary=([^;]+)/);
               if (!boundaryMatch) throw Object.assign(new Error("Invalid multipart"), { status: 400, code: "INVALID_REQUEST" });
@@ -392,7 +417,7 @@ export function createPublicAgentBff({
               const fileData = await parseMultipartFile(request, boundary, 10 * 1024 * 1024);
               if (!fileData) throw Object.assign(new Error("File is required"), { status: 400, code: "AGENT_FILE_REQUIRED" });
               const result = await ingestionService.ingest({ workspaceId: workspace.id, originalName: fileData.filename, contentType: fileData.contentType, body: (async function*(){ yield fileData.data; })() });
-              sendJson(response, 201, { file: result }, originInfo);
+              sendJson(response, 201, { file: publicFileForSession(sessionId, result) }, originInfo);
             } else {
               throw Object.assign(new Error("Invalid content type"), { status: 400, code: "INVALID_CONTENT_TYPE" });
             }

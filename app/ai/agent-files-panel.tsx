@@ -1,15 +1,17 @@
 "use client";
 
-import type { AgentFile } from "../../lib/agent-client";
+import { getAgentFileUrl, type AgentFile } from "../../lib/agent-client";
 import styles from "./ai-chat.module.css";
 
 export default function AgentFilesPanel({
   files,
+  sessionId,
   onAttach,
   onDelete,
   pendingIds,
 }: {
   files: AgentFile[];
+  sessionId: string | null;
   onAttach: (file: AgentFile) => void;
   onDelete: (fileId: string) => void;
   pendingIds: Set<string>;
@@ -36,6 +38,7 @@ export default function AgentFilesPanel({
                 <button type="button" className={styles.agentFilesAttach} disabled={pendingIds.has(f.fileId)} onClick={() => onAttach(f)} aria-label={`附加 ${f.originalName}`}>
                   {pendingIds.has(f.fileId) ? "已附加" : "附加"}
                 </button>
+                {(f.downloadUrl || sessionId) ? <a className={styles.agentFilesDownload} href={f.downloadUrl ?? getAgentFileUrl(sessionId as string, f.fileId)} download={f.originalName} aria-label={`下载 ${f.originalName}`}>下载</a> : null}
                 <button type="button" className={styles.agentFilesDelete} onClick={() => onDelete(f.fileId)} aria-label={`删除文件 ${f.originalName}`}>
                   删除
                 </button>
@@ -44,7 +47,7 @@ export default function AgentFilesPanel({
           ))}
         </ul>
       )}
-      <p className={styles.agentFilesHint}>支持 文本 / 代码、PDF、DOCX、XLSX；图片暂不支持解析。</p>
+      <p className={styles.agentFilesHint}>文本 / 代码可编辑；PDF、DOCX、XLSX 可读取和提取；图片暂不支持解析。</p>
     </div>
   );
 }

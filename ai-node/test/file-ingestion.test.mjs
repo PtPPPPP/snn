@@ -26,6 +26,22 @@ test("ingestion stores safe inventory with bounded filenames and opaque binaries
   assert.deepEqual(await service.list(workspace.id), [second]);
 });
 
+test("file retrieval returns verified bytes and rejects mutation or unknown ids", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "snn-retrieve-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const manager = new WorkspaceManager();
+  const workspace = await manager.register(root, { id: "snn-workspace-retrieve" });
+  const service = new FileIngestionService({ workspaceManager: manager, maxUploadBytes: 64 });
+  const uploaded = await service.ingest({ workspaceId: workspace.id, originalName: "result.md", contentType: "text/markdown", body: body("before") });
+  const result = await service.readFile({ workspaceId: workspace.id, fileId: uploaded.fileId });
+  assert.deepEqual(result.file, uploaded);
+  assert.equal(result.bytes.toString("utf8"), "before");
+  await assert.rejects(() => service.readFile({ workspaceId: workspace.id, fileId: "snn-file-unknown-0000-4000-8000-000000000000" }), (error) => error.code === "AGENT_FILE_NOT_FOUND");
+  const manifest = JSON.parse(await readFile(join(root, ".snn-workspace-files.json"), "utf8"));
+  await writeFile(join(root, manifest.files[0].storedName), "tampered");
+  await assert.rejects(() => service.readFile({ workspaceId: workspace.id, fileId: uploaded.fileId }), (error) => error.code === "AGENT_FILE_MUTATED");
+});
+
 test("manifest-managed text mutation preserves fileId and rejects stale or escaping paths", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "snn-edit-"));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -38,6 +54,7 @@ test("manifest-managed text mutation preserves fileId and rejects stale or escap
   assert.equal(edited.file.fileId, uploaded.fileId);
   assert.notEqual(edited.file.sha256, initial.version);
   assert.equal((await service.readEditableText({ workspaceId: workspace.id, virtualPath: "notes.md" })).content, "version two");
+  assert.equal((await service.readFile({ workspaceId: workspace.id, fileId: uploaded.fileId })).bytes.toString("utf8"), "version two");
   await assert.rejects(() => service.writeEditableText({ workspaceId: workspace.id, virtualPath: "notes.md", content: "stale", expected: { kind: "replaceIfVersion", version: initial.version } }), (error) => error.code === "AGENT_FILE_STALE");
   const created = await service.writeEditableText({ workspaceId: workspace.id, virtualPath: "docs/summary.md", content: "created", expected: { kind: "createIfAbsent" } });
   assert.equal(created.operation, "create");

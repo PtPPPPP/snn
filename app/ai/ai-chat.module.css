@@ -1392,7 +1392,7 @@
 .agentFilesName { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
 .agentFilesMeta { grid-column: 1; color: var(--snn-text-muted); font-family: var(--font-geist-mono), monospace; font-size: 10px; }
 .agentFilesActions { display: flex; gap: 6px; align-items: center; }
-.agentFilesAttach, .agentFilesDelete {
+.agentFilesAttach, .agentFilesDownload, .agentFilesDelete {
   padding: 4px 10px;
   border: 1px solid var(--snn-border-soft);
   border-radius: 999px;
@@ -1402,6 +1402,8 @@
   cursor: pointer;
 }
 .agentFilesAttach:disabled { opacity: 0.5; cursor: not-allowed; }
+.agentFilesDownload { color: var(--snn-accent); text-decoration: none; }
+.agentFilesDownload:hover { text-decoration: underline; }
 .agentFilesHint { color: var(--snn-text-muted); font-size: 10px; margin: 8px 0 0; }
 .agentUploadButton {
   width: 36px;

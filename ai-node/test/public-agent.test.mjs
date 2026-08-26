@@ -241,6 +241,8 @@ test("ownership isolation blocks cross-owner access", async () => {
     // First upload a file to A
     const up = await fetch(`${baseUrl}/api/agent/sessions/${sidA}/files`, { method: "POST", headers: { origin, cookie: cookieA, "content-type": "application/octet-stream", "x-snn-file-name": "secret.txt" }, body: "SNN_SECRET_123" });
     const fileId = (await up.json()).file.fileId;
+    const downloadAwithB = await fetch(`${baseUrl}/api/agent/sessions/${sidA}/files/${fileId}`, { headers: { origin, cookie: cookieB } });
+    assert.equal(downloadAwithB.status, 404);
     const runBwithAfile = await fetch(`${baseUrl}/api/agent/sessions/${sidB}/runs`, { method: "POST", headers: { origin, cookie: cookieB, "content-type": "application/json" }, body: JSON.stringify({ message: "use leaked", attachments: [fileId] }) });
     assert.equal(runBwithAfile.status, 404);
     const leakedCode = (await runBwithAfile.json()).error.code;
@@ -269,6 +271,7 @@ test("public file upload/list/delete via BFF is bounded and safe", async () => {
     assert.match(file.fileId, /^snn-file-/);
     assert.equal("storedName" in file, false);
     assert.equal("workspaceId" in file, false);
+    assert.equal(file.downloadUrl, `/api/agent/sessions/${sid}/files/${file.fileId}`);
 
     // list
     const list = await fetch(`${baseUrl}/api/agent/sessions/${sid}/files`, { headers: { origin, cookie } });
@@ -276,6 +279,19 @@ test("public file upload/list/delete via BFF is bounded and safe", async () => {
     const listBody = await list.json();
     assert.equal(listBody.files.length, 1);
     assert.equal(listBody.files[0].fileId, file.fileId);
+    assert.equal(listBody.files[0].downloadUrl, file.downloadUrl);
+
+    // retrieve by server-assigned fileId, never by a filesystem path
+    const download = await fetch(`${baseUrl}/api/agent/sessions/${sid}/files/${file.fileId}`, { headers: { origin, cookie } });
+    assert.equal(download.status, 200);
+    assert.equal(download.headers.get("content-type"), "text/markdown");
+    assert.match(download.headers.get("content-disposition"), /attachment/);
+    assert.match(download.headers.get("content-disposition"), /filename\*=UTF-8''notes\.md/);
+    assert.equal(await download.text(), "hello world");
+    const unknownDownload = await fetch(`${baseUrl}/api/agent/sessions/${sid}/files/snn-file-unknown-0000-4000-8000-000000000000`, { headers: { origin, cookie } });
+    assert.equal(unknownDownload.status, 404);
+    const pathLikeDownload = await fetch(`${baseUrl}/api/agent/sessions/${sid}/files/${encodeURIComponent("C:\\Windows\\secret.txt")}`, { headers: { origin, cookie } });
+    assert.equal(pathLikeDownload.status, 404);
 
     // second upload via octet-stream (multipart also supported, tested via raw path)
     const up2 = await fetch(`${baseUrl}/api/agent/sessions/${sid}/files`, { method: "POST", headers: { origin, cookie, "content-type": "application/octet-stream", "x-snn-file-name": "second.txt" }, body: "second file" });
@@ -326,6 +342,10 @@ test("public BFF preserves browser FormData binary bytes and Unicode filenames",
       const file = (await response.json()).file;
       assert.equal(file.originalName, filename);
       assert.equal(file.size, bytes.length);
+      const download = await fetch(`${baseUrl}/api/agent/sessions/${sessionId}/files/${file.fileId}`, { headers: { origin, cookie } });
+      assert.equal(download.status, 200);
+      assert.match(download.headers.get("content-disposition"), /filename\*=UTF-8''/);
+      assert.deepEqual(Buffer.from(await download.arrayBuffer()), bytes);
       const manifest = JSON.parse(await readFile(join(workspace.root, ".snn-workspace-files.json"), "utf8"));
       const entry = manifest.files.find((candidate) => candidate.fileId === file.fileId);
       assert.notEqual(entry.storedName, filename);

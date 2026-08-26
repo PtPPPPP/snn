@@ -1,6 +1,6 @@
 import { devices, expect, test } from "@playwright/test";
 
-const BASE_URL = "http://127.0.0.1:3000";
+const BASE_URL = process.env.SNN_BROWSER_BASE_URL ?? "http://127.0.0.1:3000";
 const SCREENSHOT_DIR = ".preview/mobile-remediation";
 const mobileProfiles = ["iPhone SE", "iPhone 13", "iPhone 15", "Pixel 5", "Galaxy S24"];
 const portraitViewports = [

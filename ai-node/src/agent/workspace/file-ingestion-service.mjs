@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { readFile, rename, rm, writeFile } from "node:fs/promises";
+import { readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, join, posix } from "node:path";
 import { TEXT_EXTENSIONS } from "../documents/file-access.mjs";
 
@@ -17,7 +17,7 @@ export class FileIngestionService {
     this.maxUploadBytes = maxUploadBytes;
     this.maxFiles = maxFiles;
     this.maxTotalBytes = maxTotalBytes;
-    this.io = { writeFile, rename, rm, ...io };
+    this.io = { writeFile, rename, rm, readFile, stat, ...io };
   }
 
   async ingest({ workspaceId, originalName, contentType = "application/octet-stream", body }) {
@@ -46,6 +46,19 @@ export class FileIngestionService {
   }
 
   async list(workspaceId) { const workspace = this.workspaceManager.resolve(workspaceId); return (await this.#load(workspace)).files.map(publicFile); }
+  async readFile({ workspaceId, fileId }) {
+    if (!FILE_ID.test(fileId)) throw code("AGENT_FILE_NOT_FOUND", "File was not found");
+    const workspace = this.workspaceManager.resolve(workspaceId);
+    const manifest = await this.#load(workspace);
+    const file = manifest.files.find((item) => item.fileId === fileId);
+    if (!file) throw code("AGENT_FILE_NOT_FOUND", "File was not found");
+    const target = join(workspace.root, file.storedName);
+    const metadata = await this.io.stat(target);
+    if (!metadata.isFile() || metadata.size !== file.size || metadata.size > this.maxUploadBytes) throw code("AGENT_FILE_MUTATED", "File integrity check failed");
+    const bytes = await this.io.readFile(target);
+    if (bytes.length !== file.size || createHash("sha256").update(bytes).digest("hex") !== file.sha256) throw code("AGENT_FILE_MUTATED", "File integrity check failed");
+    return { file: publicFile(file), bytes };
+  }
   async resolveVirtualPath({ workspaceId, virtualPath }) {
     const workspace = this.workspaceManager.resolve(workspaceId);
     const path = validateVirtualPath(virtualPath);

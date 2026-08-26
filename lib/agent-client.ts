@@ -10,6 +10,7 @@ export type AgentFile = {
   size: number;
   kind: string;
   contentType?: string;
+  downloadUrl?: string;
 };
 
 export type AgentRunState = "idle" | "starting" | "streaming" | "cancelling" | "completed" | "failed" | "cancelled";
@@ -118,6 +119,10 @@ export async function listAgentFiles(sessionId: string): Promise<AgentFile[]> {
   }
   const data = (await res.json()) as { files: AgentFile[] };
   return Array.isArray(data.files) ? data.files : [];
+}
+
+export function getAgentFileUrl(sessionId: string, fileId: string): string {
+  return `${getAgentApiBaseUrl()}/sessions/${encodeURIComponent(sessionId)}/files/${encodeURIComponent(fileId)}`;
 }
 
 export async function uploadAgentFile(sessionId: string, file: File): Promise<AgentFile> {
