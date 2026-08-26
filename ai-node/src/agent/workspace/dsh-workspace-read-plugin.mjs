@@ -60,11 +60,24 @@ export function apply(ctx, config = {}) {
 
   ctx.tools.register(defineTool({
     name: "workspace.fetch",
-    description: "Fetch public http(s) web content and return up to 200KB of text. Private and internal addresses are rejected.",
+    description: "Fetch a known public http(s) URL and return up to 200KB of text plus the final URL. Private and internal addresses are rejected. It does not search the web.",
     parameters: { url: { type: "string", required: true, description: "Absolute http or https URL of the public web page to fetch." } },
     output: { schema: { type: "string" }, render: (_args, value) => [{ type: "text", text: value }] },
     async execute(args) {
-      try { return await fetchPublicText(typeof args?.url === "string" ? args.url : "", { allowPrivateNetworks: config.fetchAllowPrivate === true }); }
+      try {
+        const result = await fetchPublicText(typeof args?.url === "string" ? args.url : "", { allowPrivateNetworks: config.fetchAllowPrivate === true });
+        // Envelope keeps the real final URL visible so answers can cite the
+        // exact source instead of a model-invented address.
+        return [
+          `<source>${result.finalUrl}</source>`,
+          `<status>${result.status}</status>`,
+          `<content-type>${result.contentType}</content-type>`,
+          `<bytes>${result.bytes}</bytes>`,
+          "<content>",
+          result.text,
+          "</content>",
+        ].join("\n");
+      }
       catch (error) { throw new Error(typeof error?.code === "string" && error.code.startsWith("WORKSPACE_FETCH_") ? error.code : "WORKSPACE_FETCH_NETWORK_ERROR"); }
     },
   }));

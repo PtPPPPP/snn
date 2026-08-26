@@ -130,4 +130,78 @@ test.describe("workspace editing black box", () => {
       await web.close();
     }
   });
+
+  test("file + web combined workflow merges an uploaded note with fetched page content", async ({ browser }) => {
+    // MODEL_PROVIDER_SCRIPTED / RUNTIME_AND_TOOLS_REAL: only the upstream model
+    // is scripted; everything from the browser to the manifest is production code.
+    const NOTE_BODY = "Project Alpha currently supports file editing.";
+    const WEB_BODY = "Project Alpha added controlled web fetch.\nRelease date: 2026-08-27.";
+    const web = createPublicWebFixture(WEB_BODY);
+    await web.listen();
+    const context = await browser.newContext({ acceptDownloads: true });
+    try {
+      const page = await context.newPage();
+      const pageErrors = [];
+      page.on("pageerror", (error) => pageErrors.push(error.message));
+
+      // The scripted model behaves like an instructed editor: read the uploaded
+      // note, fetch the provided URL, apply one literal edit, then answer while
+      // citing the real source URL.
+      env.upstream.set([
+        { match: "结合两个来源", payloads: toolPayloads("cb-read-1", "read", { file_path: "notes.md" }) },
+        { payloads: toolPayloads("cb-fetch-1", "workspace.fetch", { url: web.url }) },
+        {
+          payloads: toolPayloads("cb-edit-1", "edit", {
+            file_path: "notes.md",
+            old_string: "supports file editing.",
+            new_string: `supports file editing. It also added controlled web fetch (source: ${web.url}). Release date: 2026-08-27.`,
+          }),
+        },
+        { payloads: textPayloads(`已结合上传的 notes.md 与网页内容更新文件。来源：${web.url}`) },
+      ]);
+
+      await page.goto(`${env.frontendUrl}/ai/`, { waitUntil: "domcontentloaded" });
+      await expect(page.getByRole("tab", { name: /Agent/ })).toBeVisible({ timeout: 30_000 });
+      await page.getByRole("tab", { name: /Agent/ }).click();
+      await expect(page.getByRole("tab", { name: /Agent/ })).toHaveAttribute("aria-selected", "true", { timeout: 30_000 });
+
+      // Upload the user note first.
+      await page.getByTestId("agent-file-input").setInputFiles({ name: "notes.md", mimeType: "text/markdown", buffer: Buffer.from(NOTE_BODY) });
+      await expect(page.getByTestId("attachment-chip")).toContainText("notes.md");
+      await expect(page.getByTestId("files-panel")).toContainText("notes.md");
+
+      await page.getByTestId("agent-input").fill(`读取我上传的 notes.md，再查看这个网页：${web.url}\n结合两个来源更新 notes.md，把网页中的新能力和日期补进去。直接修改文件，并告诉我网页来源。`);
+      await page.getByTestId("agent-send-button").click();
+
+      // All three real tool calls surface in the workspace activity feed.
+      const activity = page.getByTestId("workspace-activity");
+      await expect(activity).toContainText("读取文件", { timeout: 60_000 });
+      await expect(activity).toContainText("抓取网页", { timeout: 60_000 });
+      await expect(activity).toContainText("编辑文件", { timeout: 60_000 });
+      await expect(activity).toContainText("完成", { timeout: 60_000 });
+
+      // Recent Changes shows the modified note.
+      const changes = page.getByTestId("workspace-changes");
+      await expect(changes).toContainText("修改", { timeout: 60_000 });
+      await expect(changes).toContainText("notes.md", { timeout: 60_000 });
+
+      // The answer carries the real source URL from the fetch result.
+      await expect(page.getByTestId("agent-assistant-message").last()).toContainText(web.url, { timeout: 60_000 });
+
+      // The downloaded file keeps the original fact and adds the fetched facts.
+      const downloadPromise = page.waitForEvent("download");
+      await page.getByRole("link", { name: "下载 notes.md" }).click();
+      const download = await downloadPromise;
+      const content = await readFile(await download.path(), "utf8");
+      expect(content).toContain("Project Alpha currently supports file editing.");
+      expect(content).toContain("controlled web fetch");
+      expect(content).toContain("2026-08-27");
+
+      expect(web.hits.length).toBeGreaterThanOrEqual(1);
+      expect(pageErrors).toEqual([]);
+    } finally {
+      await context.close();
+      await web.close();
+    }
+  });
 });

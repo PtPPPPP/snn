@@ -43,6 +43,26 @@ test("capability resolver grants only registered available safe reads", async ()
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("public agent capability surface exposes no shell-style execution tool", async () => {
+  // Regression for the NO SHELL contract: workspace.execute stays registered
+  // as a capability definition but no public skill may ever grant it, and the
+  // DSH tool policy default denies everything not explicitly allowed.
+  const root = await mkdtemp(join(tmpdir(), "snn-noshell-ws-"));
+  try {
+    const manager = new WorkspaceManager();
+    const workspace = await manager.register(root);
+    const resolver = createDefaultCapabilityResolver();
+    for (const skillId of ["workspace-reader", "workspace-editor"]) {
+      const capability = resolver.resolve({ workspace, skillId });
+      assert.equal(capability.dshToolPolicy.default, "deny");
+      for (const shellish of ["workspace.execute", "shell", "terminal", "exec", "bash", "spawn"]) {
+        assert.equal(capability.allowedToolIds.includes(shellish), false, `${skillId} must not grant ${shellish}`);
+        assert.ok(!capability.dshToolPolicy.rules.some((rule) => rule.toolName === shellish), `${skillId} policy must not allow ${shellish}`);
+      }
+    }
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("workspace manager enforces canonical read boundary and resource limits", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "snn-workspace-root-"));
   const outside = await mkdtemp(join(tmpdir(), "snn-workspace-outside-"));
