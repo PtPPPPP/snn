@@ -7,7 +7,7 @@
  * @returns {{ decision: "allow" | "deny", reason?: string }}
  */
 export function projectDefaultToolPolicy(metadata) {
-  if (metadata?.risk === "READ") return { decision: "allow" };
+  if (metadata?.risk === "READ" || metadata?.risk === "WRITE") return { decision: "allow" };
   return { decision: "deny", reason: "SNN default policy denies tools without declared metadata" };
 }
 

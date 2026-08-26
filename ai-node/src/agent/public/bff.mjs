@@ -253,7 +253,7 @@ export function createPublicAgentBff({
         await mkdir(workspaceRoot, { recursive: true });
         await workspaceManager.register(workspaceRoot, { id: workspaceId });
         newWorkspaceId = workspaceId;
-        const result = await controller.createSession({ workspaceId });
+        const result = await controller.createSession({ workspaceId, skillId: "workspace-editor" });
         createdSessionId = result.sessionId;
         await ownershipStore.create(createdSessionId, ownerHash);
         await ownershipStore.touch(createdSessionId);

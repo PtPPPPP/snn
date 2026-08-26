@@ -11,7 +11,7 @@ export default function AgentToolActivity({ items }: { items: ToolActivity[] }) 
       <ul className={styles.toolActivityList}>
         {items.map((t) => (
           <li key={t.id} className={styles.toolActivityItem}>
-            <span className={styles.toolActivityName}>{t.name}</span>
+            <span className={styles.toolActivityName}>{toolLabel(t.name)}</span>
             <span className={`${styles.toolActivityStatus} ${t.status === "failed" ? styles.toolFailed : t.status === "completed" ? styles.toolCompleted : styles.toolStarted}`}>
               {t.status === "started" ? "正在读取…" : t.status === "completed" ? "✓" : "✕"}
             </span>
@@ -20,4 +20,11 @@ export default function AgentToolActivity({ items }: { items: ToolActivity[] }) 
       </ul>
     </div>
   );
+}
+
+function toolLabel(name: string) {
+  if (name === "read") return "读取 Workspace 文件";
+  if (name === "write") return "创建 Workspace 文件";
+  if (name === "edit") return "编辑 Workspace 文件";
+  return name;
 }

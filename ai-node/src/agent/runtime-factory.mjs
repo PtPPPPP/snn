@@ -38,6 +38,7 @@ export async function createConfiguredAgentRuntime(agentConfig) {
 async function createWorkspaceBridgeConfig(agentConfig) {
   const directory = await mkdtemp(join(tmpdir(), "snn-agent-cordis-"));
   const pluginPath = fileURLToPath(new URL("./workspace/dsh-workspace-read-plugin.mjs", import.meta.url));
+  const filesystemPluginPath = fileURLToPath(new URL("./workspace/dsh-workspace-fs-plugin.mjs", import.meta.url));
   const configPath = join(directory, "cordis.yml");
   const quoted = (value) => JSON.stringify(value);
   // Document limits are server-owned constants serialized into the overlay;
@@ -49,12 +50,23 @@ async function createWorkspaceBridgeConfig(agentConfig) {
     "  config:",
     `    path: ${quoted(pathToFileURL(agentConfig.cordisConfig).href)}`,
     "    patches:",
-    "      - id: tool-fs",
+    "      - id: fs-local",
     "        disabled: true",
+    "      - id: fs-sandbox",
+    "        disabled: true",
+    "      - id: tool-fs",
+    "        disabled: false",
     "      - id: sandbox-policy",
     "        config:",
     "          mode: read-only",
     "      - insert:",
+    "          - id: fs-observation-policy",
+    "            name: '@deepseek-ai/dsh-fs-observation-policy'",
+    "          - id: snn-workspace-fs",
+    `            name: ${quoted(pathToFileURL(filesystemPluginPath).href)}`,
+    "            config:",
+    `              workspaceRoot: ${quoted(agentConfig.runtimeCwd)}`,
+    "              maxEditableBytes: 1048576",
     "          - id: snn-workspace-read",
     `            name: ${quoted(pathToFileURL(pluginPath).href)}`,
     "            config:",

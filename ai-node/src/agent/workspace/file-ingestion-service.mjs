@@ -1,9 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile, rename, rm, writeFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { basename, join, posix } from "node:path";
+import { TEXT_EXTENSIONS } from "../documents/file-access.mjs";
 
 const MANIFEST = ".snn-workspace-files.json";
-const VERSION = 1;
+const VERSION = 2;
 const RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i;
 const FILE_ID = /^snn-file-[a-z0-9-]{8,80}$/;
 const STORED_NAME = /^\.snn-upload-[a-z0-9-]{8,80}$/;
@@ -30,7 +31,7 @@ export class FileIngestionService {
     const stage = join(workspace.root, `.${fileId}.stage`);
     const target = join(workspace.root, storedName);
     const kind = bytes.includes(0) ? "opaque" : "text";
-    const file = Object.freeze({ fileId, originalName: safeName, storedName, size: bytes.length, contentType: normalizeType(contentType), kind, sha256: createHash("sha256").update(bytes).digest("hex") });
+    const file = Object.freeze({ fileId, originalName: safeName, virtualPath: safeName, storedName, size: bytes.length, contentType: normalizeType(contentType), kind, sha256: createHash("sha256").update(bytes).digest("hex") });
     try {
       await writeFile(stage, bytes, { flag: "wx" });
       await rename(stage, target);
@@ -44,6 +45,51 @@ export class FileIngestionService {
   }
 
   async list(workspaceId) { const workspace = this.workspaceManager.resolve(workspaceId); return (await this.#load(workspace)).files.map(publicFile); }
+  async resolveVirtualPath({ workspaceId, virtualPath }) {
+    const workspace = this.workspaceManager.resolve(workspaceId);
+    const path = validateVirtualPath(virtualPath);
+    const manifest = await this.#load(workspace);
+    return { workspace, virtualPath: path, file: manifest.files.find((item) => item.virtualPath === path) };
+  }
+  async readEditableText({ workspaceId, virtualPath }) {
+    const resolved = await this.resolveVirtualPath({ workspaceId, virtualPath });
+    if (!resolved.file) throw code("AGENT_FILE_NOT_FOUND", "File was not found");
+    if (!isEditableTextFile(resolved.file)) throw code("AGENT_FILE_NOT_EDITABLE", "File is not editable");
+    const bytes = await readFile(join(resolved.workspace.root, resolved.file.storedName));
+    if (bytes.length !== resolved.file.size || createHash("sha256").update(bytes).digest("hex") !== resolved.file.sha256 || bytes.includes(0)) throw code("AGENT_FILE_MUTATED", "File integrity check failed");
+    let content;
+    try { content = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { throw code("AGENT_FILE_NOT_EDITABLE", "File is not valid UTF-8"); }
+    return { ...resolved, content, version: resolved.file.sha256 };
+  }
+  async writeEditableText({ workspaceId, virtualPath, content, expected }) {
+    if (typeof content !== "string") throw code("AGENT_FILE_NOT_EDITABLE", "File content must be text");
+    const bytes = Buffer.from(content, "utf8");
+    if (bytes.length > this.maxUploadBytes) throw code("AGENT_FILE_TOO_LARGE", "File exceeds editable size limit");
+    const resolved = await this.resolveVirtualPath({ workspaceId, virtualPath });
+    const manifest = await this.#load(resolved.workspace);
+    const current = manifest.files.find((item) => item.virtualPath === resolved.virtualPath);
+    if (current?.kind !== undefined && !isEditableTextFile(current)) throw code("AGENT_FILE_NOT_EDITABLE", "File is not editable");
+    if (!current && !isEditableTextPath(resolved.virtualPath)) throw code("AGENT_FILE_NOT_EDITABLE", "File type is not editable");
+    if (expected?.kind === "createIfAbsent" && current) throw code("AGENT_FILE_EXISTS", "File already exists");
+    if (expected?.kind === "replaceIfVersion" && (!current || current.sha256 !== expected.version)) throw code("AGENT_FILE_STALE", "File changed since it was read");
+    const before = current ? (await this.readEditableText({ workspaceId, virtualPath: resolved.virtualPath })).content : null;
+    const fileId = current?.fileId ?? `snn-file-${randomUUID()}`;
+    const storedName = `.snn-upload-${randomUUID()}`;
+    const next = Object.freeze({ fileId, originalName: current?.originalName ?? basename(resolved.virtualPath), virtualPath: resolved.virtualPath, storedName, size: bytes.length, contentType: current?.contentType ?? "text/plain", kind: "text", sha256: createHash("sha256").update(bytes).digest("hex") });
+    const stage = join(resolved.workspace.root, `.${fileId}.stage`);
+    const target = join(resolved.workspace.root, storedName);
+    try {
+      await writeFile(stage, bytes, { flag: "wx" });
+      await rename(stage, target);
+      await this.#save(resolved.workspace, { schemaVersion: VERSION, files: [...manifest.files.filter((item) => item.fileId !== fileId), next] });
+    } catch (error) {
+      await rm(stage, { force: true }).catch(() => {});
+      await rm(target, { force: true }).catch(() => {});
+      throw error;
+    }
+    if (current) await rm(join(resolved.workspace.root, current.storedName), { force: true }).catch(() => {});
+    return { operation: current ? "update" : "create", file: next, before, after: content, version: next.sha256 };
+  }
   async remove({ workspaceId, fileId }) {
     if (!FILE_ID.test(fileId)) throw code("AGENT_FILE_NOT_FOUND", "File was not found");
     const workspace = this.workspaceManager.resolve(workspaceId); const manifest = await this.#load(workspace);
@@ -62,6 +108,10 @@ async function readBounded(body, max) { const chunks = []; let size = 0; for awa
 function validateName(name) { if (!isSafeOriginalName(name)) throw code("AGENT_FILE_INVALID", "Filename is invalid"); return name; }
 function normalizeType(type) { return typeof type === "string" && type.length <= 128 ? type.toLowerCase() : "application/octet-stream"; }
 function isSafeOriginalName(name) { return typeof name === "string" && name.length > 0 && Buffer.byteLength(name, "utf8") <= MAX_FILENAME_BYTES && name === basename(name) && !/[\\/\0-\x1f]/.test(name) && !/^[a-z]:/i.test(name) && !RESERVED.test(name) && !/[. ]$/.test(name); }
-function normalize(value) { if (!value || value.schemaVersion !== VERSION || !Array.isArray(value.files)) throw code("AGENT_FILE_MANIFEST_INVALID", "Workspace file inventory is invalid"); const ids = new Set(); const names = new Set(); for (const file of value.files) { if (!FILE_ID.test(file?.fileId) || !isSafeOriginalName(file.originalName) || typeof file.storedName !== "string" || (!STORED_NAME.test(file.storedName) && !isSafeOriginalName(file.storedName)) || !Number.isSafeInteger(file.size) || file.size < 0 || typeof file.contentType !== "string" || (file.kind !== "text" && file.kind !== "opaque") || typeof file.sha256 !== "string" || !/^[a-f0-9]{64}$/i.test(file.sha256) || ids.has(file.fileId) || names.has(file.originalName)) throw code("AGENT_FILE_MANIFEST_INVALID", "Workspace file inventory is invalid"); ids.add(file.fileId); names.add(file.originalName); } return value; }
-function publicFile(file) { return Object.freeze({ fileId: file.fileId, originalName: file.originalName, size: file.size, kind: file.kind, contentType: file.contentType }); }
+function normalize(value) { if (!value || (value.schemaVersion !== 1 && value.schemaVersion !== VERSION) || !Array.isArray(value.files)) throw code("AGENT_FILE_MANIFEST_INVALID", "Workspace file inventory is invalid"); const ids = new Set(); const paths = new Set(); const files = value.files.map((file) => ({ ...file, virtualPath: file.virtualPath ?? file.originalName })); for (const file of files) { if (!FILE_ID.test(file?.fileId) || !isSafeOriginalName(file.originalName) || !isSafeVirtualPath(file.virtualPath) || typeof file.storedName !== "string" || (!STORED_NAME.test(file.storedName) && !isSafeOriginalName(file.storedName)) || !Number.isSafeInteger(file.size) || file.size < 0 || typeof file.contentType !== "string" || (file.kind !== "text" && file.kind !== "opaque") || typeof file.sha256 !== "string" || !/^[a-f0-9]{64}$/i.test(file.sha256) || ids.has(file.fileId) || paths.has(file.virtualPath)) throw code("AGENT_FILE_MANIFEST_INVALID", "Workspace file inventory is invalid"); ids.add(file.fileId); paths.add(file.virtualPath); } return { schemaVersion: VERSION, files }; }
+function publicFile(file) { return Object.freeze({ fileId: file.fileId, originalName: file.originalName, virtualPath: file.virtualPath, size: file.size, kind: file.kind, contentType: file.contentType }); }
+function validateVirtualPath(value) { if (!isSafeVirtualPath(value)) throw code("AGENT_FILE_PATH_INVALID", "Workspace path is invalid"); return value.normalize("NFC"); }
+function isSafeVirtualPath(value) { if (typeof value !== "string" || value.length === 0 || value !== value.normalize("NFC") || value.includes("\\") || /[\0-\x1f]/.test(value) || value.startsWith("/") || /^[a-z]:/i.test(value) || value.startsWith("//")) return false; const normalized = posix.normalize(value); return normalized === value && normalized !== "." && !normalized.split("/").some((segment) => segment.length === 0 || segment === "." || segment === ".."); }
+function isEditableTextFile(file) { return file.kind === "text" && isEditableTextPath(file.virtualPath ?? file.originalName); }
+function isEditableTextPath(path) { const extension = /\.([a-z0-9]+)$/i.exec(path)?.[1]?.toLowerCase(); return extension === undefined || TEXT_EXTENSIONS.has(extension); }
 function code(code, message) { return Object.assign(new Error(message), { code }); }

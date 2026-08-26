@@ -34,9 +34,9 @@ export class AgentSessionController {
     this.#attachmentContextResolver = attachmentContextResolver;
   }
 
-  async createSession({ workspaceId } = {}) {
+  async createSession({ workspaceId, skillId = this.#skillId } = {}) {
     const sessionId = `snn-agent-${randomUUID()}`;
-    const context = await this.#contextForCreate(workspaceId);
+    const context = await this.#contextForCreate(workspaceId, skillId);
     const runtime = await this.#runtimeFor(context.binding).then((manager) => manager.ensureReady());
     if (this.#metadataStore) await this.#metadataStore.create(sessionId, context.binding);
     try { await runtime.createSession({ sessionId, toolPolicy: context.capability.dshToolPolicy }); }
@@ -88,11 +88,11 @@ export class AgentSessionController {
       try { await this.cancel(sessionId, active.runId); } catch { /* The stream still publishes its true outcome. */ }
     }));
   }
-  async #contextForCreate(workspaceId) {
+  async #contextForCreate(workspaceId, skillId = this.#skillId) {
     const binding = {
       schemaVersion: 1,
       workspaceId: workspaceId ?? this.#workspace?.id,
-      skillId: this.#skillId,
+      skillId,
     };
     return { binding, capability: await this.#resolve(binding) };
   }

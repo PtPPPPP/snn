@@ -133,7 +133,7 @@ function sanitizeOriginalName(name) {
 async function readManifest(root) {
   try {
     const value = JSON.parse(await readFile(join(root, MANIFEST_FILENAME), "utf8"));
-    if (!value || value.schemaVersion !== 1 || !Array.isArray(value.files)) throw documentError("AGENT_DOCUMENT_INVALID");
+    if (!value || (value.schemaVersion !== 1 && value.schemaVersion !== 2) || !Array.isArray(value.files)) throw documentError("AGENT_DOCUMENT_INVALID");
     return value;
   } catch (error) {
     if (error?.code === "ENOENT") throw documentError("AGENT_DOCUMENT_NOT_FOUND");
