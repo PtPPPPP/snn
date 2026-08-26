@@ -36,7 +36,17 @@ export type ToolActivity = {
   timestamp: string;
 };
 
+export type WorkspaceChange = {
+  id: string;
+  fileId: string;
+  name: string;
+  type: "created" | "modified" | "deleted";
+  at: number;
+};
+
 const MAX_ATTACHMENTS = 8;
+const MAX_WORKSPACE_CHANGES = 20;
+const MAX_WORKSPACE_ACTIVITY = 20;
 const LOCAL_ACTIVE_KEY = "snn-agent-active-session";
 
 function uploadErrorMessage(error: AgentClientError): string {
@@ -75,6 +85,10 @@ export function useAgent() {
     try { return localStorage.getItem(LOCAL_ACTIVE_KEY); } catch { return null; }
   });
   const [files, setFiles] = useState<AgentFile[]>([]);
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [filesError, setFilesError] = useState(false);
+  const [recentChanges, setRecentChanges] = useState<WorkspaceChange[]>([]);
+  const [workspaceActivity, setWorkspaceActivity] = useState<ToolActivity[]>([]);
   const [pendingAttachments, setPendingAttachments] = useState<AgentFile[]>([]);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [runState, setRunState] = useState<AgentRunState>("idle");
@@ -94,6 +108,11 @@ export function useAgent() {
   const pendingAttachmentsRef = useRef<AgentFile[]>([]);
   const uploadsInFlightBySessionRef = useRef<Record<string, number>>({});
   const uploadSequenceRef = useRef(0);
+  // Authoritative manifest snapshots per session, used to derive Recent
+  // Changes from before/after file lists instead of guessing from chat text.
+  const workspaceSnapshotRef = useRef<Map<string, Map<string, { updatedAt: number; name: string }>>>(new Map());
+  const changesBySessionRef = useRef<Map<string, WorkspaceChange[]>>(new Map());
+  const activityBySessionRef = useRef<Map<string, ToolActivity[]>>(new Map());
 
   useEffect(() => { activeSessionIdRef.current = activeSessionId; try { if (activeSessionId) localStorage.setItem(LOCAL_ACTIVE_KEY, activeSessionId); else localStorage.removeItem(LOCAL_ACTIVE_KEY); } catch {} }, [activeSessionId]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
@@ -128,9 +147,46 @@ export function useAgent() {
     }
   }, [replacePendingAttachments]);
 
+  const recordWorkspaceChanges = useCallback((sessionId: string, entries: WorkspaceChange[]) => {
+    if (entries.length === 0) return;
+    const existing = changesBySessionRef.current.get(sessionId) ?? [];
+    const next = [...entries, ...existing].slice(0, MAX_WORKSPACE_CHANGES);
+    changesBySessionRef.current.set(sessionId, next);
+    if (activeSessionIdRef.current === sessionId) setRecentChanges(next);
+  }, []);
+
+  const recordWorkspaceActivity = useCallback((sessionId: string, ev: { name: string; status: "started" | "completed" | "failed"; toolCallId?: string }) => {
+    const existing = activityBySessionRef.current.get(sessionId) ?? [];
+    let next: ToolActivity[];
+    const timestamp = new Date().toISOString();
+    if (ev.status === "started") {
+      if (ev.toolCallId && existing.some((item) => item.id === ev.toolCallId)) return;
+      next = [...existing, { id: ev.toolCallId ?? `${ev.name}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name: ev.name, status: "started", timestamp }];
+    } else if (ev.toolCallId) {
+      const index = existing.findIndex((item) => item.id === ev.toolCallId);
+      next = index === -1
+        ? [...existing, { id: ev.toolCallId, name: ev.name, status: ev.status, timestamp }]
+        : existing.map((item) => (item.id === ev.toolCallId ? { ...item, status: ev.status } : item));
+    } else {
+      // No toolCallId in the event: pair by tool name, matching the first
+      // still-running call so completion does not duplicate the entry.
+      const index = existing.findIndex((item) => item.name === ev.name && item.status === "started");
+      next = index === -1
+        ? [...existing, { id: `${ev.name}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name: ev.name, status: ev.status, timestamp }]
+        : existing.map((item, i) => (i === index ? { ...item, status: ev.status } : item));
+    }
+    next = next.slice(-MAX_WORKSPACE_ACTIVITY);
+    activityBySessionRef.current.set(sessionId, next);
+    if (activeSessionIdRef.current === sessionId) setWorkspaceActivity(next);
+  }, []);
+
   const refreshFiles = useCallback(async (sessionId: string) => {
     const sessionGeneration = sessionGenerationRef.current;
     const filesRevision = filesRevisionRef.current;
+    if (activeSessionIdRef.current === sessionId) {
+      setFilesLoading(true);
+      setFilesError(false);
+    }
     try {
       const list = await listAgentFiles(sessionId);
       if (
@@ -139,13 +195,34 @@ export function useAgent() {
         filesRevisionRef.current === filesRevision
       ) {
         setFiles(list);
+        setFilesLoading(false);
+      }
+      // Diff against the previous authoritative manifest snapshot. The first
+      // snapshot of a session only seeds state, so resuming a history session
+      // does not replay its whole past as fresh changes.
+      const previous = workspaceSnapshotRef.current.get(sessionId);
+      const nextSnapshot = new Map(list.map((file) => [file.fileId, { updatedAt: file.updatedAt ?? 0, name: file.originalName }]));
+      workspaceSnapshotRef.current.set(sessionId, nextSnapshot);
+      if (previous) {
+        const entries: WorkspaceChange[] = [];
+        for (const file of list) {
+          const seen = previous.get(file.fileId);
+          if (!seen) entries.push({ id: `${file.fileId}-${file.updatedAt ?? 0}-created`, fileId: file.fileId, name: file.originalName, type: "created", at: Date.now() });
+          else if (seen.updatedAt !== (file.updatedAt ?? 0)) entries.push({ id: `${file.fileId}-${file.updatedAt ?? 0}-modified`, fileId: file.fileId, name: file.originalName, type: "modified", at: Date.now() });
+        }
+        for (const [fileId, seen] of previous) {
+          if (!nextSnapshot.has(fileId)) entries.push({ id: `${fileId}-deleted-${Date.now()}`, fileId, name: seen.name, type: "deleted", at: Date.now() });
+        }
+        recordWorkspaceChanges(sessionId, entries);
       }
     } catch {
       if (activeSessionIdRef.current === sessionId && sessionGenerationRef.current === sessionGeneration) {
         setFiles([]);
+        setFilesLoading(false);
+        setFilesError(true);
       }
     }
-  }, []);
+  }, [recordWorkspaceChanges]);
 
   const checkAvailability = useCallback(async () => {
     const status = await getAgentStatus();
@@ -196,8 +273,13 @@ export function useAgent() {
     filesRevisionRef.current += 1;
     setActiveSessionId(id);
     setMessages([]);
+    // Stale-state guard: never let the previous session's files flash as the
+    // authoritative list of the newly selected session.
+    setFiles([]);
     replacePendingAttachments([]);
     setToolActivity([]);
+    setRecentChanges(changesBySessionRef.current.get(id) ?? []);
+    setWorkspaceActivity(activityBySessionRef.current.get(id) ?? []);
     setError(null);
     setRunState("idle");
     setUploadState({});
@@ -215,6 +297,8 @@ export function useAgent() {
     setFiles([]);
     replacePendingAttachments([]);
     setToolActivity([]);
+    setRecentChanges([]);
+    setWorkspaceActivity([]);
     setError(null);
     setRunState("idle");
     setUploadState({});
@@ -223,6 +307,9 @@ export function useAgent() {
   const deleteSession = useCallback(async (id: string) => {
     await deleteAgentSession(id);
     setSessions((prev) => prev.filter((s) => s.sessionId !== id));
+    workspaceSnapshotRef.current.delete(id);
+    changesBySessionRef.current.delete(id);
+    activityBySessionRef.current.delete(id);
     if (activeSessionIdRef.current === id) {
       generationRef.current += 1;
       sessionGenerationRef.current += 1;
@@ -234,6 +321,8 @@ export function useAgent() {
       replacePendingAttachments([]);
       setRunState("idle");
       setToolActivity([]);
+      setRecentChanges([]);
+      setWorkspaceActivity([]);
       setUploadState({});
     }
   }, [replacePendingAttachments]);
@@ -261,6 +350,11 @@ export function useAgent() {
       if (activeSessionIdRef.current === sid && sessionGenerationRef.current === sessionGeneration) {
         filesRevisionRef.current += 1;
         setFiles((prev) => prev.some((item) => item.fileId === uploaded.fileId) ? prev : [...prev, uploaded]);
+        // Seed the snapshot for user uploads so they are not replayed as
+        // agent-created changes on the next authoritative refresh.
+        const snapshot = workspaceSnapshotRef.current.get(sid) ?? new Map();
+        snapshot.set(uploaded.fileId, { updatedAt: uploaded.updatedAt ?? 0, name: uploaded.originalName });
+        workspaceSnapshotRef.current.set(sid, snapshot);
         replacePendingAttachments((prev) => {
           if (prev.length >= MAX_ATTACHMENTS || prev.some((item) => item.fileId === uploaded.fileId)) return prev;
           return [...prev, uploaded];
@@ -317,6 +411,9 @@ export function useAgent() {
     if (activeSessionIdRef.current !== sid) return;
     filesRevisionRef.current += 1;
     setFiles((prev) => prev.filter((f) => f.fileId !== fileId));
+    // User-initiated deletion is applied to the snapshot directly; Recent
+    // Changes only reports agent-driven manifest mutations.
+    workspaceSnapshotRef.current.get(sid)?.delete(fileId);
     replacePendingAttachments((prev) => prev.filter((file) => file.fileId !== fileId));
   }, [replacePendingAttachments]);
 
@@ -360,6 +457,10 @@ export function useAgent() {
             }
             return prev;
           });
+          // Session-scoped activity for the Workspace panel, keyed by the real
+          // toolCallId so parallel calls of the same tool stay distinct.
+          const activityStatus: "started" | "completed" | "failed" = ev.status === "completed" ? "completed" : ev.status === "failed" ? "failed" : "started";
+          recordWorkspaceActivity(sid, { name, status: activityStatus, toolCallId: ev.toolCallId });
         },
         onDone: (terminal) => {
           if (generationRef.current !== gen) return;
@@ -402,7 +503,7 @@ export function useAgent() {
         void refreshSessions();
       }
     }
-  }, [runState, ensureSession, refreshFiles, refreshSessions, replacePendingAttachments]);
+  }, [runState, ensureSession, refreshFiles, refreshSessions, replacePendingAttachments, recordWorkspaceActivity]);
 
   const cancelRun = useCallback(async () => {
     if (runState !== "streaming" && runState !== "starting") return;
@@ -427,6 +528,10 @@ export function useAgent() {
     sessions,
     activeSessionId,
     files,
+    filesLoading,
+    filesError,
+    recentChanges,
+    workspaceActivity,
     pendingAttachments,
     messages,
     runState,

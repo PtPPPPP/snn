@@ -1,12 +1,18 @@
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
+import { TEXT_EXTENSIONS } from "../documents/file-access.mjs";
 import { hashOwnerToken } from "./ownership-store.mjs";
 import { generateOwnerToken, getOwnerTokenFromRequest, buildOwnerCookie, DEFAULT_COOKIE_NAME } from "./cookie.mjs";
 import { PublicResourceGuard } from "./resource-guard.mjs";
 
 const SESSION_ID_RE = /^snn-agent-[a-z0-9-]{8,80}$/;
 const RUN_ID_RE = /^snn-run-[a-z0-9-]{8,80}$/;
+
+// Read-only text preview: small whitelist, bounded payload, no attachment
+// semantics. The download endpoint keeps its `attachment` contract.
+const PREVIEW_EXTENSIONS = new Set([...TEXT_EXTENSIONS, "jsx", "css"]);
+const MAX_PREVIEW_BYTES = 256 * 1024;
 
 const PUBLIC_SSE_EVENTS = new Set([
   "run.started", "reasoning.started", "reasoning.delta", "reasoning.completed",
@@ -93,7 +99,8 @@ export function createPublicAgentBff({
     if (["AGENT_SESSION_NOT_FOUND", "AGENT_ATTACHMENT_NOT_FOUND", "AGENT_FILE_NOT_FOUND"].includes(code)) return 404;
     if (code === "AGENT_FILE_MUTATED") return 409;
     if (["AGENT_FILE_INVALID", "AGENT_FILE_REQUIRED", "AGENT_FILE_CONFLICT", "AGENT_ATTACHMENT_UNSUPPORTED"].includes(code)) return 400;
-    if (["AGENT_FILE_TOO_LARGE", "AGENT_WORKSPACE_QUOTA_EXCEEDED", "REQUEST_TOO_LARGE"].includes(code)) return 413;
+    if (["AGENT_FILE_TOO_LARGE", "AGENT_WORKSPACE_QUOTA_EXCEEDED", "REQUEST_TOO_LARGE", "AGENT_PREVIEW_TOO_LARGE"].includes(code)) return 413;
+    if (code === "AGENT_PREVIEW_UNSUPPORTED") return 415;
     if (code === "AGENT_RUNTIME_INCOMPATIBLE") return 503;
     if (typeof code === "string" && code.startsWith("AGENT_PUBLIC_")) return 429;
     return 500;
@@ -341,9 +348,9 @@ export function createPublicAgentBff({
     }
 
     // All other session sub-routes need sessionId
-    const sessionSubMatch = /^\/api\/agent\/sessions\/([^/]+)\/(files|runs)(?:\/([^/]+))?$/.exec(path);
+    const sessionSubMatch = /^\/api\/agent\/sessions\/([^/]+)\/(files|runs)(?:\/([^/]+)(?:\/(preview))?)?$/.exec(path);
     if (!sessionSubMatch) return false;
-    const [, sessionId, sub, subId] = sessionSubMatch;
+    const [, sessionId, sub, subId, action] = sessionSubMatch;
     if (!SESSION_ID_RE.test(sessionId)) {
       sendError(response, Object.assign(new Error("Invalid session"), { status: 400, code: "INVALID_SESSION_ID" }), originInfo, path);
       return true;
@@ -372,6 +379,26 @@ export function createPublicAgentBff({
             const files = await ingestionService.list(workspace.id);
             sendJson(response, 200, { files: files.map((file) => publicFileForSession(sessionId, file)) }, originInfo);
           } catch (e) { sendError(response, e, originInfo, path); }
+          return true;
+        }
+        if (method === "GET" && subId && action === "preview") {
+          try {
+            const { workspace } = await resolveWorkspaceForSession(sessionId);
+            const files = await ingestionService.list(workspace.id);
+            const file = files.find((item) => item.fileId === subId);
+            if (!file) throw Object.assign(new Error("File was not found"), { status: 404, code: "AGENT_FILE_NOT_FOUND" });
+            if (!isPreviewableFile(file)) throw Object.assign(new Error("This file type cannot be previewed"), { status: 415, code: "AGENT_PREVIEW_UNSUPPORTED" });
+            if (file.size > MAX_PREVIEW_BYTES) throw Object.assign(new Error("File is too large to preview"), { status: 413, code: "AGENT_PREVIEW_TOO_LARGE" });
+            const { bytes } = await ingestionService.readFile({ workspaceId: workspace.id, fileId: subId });
+            let content;
+            try { content = new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
+            catch { throw Object.assign(new Error("This file type cannot be previewed"), { status: 415, code: "AGENT_PREVIEW_UNSUPPORTED" }); }
+            sendJson(response, 200, { fileId: file.fileId, name: file.originalName, mime: file.contentType, size: file.size, truncated: false, content }, originInfo);
+          } catch (e) { sendError(response, e, originInfo, path); }
+          return true;
+        }
+        if (action === "preview") {
+          sendError(response, Object.assign(new Error("Method not allowed"), { status: 405, code: "METHOD_NOT_ALLOWED" }), originInfo, path);
           return true;
         }
         if (method === "GET" && subId) {
@@ -460,6 +487,12 @@ export function createPublicAgentBff({
     }
 
     return false;
+  }
+
+  function isPreviewableFile(file) {
+    if (file.kind !== "text") return false;
+    const extension = /\.([a-z0-9]+)$/i.exec(file.originalName)?.[1]?.toLowerCase();
+    return extension === undefined || PREVIEW_EXTENSIONS.has(extension);
   }
 
   async function readJsonBody(request, maxBytes) {

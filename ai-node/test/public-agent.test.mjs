@@ -305,6 +305,69 @@ test("public file upload/list/delete via BFF is bounded and safe", async () => {
   });
 });
 
+test("public text preview endpoint is read-only, safe, and bounded", async () => {
+  await withPublic({}, async ({ baseUrl }) => {
+    const origin = "https://snnai.cn";
+    const resA = await fetch(`${baseUrl}/api/agent/sessions`, { method: "POST", headers: { origin, "content-type": "application/json" }, body: "{}" });
+    const sidA = (await resA.json()).sessionId;
+    const cookieA = resA.headers.get("set-cookie").split(";")[0];
+
+    const textBody = "# Report\n\nhello <script>alert(1)</script>";
+    const upText = await fetch(`${baseUrl}/api/agent/sessions/${sidA}/files`, { method: "POST", headers: { origin, cookie: cookieA, "content-type": "application/octet-stream", "x-snn-file-name": "report.md", "x-snn-file-content-type": "text/markdown" }, body: textBody });
+    assert.equal(upText.status, 201);
+    const textFile = (await upText.json()).file;
+
+    // Happy path: JSON text payload, never an attachment download.
+    const preview = await fetch(`${baseUrl}/api/agent/sessions/${sidA}/files/${textFile.fileId}/preview`, { headers: { origin, cookie: cookieA } });
+    assert.equal(preview.status, 200);
+    assert.match(preview.headers.get("content-type"), /application\/json/);
+    assert.equal(preview.headers.get("content-disposition"), null);
+    const body = await preview.json();
+    assert.equal(body.fileId, textFile.fileId);
+    assert.equal(body.name, "report.md");
+    assert.equal(body.size, Buffer.byteLength(textBody));
+    assert.equal(body.truncated, false);
+    assert.equal(body.content, textBody);
+
+    // Unknown fileId -> 404.
+    const unknown = await fetch(`${baseUrl}/api/agent/sessions/${sidA}/files/snn-file-unknown-0000-4000-8000-000000000000/preview`, { headers: { origin, cookie: cookieA } });
+    assert.equal(unknown.status, 404);
+
+    // Path-like fileId is rejected, never treated as a filesystem path -> 404.
+    const pathLike = await fetch(`${baseUrl}/api/agent/sessions/${sidA}/files/${encodeURIComponent("C:\\Windows\\secret.txt")}/preview`, { headers: { origin, cookie: cookieA } });
+    assert.equal(pathLike.status, 404);
+
+    // Binary (opaque) file -> 415 unsupported.
+    const binBytes = Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.from([0, 1, 2, 3])]);
+    const upBin = await fetch(`${baseUrl}/api/agent/sessions/${sidA}/files`, { method: "POST", headers: { origin, cookie: cookieA, "content-type": "application/octet-stream", "x-snn-file-name": "doc.pdf", "x-snn-file-content-type": "application/pdf" }, body: binBytes });
+    assert.equal(upBin.status, 201);
+    const binFile = (await upBin.json()).file;
+    const binPreview = await fetch(`${baseUrl}/api/agent/sessions/${sidA}/files/${binFile.fileId}/preview`, { headers: { origin, cookie: cookieA } });
+    assert.equal(binPreview.status, 415);
+
+    // Oversized text (> 256 KiB) -> 413.
+    const upBig = await fetch(`${baseUrl}/api/agent/sessions/${sidA}/files`, { method: "POST", headers: { origin, cookie: cookieA, "content-type": "application/octet-stream", "x-snn-file-name": "big.txt", "x-snn-file-content-type": "text/plain" }, body: "a".repeat(300 * 1024) });
+    assert.equal(upBig.status, 201);
+    const bigFile = (await upBig.json()).file;
+    const bigPreview = await fetch(`${baseUrl}/api/agent/sessions/${sidA}/files/${bigFile.fileId}/preview`, { headers: { origin, cookie: cookieA } });
+    assert.equal(bigPreview.status, 413);
+
+    // Cross-workspace: owner B cannot preview owner A's file -> 404.
+    const resB = await fetch(`${baseUrl}/api/agent/sessions`, { method: "POST", headers: { origin, "content-type": "application/json" }, body: "{}" });
+    const cookieB = resB.headers.get("set-cookie").split(";")[0];
+    const cross = await fetch(`${baseUrl}/api/agent/sessions/${sidA}/files/${textFile.fileId}/preview`, { headers: { origin, cookie: cookieB } });
+    assert.equal(cross.status, 404);
+
+    // Missing owner cookie -> 404.
+    const noCookie = await fetch(`${baseUrl}/api/agent/sessions/${sidA}/files/${textFile.fileId}/preview`, { headers: { origin } });
+    assert.equal(noCookie.status, 404);
+
+    // Non-GET on preview -> 405.
+    const post = await fetch(`${baseUrl}/api/agent/sessions/${sidA}/files/${textFile.fileId}/preview`, { method: "POST", headers: { origin, cookie: cookieA, "content-type": "application/json" }, body: "{}" });
+    assert.equal(post.status, 405);
+  });
+});
+
 test("public BFF maps rejected file input to stable client errors", async () => {
   await withPublic({}, async ({ baseUrl }) => {
     const origin = "https://snnai.cn";

@@ -33,7 +33,7 @@ import { deleteConversationLifecycle, saveConversationWithNotice } from "../../l
 import ModeSwitch, { type ChatMode } from "./mode-switch";
 import { useAgent } from "./use-agent";
 import AgentComposer from "./agent-composer";
-import AgentFilesPanel from "./agent-files-panel";
+import AgentWorkspacePanel from "./agent-files-panel";
 import AgentMessage from "./agent-message";
 import AgentToolActivity from "./agent-tool-activity";
 
@@ -74,6 +74,31 @@ function preferenceStore(key: string) {
 }
 const thinkingPreference = preferenceStore(THINKING_STORAGE_KEY);
 const webSearchPreference = preferenceStore(WEB_SEARCH_STORAGE_KEY);
+
+// Workspace panel open/closed is a hydration-safe preference. The server
+// snapshot is always false (panel closed during SSR/first render); after
+// hydration React switches to the live snapshot, which defaults to open on
+// desktop and closed on mobile so the drawer never covers a fresh mobile view.
+const WORKSPACE_OPEN_KEY = "snn-agent-workspace-open";
+function readWorkspaceOpen(): boolean {
+  try {
+    const stored = window.localStorage.getItem(WORKSPACE_OPEN_KEY);
+    if (stored === "true") return true;
+    if (stored === "false") return false;
+    return window.matchMedia("(min-width: 901px)").matches;
+  } catch {
+    return false;
+  }
+}
+const workspaceOpenPreference = {
+  subscribe: subscribePreference,
+  getSnapshot: readWorkspaceOpen,
+  getServerSnapshot: () => false,
+  write(open: boolean) {
+    try { window.localStorage.setItem(WORKSPACE_OPEN_KEY, String(open)); } catch {}
+    for (const listener of preferenceListeners) listener();
+  },
+};
 
 function toUiMessages(messages: AiChatMessage[]): ChatMessageModel[] {
   return messages.map((m, i) => ({
@@ -126,6 +151,11 @@ export default function AiChat() {
   const [isThinkingRequest, setIsThinkingRequest] = useState(false);
   const [mode, setMode] = useState<ChatMode>("chat");
   const agent = useAgent();
+  const workspaceOpen = useSyncExternalStore(
+    workspaceOpenPreference.subscribe,
+    workspaceOpenPreference.getSnapshot,
+    workspaceOpenPreference.getServerSnapshot,
+  );
 
   useEffect(() => {
     try {
@@ -539,6 +569,18 @@ export default function AiChat() {
         </Link>
         <div className={styles.headerRight}>
           <ModeSwitch mode={mode} onChange={setMode} agentAvailable={agent.isAgentAvailable} />
+          {mode === "agent" ? (
+            <button
+              className={styles.workspaceToggle}
+              type="button"
+              aria-label={workspaceOpen ? "关闭工作区" : "打开工作区"}
+              aria-expanded={workspaceOpen}
+              aria-controls="agent-workspace-panel"
+              onClick={() => workspaceOpenPreference.write(!workspaceOpen)}
+            >
+              工作区
+            </button>
+          ) : null}
           <button
             className={styles.sidebarToggle}
             type="button"
@@ -553,7 +595,10 @@ export default function AiChat() {
         </div>
       </header>
 
-      <section className={`${styles.chatShell} ${sidebarOpen ? styles.chatShellShifted : ""}`} aria-label="SNN AI Chat">
+      <section
+        className={`${styles.chatShell} ${sidebarOpen ? styles.chatShellShifted : ""} ${mode === "agent" && workspaceOpen ? styles.chatShellWithWorkspace : ""}`}
+        aria-label="SNN AI Chat"
+      >
         <ConversationSidebar
           id="conversation-sidebar"
           conversations={effectiveConversations}
@@ -578,9 +623,6 @@ export default function AiChat() {
             <>
               <div className={styles.messages} ref={messagesRef} onScroll={handleMessagesScroll} aria-live="off">
                 <div className={styles.conversationRail}>
-                  {agent.files.length > 0 || agent.pendingAttachments.length > 0 ? (
-                    <AgentFilesPanel sessionId={agent.activeSessionId} files={agent.files} onAttach={agent.attachExisting} onDelete={agent.deleteFile} pendingIds={new Set(agent.pendingAttachments.map((file) => file.fileId))} />
-                  ) : null}
                   {!agent.loaded ? null : agent.messages.length === 0 ? (
                     <div className={styles.emptyState} data-testid="agent-empty">
                       <span className={styles.emptyMark}>AGENT / WORKSPACE</span>
@@ -665,6 +707,30 @@ export default function AiChat() {
             </>
           )}
         </div>
+
+        {mode === "agent" && workspaceOpen ? (
+          <div className={styles.workspaceBackdrop} onClick={() => workspaceOpenPreference.write(false)} aria-hidden="true" />
+        ) : null}
+
+        {mode === "agent" ? (
+          <AgentWorkspacePanel
+            id="agent-workspace-panel"
+            open={workspaceOpen}
+            files={agent.files}
+            filesLoading={agent.filesLoading}
+            filesError={agent.filesError}
+            sessionId={agent.activeSessionId}
+            onAttach={agent.attachExisting}
+            onDelete={agent.deleteFile}
+            onRetryLoad={() => {
+              if (agent.activeSessionId) void agent.refreshFiles(agent.activeSessionId);
+            }}
+            pendingIds={new Set(agent.pendingAttachments.map((file) => file.fileId))}
+            recentChanges={agent.recentChanges}
+            activity={agent.workspaceActivity}
+            onClose={() => workspaceOpenPreference.write(false)}
+          />
+        ) : null}
       </section>
 
       {confirmDeleteId ? <DeleteConversationDialog returnFocusId={`conversation-delete-${confirmDeleteId}`} onCancel={() => setConfirmDeleteId(null)} onConfirm={confirmDelete} /> : null}

@@ -259,6 +259,52 @@ test("mobile reduced motion keeps the Hero static", async ({ browser }) => {
   await context.close();
 });
 
+test("workspace drawer opens and closes on mobile without overflow", async ({ browser }) => {
+  const context = await browser.newContext(mobileContextOptions(390, 844));
+  const page = await context.newPage();
+  const sessionId = "snn-agent-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+  await page.route("**/api/ai/status", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ online: true, model: "test", status: "ready", capabilities: { thinking: true, webSearch: false, agent: true } }),
+  }));
+  await page.route("**/api/agent/sessions", (route) => {
+    if (route.request().method() === "GET") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ sessions: [{ sessionId }] }) });
+    return route.continue();
+  });
+  await page.route(`**/api/agent/sessions/${sessionId}/files`, (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ files: [] }) }));
+
+  await page.goto(BASE_URL + "/ai/", { waitUntil: "networkidle" });
+  await page.getByRole("tab", { name: /Agent/ }).click();
+
+  // Mobile default: the workspace drawer stays closed and off-screen.
+  const panel = page.getByTestId("workspace-panel");
+  const toggle = page.locator('button[aria-controls="agent-workspace-panel"]');
+  await expect(panel).toHaveAttribute("aria-hidden", "true");
+  const closedBox = await panel.boundingBox();
+  expect(closedBox.x).toBeGreaterThanOrEqual(390);
+  await noDocumentOverflow(page);
+
+  // Opening slides the drawer in without widening the document.
+  await toggle.click();
+  await expect(panel).not.toHaveAttribute("aria-hidden", "true");
+  await expect(panel).toContainText("WORKSPACE");
+  const openBox = await panel.boundingBox();
+  expect(openBox.x).toBeGreaterThanOrEqual(-1);
+  expect(openBox.width).toBeLessThanOrEqual(321);
+  await noDocumentOverflow(page);
+
+  // Closing via the backdrop (which covers the toggle on mobile) returns the
+  // drawer off-screen after the slide-out transition.
+  await page.locator('[class*="workspaceBackdrop"]').click();
+  await expect(panel).toHaveAttribute("aria-hidden", "true");
+  await page.waitForTimeout(300);
+  const closedAgainBox = await panel.boundingBox();
+  expect(closedAgainBox.x).toBeGreaterThanOrEqual(390);
+  await noDocumentOverflow(page);
+  await context.close();
+});
+
 for (const deviceScaleFactor of [1, 2, 3]) {
   test(`mobile DPR ${deviceScaleFactor}`, async ({ browser }) => {
     const context = await browser.newContext({ ...mobileContextOptions(390, 844), deviceScaleFactor });

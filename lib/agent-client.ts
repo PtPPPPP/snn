@@ -11,7 +11,31 @@ export type AgentFile = {
   kind: string;
   contentType?: string;
   downloadUrl?: string;
+  updatedAt?: number;
 };
+
+export type AgentFilePreview = {
+  fileId: string;
+  name: string;
+  mime: string;
+  size: number;
+  truncated: boolean;
+  content: string;
+};
+
+// Client-side mirror of the server preview whitelist (bff.mjs); the server
+// remains authoritative and rejects anything outside it.
+export const PREVIEW_TEXT_EXTENSIONS = new Set([
+  "txt", "md", "markdown", "csv", "json", "log", "xml", "yml", "yaml", "html", "htm",
+  "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "java", "c", "h", "cpp", "go", "rs",
+  "rb", "sh", "sql", "ini", "toml", "css",
+]);
+
+export function isPreviewableAgentFile(file: AgentFile): boolean {
+  if (file.kind !== "text") return false;
+  const extension = /\.([a-z0-9]+)$/i.exec(file.originalName)?.[1]?.toLowerCase();
+  return extension === undefined || PREVIEW_TEXT_EXTENSIONS.has(extension);
+}
 
 export type AgentRunState = "idle" | "starting" | "streaming" | "cancelling" | "completed" | "failed" | "cancelled";
 
@@ -125,6 +149,17 @@ export function getAgentFileUrl(sessionId: string, fileId: string): string {
   return `${getAgentApiBaseUrl()}/sessions/${encodeURIComponent(sessionId)}/files/${encodeURIComponent(fileId)}`;
 }
 
+export async function previewAgentFile(sessionId: string, fileId: string): Promise<AgentFilePreview> {
+  const res = await agentFetch(`/sessions/${encodeURIComponent(sessionId)}/files/${encodeURIComponent(fileId)}/preview`, { method: "GET" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throwForStatus(res, body);
+  }
+  const data = (await res.json()) as AgentFilePreview;
+  if (typeof data.content !== "string") throw new AgentClientError("response");
+  return data;
+}
+
 export async function uploadAgentFile(sessionId: string, file: File): Promise<AgentFile> {
   const formData = new FormData();
   formData.append("file", file, file.name);
@@ -184,7 +219,7 @@ function parseSseEvent(block: string) {
 export type AgentStreamHandlers = {
   signal: AbortSignal;
   onDelta: (text: string) => void;
-  onTool: (ev: { type: string; name?: string; status: string }) => void;
+  onTool: (ev: { type: string; name?: string; status: string; toolCallId?: string }) => void;
   onDone: (terminal: string) => void;
   onError: (msg: string) => void;
 };
@@ -230,7 +265,8 @@ export async function streamAgentRun(
       handlers.onDelta((p.payload as { text: string }).text);
     } else if (parsed.event === "tool.started" || parsed.event === "tool.completed" || parsed.event === "tool.failed") {
       const name = (p.payload as { name?: string })?.name;
-      handlers.onTool({ type: parsed.event, name, status: parsed.event === "tool.failed" ? "failed" : parsed.event === "tool.completed" ? "completed" : "started" });
+      const toolCallId = typeof p.toolCallId === "string" ? p.toolCallId : undefined;
+      handlers.onTool({ type: parsed.event, name, status: parsed.event === "tool.failed" ? "failed" : parsed.event === "tool.completed" ? "completed" : "started", toolCallId });
     } else if (parsed.event === "run.completed" || parsed.event === "run.failed" || parsed.event === "run.cancelled") {
       terminal = parsed.event;
       handlers.onDone(terminal);

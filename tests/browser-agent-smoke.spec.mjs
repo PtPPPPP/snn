@@ -323,3 +323,63 @@ test("Files Panel refreshes the authoritative inventory after an Agent file muta
   await expect(download).toHaveAttribute("href", `/api/agent/sessions/${sessionId}/files/${notes.fileId}`);
   await expect(download).toHaveAttribute("download", "notes.md");
 });
+
+test("Workspace panel previews text read-only, escapes payloads, and isolates sessions", async ({ page }) => {
+  const sessionA = "snn-agent-abababab-abab-4aba-8aba-abababababab";
+  const sessionB = "snn-agent-cdcdcdcd-cdcd-4cdc-8cdc-cdcdcdcdcdcd";
+  const fileId = "workspace-preview-file";
+  const xssContent = "<script>window.__workspaceXss = 1;</script>hello preview";
+  let previewRequests = 0;
+  await mockAgentStatus(page, true);
+  await page.route("**/api/agent/sessions", async (route) => {
+    if (route.request().method() === "GET") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ sessions: [{ sessionId: sessionA }, { sessionId: sessionB }] }) });
+    return route.continue();
+  });
+  await page.route(`**/api/agent/sessions/${sessionA}/files`, async (route) => {
+    if (route.request().method() === "GET") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ files: [{ fileId, originalName: "notes.md", size: 42, kind: "text" }] }) });
+    return route.continue();
+  });
+  await page.route(`**/api/agent/sessions/${sessionB}/files`, async (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ files: [] }) }));
+  await page.route(`**/api/agent/sessions/${sessionA}/files/${fileId}/preview`, async (route) => {
+    previewRequests += 1;
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ fileId, name: "notes.md", mime: "text/markdown", size: 42, truncated: false, content: xssContent }) });
+  });
+
+  await page.goto("/ai/", { waitUntil: "networkidle" });
+  await page.getByRole("tab", { name: /Agent/ }).click();
+
+  // Desktop default: workspace panel opens automatically; toggle reflects state.
+  const panel = page.getByTestId("workspace-panel");
+  const toggle = page.locator('button[aria-controls="agent-workspace-panel"]');
+  await expect(panel).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(panel).toContainText("WORKSPACE");
+
+  await page.getByRole("button", { name: new RegExp(`^Agent ${sessionA.slice(-6)}`) }).click();
+  await expect(page.getByTestId("files-panel")).toContainText("notes.md");
+
+  // Open preview: content renders as inert text, never executed HTML.
+  await page.getByRole("button", { name: "预览 notes.md" }).click();
+  await expect(panel).toContainText("hello preview");
+  const previewHtml = await panel.locator("pre").first().innerHTML();
+  expect(previewHtml).toContain("&lt;script&gt;");
+  expect(previewHtml).not.toContain("<script>");
+  expect(await page.evaluate(() => window.__workspaceXss)).toBeUndefined();
+  await expect(panel.getByRole("link", { name: "下载 notes.md" })).toBeVisible();
+  expect(previewRequests).toBe(1);
+
+  // Close and reopen: the presentation state is preserved, no duplicate fetch.
+  await toggle.click();
+  await expect(panel).toBeHidden();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await toggle.click();
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText("hello preview");
+  expect(previewRequests).toBe(1);
+
+  // Session isolation: switching sessions clears files and hides the preview.
+  await page.getByRole("button", { name: new RegExp(`^Agent ${sessionB.slice(-6)}`) }).click();
+  await expect(page.getByTestId("files-panel")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "预览 notes.md" })).toHaveCount(0);
+  await expect(panel).not.toContainText("hello preview");
+});
