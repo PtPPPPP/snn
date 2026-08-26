@@ -289,6 +289,22 @@ test("public file upload/list/delete via BFF is bounded and safe", async () => {
   });
 });
 
+test("public BFF maps rejected file input to stable client errors", async () => {
+  await withPublic({}, async ({ baseUrl }) => {
+    const origin = "https://snnai.cn";
+    const created = await fetch(`${baseUrl}/api/agent/sessions`, { method: "POST", headers: { origin, "content-type": "application/json" }, body: "{}" });
+    const { sessionId } = await created.json();
+    const cookie = created.headers.get("set-cookie").split(";")[0];
+    const invalid = await fetch(`${baseUrl}/api/agent/sessions/${sessionId}/files`, {
+      method: "POST",
+      headers: { origin, cookie, "content-type": "application/octet-stream", "x-snn-file-name": "con.pdf" },
+      body: "not-a-document",
+    });
+    assert.equal(invalid.status, 400);
+    assert.deepEqual(await invalid.json(), { error: { code: "AGENT_FILE_INVALID", message: "Filename is invalid" } });
+  });
+});
+
 test("public BFF preserves browser FormData binary bytes and Unicode filenames", async () => {
   await withPublic({}, async ({ baseUrl, metadataStore, workspaceManager }) => {
     const origin = "https://snnai.cn";

@@ -78,7 +78,7 @@ export function createPublicAgentBff({
   }
 
   function sendError(response, error, originInfo, pathForLog) {
-    const status = Number.isInteger(error?.status) ? error.status : error?.code === "AGENT_SESSION_NOT_FOUND" ? 404 : error?.code === "AGENT_RUNTIME_INCOMPATIBLE" ? 503 : error?.status ?? (error?.code?.startsWith("AGENT_PUBLIC_") ? 429 : 500);
+    const status = Number.isInteger(error?.status) ? error.status : publicErrorStatus(error?.code);
     const code = typeof error?.code === "string" ? error.code : status === 404 ? "NOT_FOUND" : "INTERNAL_ERROR";
     const message = status >= 500 ? "Agent service is unavailable" : status === 429 ? error.message : error?.message || "Request failed";
     logger.error?.(JSON.stringify({ component: "public-agent-bff", path: pathForLog, status, code }));
@@ -87,6 +87,15 @@ export function createPublicAgentBff({
     } else if (!response.writableEnded) {
       response.end();
     }
+  }
+
+  function publicErrorStatus(code) {
+    if (["AGENT_SESSION_NOT_FOUND", "AGENT_ATTACHMENT_NOT_FOUND", "AGENT_FILE_NOT_FOUND"].includes(code)) return 404;
+    if (["AGENT_FILE_INVALID", "AGENT_FILE_REQUIRED", "AGENT_FILE_CONFLICT", "AGENT_ATTACHMENT_UNSUPPORTED"].includes(code)) return 400;
+    if (["AGENT_FILE_TOO_LARGE", "AGENT_WORKSPACE_QUOTA_EXCEEDED", "REQUEST_TOO_LARGE"].includes(code)) return 413;
+    if (code === "AGENT_RUNTIME_INCOMPATIBLE") return 503;
+    if (typeof code === "string" && code.startsWith("AGENT_PUBLIC_")) return 429;
+    return 500;
   }
 
   function getOwnerToken(request) {
