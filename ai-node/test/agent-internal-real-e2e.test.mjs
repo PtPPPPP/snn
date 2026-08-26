@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createServer } from "node:http";
-import { createHook } from "node:async_hooks";
 import { existsSync } from "node:fs";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -32,24 +31,6 @@ const fixtureBase = join(dshRoot, "examples/jsonrpc-agent");
 const hasRuntime = existsSync(sdkPath) && existsSync(runnerPath) && existsSync(fixtureBase);
 const options = { skip: hasRuntime ? false : "requires sibling DSH built SDK and jsonrpc fixture", timeout: 180_000 };
 
-if (process.env.TEST_DEBUG_HANDLES === "1") {
-  const pendingFs = new Map();
-  const hook = createHook({
-    init(asyncId, type) {
-      if (type === "FSREQCALLBACK" || type === "FSREQPROMISE") {
-        pendingFs.set(asyncId, { type, stack: new Error().stack?.split("\n").slice(2, 7) });
-      }
-    },
-    destroy(asyncId) { pendingFs.delete(asyncId); },
-  });
-  hook.enable();
-  test.after(() => {
-    const handles = process._getActiveHandles().map((handle) => handle?.constructor?.name ?? typeof handle);
-    const requests = process._getActiveRequests().map((request) => request?.constructor?.name ?? typeof request);
-    console.error(`TEST_DEBUG_HANDLES ${JSON.stringify({ handles, requests, pendingFs: [...pendingFs.values()] })}`);
-    hook.disable();
-  });
-}
 
 function textPayloads(text) {
   return [
