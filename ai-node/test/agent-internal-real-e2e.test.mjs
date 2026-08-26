@@ -160,6 +160,7 @@ async function bootRealInternal(label, shared = {}) {
     toolMetadata: BUILT_IN_TOOL_METADATA,
     capabilityResolver: shared.capabilityResolver ?? createDefaultCapabilityResolver(),
     workspace: workspaceRecord,
+    ...(shared.skillId ? { skillId: shared.skillId } : {}),
     workspaceManager,
     metadataStore: new SessionMetadataStore(metadata),
     runtimeRegistry,
@@ -233,6 +234,45 @@ function resolverWith({ skill = true, readAvailable = true } = {}) {
   const skills = new SkillRegistry({ toolRegistry: tools, skills: skill ? [{ id: "workspace-reader", name: "Workspace Reader", description: "Read", instructions: "Read only", requiredTools: ["workspace.read"] }] : [] });
   return new CapabilityResolver({ toolRegistry: tools, skillRegistry: skills });
 }
+
+test("real pinned DSH child reads and edits through the manifest-aware virtual filesystem", options, async (t) => {
+  const env = await bootRealInternal("native-edit", { skillId: "workspace-editor" });
+  t.after(() => env.close());
+  const uploaded = await env.ingestion.ingest({ workspaceId: env.workspaceRecord.id, originalName: "notes.md", contentType: "text/markdown", body: (async function* () { yield Buffer.from("version one"); })() });
+  const before = await env.ingestion.readEditableText({ workspaceId: env.workspaceRecord.id, virtualPath: "notes.md" });
+  const create = await post(`${env.baseUrl}/internal/agent/sessions`, {});
+  assert.equal(create.status, 201);
+  const { sessionId } = await create.json();
+  env.llm.set([
+    { match: "modify notes", payloads: toolPayloads("native-read", "read", { file_path: "notes.md" }) },
+    { payloads: toolPayloads("native-edit", "edit", { file_path: "notes.md", old_string: "version one", new_string: "version two" }) },
+    { payloads: textPayloads("edit complete") },
+  ]);
+  const response = await post(`${env.baseUrl}/internal/agent/sessions/${sessionId}/runs`, { message: "modify notes" });
+  assert.equal(response.status, 200);
+  const stream = await sse(response);
+  assertTerminal(stream.events);
+  const after = await env.ingestion.readEditableText({ workspaceId: env.workspaceRecord.id, virtualPath: "notes.md" });
+  assert.equal(after.content, "version two", stream.body);
+  assert.equal((await env.ingestion.resolveVirtualPath({ workspaceId: env.workspaceRecord.id, virtualPath: "notes.md" })).file.fileId, uploaded.fileId);
+  assert.notEqual(after.version, before.version);
+  assert.ok(env.llm.requests.some((request) => request.tools?.some((tool) => tool.function?.name === "read")));
+  assert.ok(env.llm.requests.some((request) => request.tools?.some((tool) => tool.function?.name === "edit")));
+});
+
+test("real pinned DSH child creates an inventory-backed text file", options, async (t) => {
+  const env = await bootRealInternal("native-create", { skillId: "workspace-editor" });
+  t.after(() => env.close());
+  const create = await post(`${env.baseUrl}/internal/agent/sessions`, {});
+  const { sessionId } = await create.json();
+  env.llm.set([{ match: "create summary", payloads: toolPayloads("native-write", "write", { file_path: "summary.md", content: "SNN Agent edit smoke passed" }) }, { payloads: textPayloads("created") }]);
+  const response = await post(`${env.baseUrl}/internal/agent/sessions/${sessionId}/runs`, { message: "create summary" });
+  const stream = await sse(response);
+  assertTerminal(stream.events);
+  const created = await env.ingestion.readEditableText({ workspaceId: env.workspaceRecord.id, virtualPath: "summary.md" });
+  assert.equal(created.content, "SNN Agent edit smoke passed");
+  assert.ok((await env.ingestion.list(env.workspaceRecord.id)).some((file) => file.virtualPath === "summary.md"));
+});
 
 test("real HTTP Internal API drives official SDK and child with sanitized READ/WRITE policy", options, async (t) => {
   const env = await bootRealInternal("policy");
