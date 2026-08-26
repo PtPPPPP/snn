@@ -73,6 +73,8 @@ function loadAgentConfig(environment) {
     model: requireConfigString(environment.SNN_AGENT_DSH_MODEL, "SNN_AGENT_DSH_MODEL"),
     requestTimeoutMs: readPositiveInteger(environment.SNN_AGENT_DSH_REQUEST_TIMEOUT_MS, 120_000, "SNN_AGENT_DSH_REQUEST_TIMEOUT_MS"),
     shutdownTimeoutMs: readPositiveInteger(environment.SNN_AGENT_DSH_SHUTDOWN_TIMEOUT_MS, 10_000, "SNN_AGENT_DSH_SHUTDOWN_TIMEOUT_MS"),
+    // Test-only escape hatch: lets workspace.fetch reach loopback fixtures. Never enable in production.
+    fetchAllowPrivateNetworks: readBoolean(environment.SNN_AGENT_FETCH_ALLOW_PRIVATE, false, "SNN_AGENT_FETCH_ALLOW_PRIVATE"),
     environment: Object.fromEntries(passthrough.map((name) => [name, environment[name]]).filter(([, value]) => value !== undefined)),
   };
 }

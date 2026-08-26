@@ -627,7 +627,7 @@ export default function AiChat() {
                     <div className={styles.emptyState} data-testid="agent-empty">
                       <span className={styles.emptyMark}>AGENT / WORKSPACE</span>
                       <h2>Agent 可以读取 Workspace 中的文件</h2>
-                      <p>上传文本、PDF、DOCX 或 XLSX，使用安全工具完成任务。文本文件可以编辑或生成，PDF、DOCX 和 XLSX 可以读取和提取；Agent 不具备联网或 Shell 能力。</p>
+                      <p>上传文本、PDF、DOCX 或 XLSX，使用安全工具完成任务。文本文件可以编辑或生成，PDF、DOCX 和 XLSX 可以读取和提取；Agent 可以抓取公开网页内容，不具备 Shell 能力。</p>
                     </div>
                   ) : (
                     agent.messages.map((m) => <AgentMessage key={m.id} message={m} toolActivity={m.role === "assistant" && agent.toolActivity.length > 0 && m.id === agent.messages[agent.messages.length - 1].id ? agent.toolActivity : undefined} />)

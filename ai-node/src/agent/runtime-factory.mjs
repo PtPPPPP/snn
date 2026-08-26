@@ -72,6 +72,7 @@ async function createWorkspaceBridgeConfig(agentConfig) {
     "            config:",
     `              workspaceRoot: ${quoted(agentConfig.runtimeCwd)}`,
     `              documentLimits: ${documentLimits}`,
+    `              fetchAllowPrivate: ${agentConfig.fetchAllowPrivateNetworks === true}`,
     "",
   ].join("\n"), "utf8");
   return { configPath, dispose: () => rm(directory, { recursive: true, force: true }).catch(() => {}) };

@@ -83,6 +83,21 @@ export function createScriptedUpstream() {
   };
 }
 
+/** Public web fixture the workspace.fetch tool can retrieve in tests. */
+export function createPublicWebFixture(body, contentType = "text/plain; charset=utf-8") {
+  const hits = [];
+  const server = createServer((request, response) => {
+    hits.push(request.url);
+    response.writeHead(200, { "content-type": contentType });
+    response.end(body);
+  });
+  return {
+    hits,
+    async listen() { await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve)); this.url = `http://127.0.0.1:${server.address().port}/public-web.txt`; },
+    async close() { await new Promise((resolve) => { server.closeAllConnections(); server.close(resolve); }); },
+  };
+}
+
 async function removeTree(target) {
   const deadline = Date.now() + 10_000;
   for (;;) {
@@ -172,7 +187,7 @@ async function createFrontendProxy(getBffBaseUrl) {
   return { url: `http://127.0.0.1:${port}`, origin: `http://127.0.0.1:${port}`, async close() { await new Promise((resolve) => { server.closeAllConnections(); server.close(resolve); }); } };
 }
 
-export async function bootWorkspaceEditEnv(label) {
+export async function bootWorkspaceEditEnv(label, { fetchAllowPrivateNetworks = false } = {}) {
   if (!hasRealRuntime()) throw new Error("requires sibling DSH built SDK and jsonrpc fixture");
   const workspaceBase = await mkdtemp(path.join(tmpdir(), "snn-5b7-wsbase-"));
   const ownershipRoot = await mkdtemp(path.join(tmpdir(), "snn-5b7-own-"));
@@ -211,6 +226,7 @@ export async function bootWorkspaceEditEnv(label) {
   const runtimeConfig = {
     sdkPath, toolHostPath, runtimeExecutable: process.execPath, runtimeArguments: [runnerPath], cordisConfig: cordis,
     runtimeCwd: defaultWsRoot, provider: "deepseek-official", model: "snn-blackbox-model", requestTimeoutMs: 120_000, shutdownTimeoutMs: 10_000,
+    fetchAllowPrivateNetworks,
     environment: { PATH: process.env.PATH, DEEPSEEK_API_KEY: "test-key", DEEPSEEK_BASE_URL: upstream.url, DSH_SESSION_ROOT: persistence, DSH_CWD: defaultWsRoot, DSH_HOME: path.join(defaultWsRoot, ".home"), DSH_AGENTS_HOME: path.join(defaultWsRoot, ".agents") },
   };
   const createManagerForWs = (ws) => new AgentRuntimeManager({ createRuntime: () => createConfiguredAgentRuntime({ ...runtimeConfig, runtimeCwd: ws.root, environment: { ...runtimeConfig.environment, DSH_CWD: ws.root, DSH_HOME: path.join(ws.root, ".home"), DSH_AGENTS_HOME: path.join(ws.root, ".agents") } }) });

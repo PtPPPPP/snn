@@ -297,6 +297,7 @@ function toolLabel(name: string) {
   if (name === "edit") return "编辑文件";
   if (name === "workspace.open") return "打开文件";
   if (name === "workspace.extract") return "解析文档";
+  if (name === "workspace.fetch") return "抓取网页";
   return name;
 }
 

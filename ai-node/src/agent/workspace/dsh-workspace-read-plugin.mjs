@@ -4,6 +4,7 @@ import { WorkspaceManager } from "./workspace-manager.mjs";
 import { WorkspaceFileOpener } from "./workspace-file-opener.mjs";
 import { DocumentExtractionService } from "../documents/document-extraction-service.mjs";
 import { clampDocumentLimits } from "../documents/limits.mjs";
+import { fetchPublicText } from "./workspace-url-fetch.mjs";
 
 const anchor = process.env.SNN_DSH_PLUGIN_RESOLVE_FROM;
 if (!anchor) throw new Error("SNN_DSH_PLUGIN_RESOLVE_FROM is required for SNN workspace read bridge");
@@ -54,6 +55,17 @@ export function apply(ctx, config = {}) {
     async execute(args) {
       try { return await opener.open(typeof args?.file_id === "string" ? args.file_id : ""); }
       catch (error) { throw new Error(typeof error?.code === "string" && error.code.startsWith("AGENT_DOCUMENT_") ? error.code : "AGENT_DOCUMENT_INVALID"); }
+    },
+  }));
+
+  ctx.tools.register(defineTool({
+    name: "workspace.fetch",
+    description: "Fetch public http(s) web content and return up to 200KB of text. Private and internal addresses are rejected.",
+    parameters: { url: { type: "string", required: true, description: "Absolute http or https URL of the public web page to fetch." } },
+    output: { schema: { type: "string" }, render: (_args, value) => [{ type: "text", text: value }] },
+    async execute(args) {
+      try { return await fetchPublicText(typeof args?.url === "string" ? args.url : "", { allowPrivateNetworks: config.fetchAllowPrivate === true }); }
+      catch (error) { throw new Error(typeof error?.code === "string" && error.code.startsWith("WORKSPACE_FETCH_") ? error.code : "WORKSPACE_FETCH_NETWORK_ERROR"); }
     },
   }));
 }
