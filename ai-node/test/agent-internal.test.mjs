@@ -111,9 +111,9 @@ test("internal create derives the server tool policy and rejects client escalati
     const policy = runtime.calls.find(([kind]) => kind === "create")[1].toolPolicy;
     assert.equal(policy.default, "deny");
     assert.equal(policy.rules.find((rule) => rule.toolName === "workspace.read").decision, "allow");
-    assert.equal(policy.rules.find((rule) => rule.toolName === "workspace.write").decision, "allow");
-    assert.equal(policy.rules.find((rule) => rule.toolName === "workspace.execute").decision, "allow");
-    assert.equal(policy.rules.find((rule) => rule.toolName === "workspace.fetch").decision, "allow");
+    for (const toolName of ["workspace.write", "workspace.execute", "workspace.fetch"]) {
+      assert.equal(policy.rules.some((rule) => rule.toolName === toolName), false);
+    }
   });
 });
 

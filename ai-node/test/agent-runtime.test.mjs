@@ -408,7 +408,6 @@ test("session controller uses one server policy and isolates same-session owners
   assert.equal(policy.default, "deny");
   assert.deepEqual(policy.rules, [
     { toolName: "read", decision: "allow" },
-    { toolName: "write", decision: "allow" },
   ]);
   const run = await controller.startRun(created.sessionId, "hello");
   await assert.rejects(() => controller.startRun(created.sessionId, "again"), (error) => error.code === "AGENT_RUN_CONFLICT");

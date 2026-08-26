@@ -201,8 +201,9 @@ async function uploadFile(env, filename, buffer, contentType = "application/octe
 
 async function createSession(env) {
   const created = await post(`${env.baseUrl}/internal/agent/sessions`, {});
-  assert.equal(created.status, 201);
-  return (await created.json()).sessionId;
+  const body = await created.text();
+  assert.equal(created.status, 201, body);
+  return JSON.parse(body).sessionId;
 }
 
 function assertNoLeaks(env, ...bodies) {

@@ -381,7 +381,7 @@ export function createPublicAgentBff({
               if (!boundaryMatch) throw Object.assign(new Error("Invalid multipart"), { status: 400, code: "INVALID_REQUEST" });
               const boundary = boundaryMatch[1].replace(/^"|"$/g, "");
               const fileData = await parseMultipartFile(request, boundary, 10 * 1024 * 1024);
-              if (!fileData) throw Object.assign(new Error("File is required"), { status: 400, code: "AGENT_FILE_INVALID" });
+              if (!fileData) throw Object.assign(new Error("File is required"), { status: 400, code: "AGENT_FILE_REQUIRED" });
               const result = await ingestionService.ingest({ workspaceId: workspace.id, originalName: fileData.filename, contentType: fileData.contentType, body: (async function*(){ yield fileData.data; })() });
               sendJson(response, 201, { file: result }, originInfo);
             } else {
@@ -453,27 +453,47 @@ export function createPublicAgentBff({
       chunks.push(chunk);
     }
     const buffer = Buffer.concat(chunks);
-    const text = buffer.toString("binary");
-    const delimiter = `--${boundary}`;
-    const parts = text.split(delimiter);
-    for (const part of parts) {
-      if (!part.includes("Content-Disposition")) continue;
-      const headerEnd = part.indexOf("\r\n\r\n");
-      if (headerEnd === -1) continue;
-      const headers = part.slice(0, headerEnd);
-      const body = part.slice(headerEnd + 4);
-      const bodyTrim = body.replace(/\r\n--$/, "").replace(/\r\n$/, "");
-      const disposition = headers.match(/Content-Disposition:[^\r\n]*name="([^"]+)"(?:;[^\r\n]*filename="([^"]+)")?/);
-      if (!disposition) continue;
-      const fieldName = disposition[1];
-      const filename = disposition[2];
-      if (fieldName !== "file" || !filename) continue;
-      const ctMatch = headers.match(/Content-Type:\s*([^\r\n]+)/i);
-      const contentType = ctMatch ? ctMatch[1].trim() : "application/octet-stream";
-      const data = Buffer.from(bodyTrim, "binary");
-      return { filename, contentType, data };
+    const delimiter = Buffer.from(`--${boundary}`, "ascii");
+    const separator = Buffer.from("\r\n\r\n", "ascii");
+    let position = 0;
+    for (;;) {
+      const boundaryIndex = buffer.indexOf(delimiter, position);
+      if (boundaryIndex === -1) return null;
+      let partStart = boundaryIndex + delimiter.length;
+      if (buffer.subarray(partStart, partStart + 2).equals(Buffer.from("--", "ascii"))) return null;
+      if (!buffer.subarray(partStart, partStart + 2).equals(Buffer.from("\r\n", "ascii"))) return null;
+      partStart += 2;
+      const nextBoundary = buffer.indexOf(delimiter, partStart);
+      if (nextBoundary === -1) return null;
+      let partEnd = nextBoundary;
+      if (buffer.subarray(partEnd - 2, partEnd).equals(Buffer.from("\r\n", "ascii"))) partEnd -= 2;
+      const part = buffer.subarray(partStart, partEnd);
+      const headerEnd = part.indexOf(separator);
+      if (headerEnd !== -1) {
+        const headers = part.subarray(0, headerEnd).toString("utf8");
+        const disposition = parseContentDisposition(headers);
+        if (disposition?.name === "file" && disposition.filename) {
+          const contentType = /^content-type:\s*([^\r\n]+)/im.exec(headers)?.[1].trim() ?? "application/octet-stream";
+          return { filename: disposition.filename, contentType, data: part.subarray(headerEnd + separator.length) };
+        }
+      }
+      position = nextBoundary;
     }
-    return null;
+  }
+
+  function parseContentDisposition(headers) {
+    const value = /^content-disposition:\s*([^\r\n]+)/im.exec(headers)?.[1];
+    if (!value || !/^form-data(?:;|$)/i.test(value)) return null;
+    const parameters = new Map();
+    for (const match of value.matchAll(/;\s*([^=;\s]+)=(?:"([^"]*)"|([^;\s]*))/g)) {
+      parameters.set(match[1].toLowerCase(), match[2] ?? match[3]);
+    }
+    const encodedFilename = parameters.get("filename*");
+    let filename = parameters.get("filename");
+    if (encodedFilename?.toLowerCase().startsWith("utf-8''")) {
+      try { filename = decodeURIComponent(encodedFilename.slice(7)); } catch { return null; }
+    }
+    return { name: parameters.get("name"), filename };
   }
 
   async function proxySse(request, response, controller, sessionId, run, originInfo) {

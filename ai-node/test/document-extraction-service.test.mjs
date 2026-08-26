@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FileIngestionService } from "../src/agent/workspace/file-ingestion-service.mjs";
 import { WorkspaceManager } from "../src/agent/workspace/workspace-manager.mjs";
-import { DocumentExtractionService } from "../src/agent/documents/document-extraction-service.mjs";
+import { DocumentExtractionService, readWorkspaceFileEntry } from "../src/agent/documents/document-extraction-service.mjs";
 import { DEFAULT_DOCUMENT_LIMITS, clampDocumentLimits } from "../src/agent/documents/limits.mjs";
 import { buildTestPdf, buildTestDocx, docxDocumentXml, buildTestXlsx, buildZip } from "./helpers/document-fixtures.mjs";
 
@@ -28,6 +28,7 @@ test("document extraction service parses an ingested pdf by fileId", async () =>
   try {
     const pdf = buildTestPdf({ pages: [["SNN_PDF_SENTINEL_service"], ["page two content"]] });
     const fileId = await upload(ingestion, workspace.id, "report.pdf", pdf);
+    const entry = await readWorkspaceFileEntry(root, fileId);
     const before = await readFile(join(root, ".snn-workspace-files.json"));
 
     const output = await service.extract(fileId);
@@ -39,7 +40,7 @@ test("document extraction service parses an ingested pdf by fileId", async () =>
     // Read-only guarantee: original bytes and manifest unchanged by extraction.
     const after = await readFile(join(root, ".snn-workspace-files.json"));
     assert.equal(before.equals(after), true);
-    assert.ok(await readFile(join(root, "report.pdf")).then((bytes) => bytes.equals(pdf)));
+    assert.ok(await readFile(join(root, entry.storedName)).then((bytes) => bytes.equals(pdf)));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -63,16 +64,19 @@ test("document extraction service fails closed when the file vanished or was mut
   const { workspace, ingestion, service, root } = await makeWorkspace();
   try {
     const fileId = await upload(ingestion, workspace.id, "gone.pdf", buildTestPdf({ pages: [["data"]] }));
-    await rm(join(root, "gone.pdf"));
+    const gone = await readWorkspaceFileEntry(root, fileId);
+    await rm(join(root, gone.storedName));
     await assert.rejects(() => service.extract(fileId), (error) => error.code === "AGENT_DOCUMENT_NOT_FOUND");
 
     const mutatedId = await upload(ingestion, workspace.id, "mutated.pdf", buildTestPdf({ pages: [["original"]] }));
-    await writeFile(join(root, "mutated.pdf"), Buffer.from("replaced by an attacker"));
+    const mutated = await readWorkspaceFileEntry(root, mutatedId);
+    await writeFile(join(root, mutated.storedName), Buffer.from("replaced by an attacker"));
     await assert.rejects(() => service.extract(mutatedId), (error) => error.code === "AGENT_DOCUMENT_INVALID");
 
     const swappedId = await upload(ingestion, workspace.id, "swapped.docx", buildTestDocx(docxDocumentXml([{ text: "real" }])));
-    await rm(join(root, "swapped.docx"));
-    await writeFile(join(root, "swapped.docx"), buildZip([{ name: "word/document.xml", data: "<w:document/>" }]));
+    const swapped = await readWorkspaceFileEntry(root, swappedId);
+    await rm(join(root, swapped.storedName));
+    await writeFile(join(root, swapped.storedName), buildZip([{ name: "word/document.xml", data: "<w:document/>" }]));
     await assert.rejects(() => service.extract(swappedId), (error) => error.code === "AGENT_DOCUMENT_INVALID");
   } finally { await rm(root, { recursive: true, force: true }); }
 });

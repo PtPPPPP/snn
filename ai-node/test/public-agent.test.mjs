@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createAiNodeServer } from "../src/server.mjs";
@@ -15,6 +16,7 @@ import { WorkspaceRuntimeRegistry } from "../src/agent/workspace-runtime-registr
 import { PublicAgentOwnershipStore } from "../src/agent/public/ownership-store.mjs";
 import { createPublicAgentBff } from "../src/agent/public/bff.mjs";
 import { createDefaultCapabilityResolver } from "../src/agent/capabilities/built-ins.mjs";
+import { buildTestDocx, buildTestPdf, buildTestXlsx, docxDocumentXml } from "./helpers/document-fixtures.mjs";
 
 function deferred() {
   let resolve;
@@ -151,7 +153,7 @@ async function withPublic(options, run) {
     await rm(runtimeCwd, { recursive: true, force: true }).catch(() => {});
   };
   try {
-    await run({ baseUrl, workspaceBase, ownershipRoot, metadataRoot, workspaceManager, ownershipStore, controller, fakeRuntime, ingestion, bff, config });
+    await run({ baseUrl, workspaceBase, ownershipRoot, metadataRoot, workspaceManager, metadataStore, ownershipStore, controller, fakeRuntime, ingestion, bff, config });
   } finally {
     await cleanup();
   }
@@ -284,6 +286,37 @@ test("public file upload/list/delete via BFF is bounded and safe", async () => {
     assert.equal(del.status, 204);
     const list2 = await fetch(`${baseUrl}/api/agent/sessions/${sid}/files`, { headers: { origin, cookie } });
     assert.equal((await list2.json()).files.length, 1); // one multipart file remains
+  });
+});
+
+test("public BFF preserves browser FormData binary bytes and Unicode filenames", async () => {
+  await withPublic({}, async ({ baseUrl, metadataStore, workspaceManager }) => {
+    const origin = "https://snnai.cn";
+    const created = await fetch(`${baseUrl}/api/agent/sessions`, { method: "POST", headers: { origin, "content-type": "application/json" }, body: "{}" });
+    const { sessionId } = await created.json();
+    const cookie = created.headers.get("set-cookie").split(";")[0];
+    const uploads = [
+      ["中文测试报告.pdf", "application/pdf", buildTestPdf({ pages: [["SNN_PUBLIC_UNICODE_PDF"]] })],
+      ["学校泳池项目合作意向书(1).docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", buildTestDocx(docxDocumentXml([{ text: "SNN_PUBLIC_UNICODE_DOCX" }]))],
+      ["数据分析.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buildTestXlsx({ sheets: [{ name: "数据", cells: [{ ref: "A1", kind: "s", value: "SNN_PUBLIC_UNICODE_XLSX" }] }] })],
+    ];
+    const binding = await metadataStore.get(sessionId);
+    const workspace = workspaceManager.resolve(binding.workspaceId);
+    for (const [filename, contentType, bytes] of uploads) {
+      const form = new FormData();
+      form.append("file", new Blob([bytes], { type: contentType }), filename);
+      const response = await fetch(`${baseUrl}/api/agent/sessions/${sessionId}/files`, { method: "POST", headers: { origin, cookie }, body: form });
+      if (response.status !== 201) assert.fail(await response.text());
+      const file = (await response.json()).file;
+      assert.equal(file.originalName, filename);
+      assert.equal(file.size, bytes.length);
+      const manifest = JSON.parse(await readFile(join(workspace.root, ".snn-workspace-files.json"), "utf8"));
+      const entry = manifest.files.find((candidate) => candidate.fileId === file.fileId);
+      assert.notEqual(entry.storedName, filename);
+      assert.match(entry.storedName, /^\.snn-upload-/);
+      const stored = await readFile(join(workspace.root, entry.storedName));
+      assert.equal(createHash("sha256").update(stored).digest("hex"), createHash("sha256").update(bytes).digest("hex"));
+    }
   });
 });
 

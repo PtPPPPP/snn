@@ -39,6 +39,31 @@ export type ToolActivity = {
 const MAX_ATTACHMENTS = 8;
 const LOCAL_ACTIVE_KEY = "snn-agent-active-session";
 
+function uploadErrorMessage(error: AgentClientError): string {
+  if (error.code === "network" || error.code === "http") return "文件上传失败，请重试。";
+  if (error.code === "limit") return "当前 Agent 资源已达到限制，请稍后再试。";
+  switch (error.detail) {
+    case "AGENT_FILE_TOO_LARGE":
+    case "REQUEST_TOO_LARGE":
+      return "文件大小超过限制。";
+    case "AGENT_WORKSPACE_QUOTA_EXCEEDED":
+      return "当前会话文件容量已达到限制。";
+    case "AGENT_SESSION_NOT_FOUND":
+      return "当前 Agent 会话已失效，请重新创建。";
+    case "INVALID_CONTENT_TYPE":
+    case "AGENT_ATTACHMENT_UNSUPPORTED":
+      return "当前不支持这种文件类型。";
+    case "AGENT_FILE_CONFLICT":
+      return "已有同名文件，请修改文件名后重试。";
+    case "AGENT_FILE_INVALID":
+      return "文件名无效，请修改后重试。";
+    case "AGENT_FILE_REQUIRED":
+      return "未能读取所选文件，请重新选择后重试。";
+    default:
+      return "文件上传失败，请重试。";
+  }
+}
+
 function nowId(role: string) {
   return `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -190,10 +215,7 @@ export function useAgent() {
     } catch (e) {
       setUploadState((prev) => ({ ...prev, [tempId]: "error" }));
       const err = e as AgentClientError;
-      if (err.code === "limit") setError("当前 Agent 资源已达到限制，请稍后再试。");
-      else if (err.code === "invalid" && err.detail?.includes("too large")) setError("文件过大，请选择更小的文件。");
-      else if (err.code === "invalid") setError("文件不支持或名称无效。");
-      else setError(err.detail || "上传失败，请重试。");
+      setError(uploadErrorMessage(err));
       throw e;
     } finally {
       setTimeout(() => setUploadState((prev) => { const n = { ...prev }; delete n[tempId]; return n; }), 3000);

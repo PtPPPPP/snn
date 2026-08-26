@@ -8,9 +8,6 @@
  */
 export function projectDefaultToolPolicy(metadata) {
   if (metadata?.risk === "READ") return { decision: "allow" };
-  if (metadata?.risk === "WRITE") return { decision: "allow" };
-  if (metadata?.risk === "EXEC") return { decision: "allow" };
-  if (metadata?.risk === "EXTERNAL") return { decision: "allow" };
   return { decision: "deny", reason: "SNN default policy denies tools without declared metadata" };
 }
 

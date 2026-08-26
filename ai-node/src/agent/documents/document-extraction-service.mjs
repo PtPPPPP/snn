@@ -8,7 +8,8 @@ export { createDefaultDocumentParserRegistry, TEXT_EXTENSIONS };
 
 const MANIFEST_FILENAME = ".snn-workspace-files.json";
 const FILE_ID_PATTERN = /^snn-file-[a-z0-9-]{8,80}$/;
-const STORED_NAME_PATTERN = /^[a-z0-9.-]+$/i;
+const LEGACY_STORED_NAME_PATTERN = /^[a-z0-9.-]+$/i;
+const MANAGED_STORED_NAME_PATTERN = /^\.snn-upload-[a-z0-9-]{8,80}$/;
 
 /**
  * Child-side, workspace-scoped document extraction. The service root is fixed
@@ -97,7 +98,7 @@ export async function readWorkspaceFileEntry(root, fileId) {
   const manifest = await readManifest(root);
   const entry = manifest.files.find((file) => file.fileId === fileId);
   if (!entry) throw documentError("AGENT_DOCUMENT_NOT_FOUND");
-  if (typeof entry.storedName !== "string" || !STORED_NAME_PATTERN.test(entry.storedName) || isAbsolute(entry.storedName) || win32.isAbsolute(entry.storedName)) {
+  if (typeof entry.storedName !== "string" || (!LEGACY_STORED_NAME_PATTERN.test(entry.storedName) && !MANAGED_STORED_NAME_PATTERN.test(entry.storedName)) || isAbsolute(entry.storedName) || win32.isAbsolute(entry.storedName)) {
     throw documentError("AGENT_DOCUMENT_INVALID");
   }
   let stats;

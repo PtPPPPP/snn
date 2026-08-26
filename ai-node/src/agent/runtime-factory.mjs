@@ -53,7 +53,7 @@ async function createWorkspaceBridgeConfig(agentConfig) {
     "        disabled: true",
     "      - id: sandbox-policy",
     "        config:",
-    "          mode: read-write",
+    "          mode: read-only",
     "      - insert:",
     "          - id: snn-workspace-read",
     `            name: ${quoted(pathToFileURL(pluginPath).href)}`,

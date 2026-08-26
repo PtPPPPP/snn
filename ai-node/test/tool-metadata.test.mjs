@@ -24,10 +24,10 @@ test("DSH call-kind risk mapping is explicit", () => {
   assert.throws(() => riskFromDshCallKind("other"), /explicit SNN risk mapping/);
 });
 
-test("default tool policy allows all declared risk levels", () => {
+test("default tool policy allows only declared read tools", () => {
   assert.deepEqual(projectDefaultToolPolicy({ risk: "READ" }), { decision: "allow" });
   for (const risk of ["WRITE", "EXEC", "EXTERNAL"]) {
-    assert.equal(projectDefaultToolPolicy({ risk }).decision, "allow");
+    assert.equal(projectDefaultToolPolicy({ risk }).decision, "deny");
   }
   assert.equal(projectDefaultToolPolicy(undefined).decision, "deny");
 });
@@ -40,7 +40,6 @@ test("SNN metadata translates to a generic DSH policy payload", () => {
     default: "deny",
     rules: [
       { toolName: "read", decision: "allow" },
-      { toolName: "write", decision: "allow" },
     ],
   });
 });

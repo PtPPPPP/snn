@@ -19,6 +19,7 @@ import { SkillRegistry } from "../src/agent/skills/skill-registry.mjs";
 import { CapabilityResolver } from "../src/agent/capabilities/capability-resolver.mjs";
 import { FileIngestionService } from "../src/agent/workspace/file-ingestion-service.mjs";
 import { WorkspaceRuntimeRegistry } from "../src/agent/workspace-runtime-registry.mjs";
+import { AttachmentContextResolver } from "../src/agent/attachments/attachment-context-resolver.mjs";
 import { buildTestPdf, buildTestDocx, docxDocumentXml, buildTestXlsx } from "./helpers/document-fixtures.mjs";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
@@ -153,6 +154,7 @@ async function bootRealInternal(label, shared = {}) {
       return created;
     },
   }) : undefined;
+  const ingestion = new FileIngestionService({ workspaceManager });
   const controller = new AgentSessionController({
     manager,
     toolMetadata: BUILT_IN_TOOL_METADATA,
@@ -161,8 +163,8 @@ async function bootRealInternal(label, shared = {}) {
     workspaceManager,
     metadataStore: new SessionMetadataStore(metadata),
     runtimeRegistry,
+    attachmentContextResolver: new AttachmentContextResolver({ fileInventory: ingestion }),
   });
-  const ingestion = new FileIngestionService({ workspaceManager });
   const listener = createAgentInternalServer({ config: { enabled: true, host: "127.0.0.1", port: 0, maxBodyBytes: 16_384 }, controller, manager, ingestionService: ingestion, logger: { error() {} } });
   await listener.listen();
   const baseUrl = `http://127.0.0.1:${listener.address().port}`;
@@ -306,9 +308,9 @@ test("trusted ingestion makes uploaded text available to the session-bound real 
   const uploaded = await env.ingestion.ingest({ workspaceId: env.workspaceRecord.id, originalName: "note.txt", contentType: "text/plain", body: (async function* () { yield Buffer.from("SNN_UPLOAD_TEXT_SENTINEL"); })() });
   assert.deepEqual((await env.ingestion.list(env.workspaceRecord.id)).map((file) => file.fileId), [uploaded.fileId]);
   const { sessionId } = await (await post(`${env.baseUrl}/internal/agent/sessions`, {})).json();
-  env.llm.set([{ match: "read note.txt", payloads: toolPayloads("upload-read", "workspace.read", { file_path: "note.txt" }) }, { payloads: textPayloads("uploaded content read") }]);
-  const stream = await sse(await post(`${env.baseUrl}/internal/agent/sessions/${sessionId}/runs`, { message: "read note.txt" }));
-  assert.ok(stream.events.some((event) => event.type === "tool.completed"));
+  env.llm.set([{ match: "read note.txt", payloads: toolPayloads("upload-read", "workspace.open", { file_id: uploaded.fileId }) }, { payloads: textPayloads("uploaded content read") }]);
+  const stream = await sse(await post(`${env.baseUrl}/internal/agent/sessions/${sessionId}/runs`, { message: "read note.txt", attachments: [uploaded.fileId] }));
+  assert.ok(stream.events.some((event) => event.type === "tool.completed"), stream.body);
   assertTerminal(stream.events);
   assert.match(JSON.stringify(env.llm.requests), /SNN_UPLOAD_TEXT_SENTINEL/);
   assert.doesNotMatch(stream.body, /SNN_UPLOAD_TEXT_SENTINEL|\.snn-workspace-files|\.stage/);
@@ -325,10 +327,11 @@ test("real HTTP keeps workspace runtimes, uploaded files, and Agent reads strict
       headers: { "content-type": "application/octet-stream", "x-snn-file-name": filename, "x-snn-file-content-type": "text/plain" },
       body: content,
     });
-    assert.equal(response.status, 201, await response.text());
+    if (response.status !== 201) assert.fail(await response.text());
+    return (await response.json()).file;
   };
-  await upload(env.workspaceRecord.id, "secret-a.txt", "SNN_WORKSPACE_A_SECRET_7e1");
-  await upload(workspaceBId, "secret-b.txt", "SNN_WORKSPACE_B_SECRET_9d2");
+  const fileA = await upload(env.workspaceRecord.id, "secret-a.txt", "SNN_WORKSPACE_A_SECRET_7e1");
+  const fileB = await upload(workspaceBId, "secret-b.txt", "SNN_WORKSPACE_B_SECRET_9d2");
 
   const sessionA1 = await (await post(`${env.baseUrl}/internal/agent/sessions`, { workspaceId: env.workspaceRecord.id })).json();
   const sessionA2 = await (await post(`${env.baseUrl}/internal/agent/sessions`, { workspaceId: env.workspaceRecord.id })).json();
@@ -341,19 +344,17 @@ test("real HTTP keeps workspace runtimes, uploaded files, and Agent reads strict
   assert.equal(managerB.state, "READY");
 
   env.llm.set([
-    { match: "read secret-a.txt", payloads: toolPayloads("workspace-a-read", "workspace.read", { file_path: "secret-a.txt" }) },
-    { match: "read secret-b.txt", payloads: toolPayloads("workspace-b-read", "workspace.read", { file_path: "secret-b.txt" }) },
-    { match: "cross a to b", payloads: toolPayloads("workspace-a-cross", "workspace.read", { file_path: "secret-b.txt" }) },
-    { match: "cross b to a", payloads: toolPayloads("workspace-b-cross", "workspace.read", { file_path: "secret-a.txt" }) },
+    { match: "read secret-a.txt", payloads: toolPayloads("workspace-a-read", "workspace.open", { file_id: fileA.fileId }) },
+    { match: "read secret-b.txt", payloads: toolPayloads("workspace-b-read", "workspace.open", { file_id: fileB.fileId }) },
     { payloads: textPayloads("tool result handled") },
     { payloads: textPayloads("tool result handled") },
     { payloads: textPayloads("tool result handled") },
     { payloads: textPayloads("tool result handled") },
   ]);
-  const readA = await sse(await post(`${env.baseUrl}/internal/agent/sessions/${sessionA1.sessionId}/runs`, { message: "read secret-a.txt" }));
-  assert.ok(readA.events.some((event) => event.type === "tool.completed"));
+  const readA = await sse(await post(`${env.baseUrl}/internal/agent/sessions/${sessionA1.sessionId}/runs`, { message: "read secret-a.txt", attachments: [fileA.fileId] }));
+  assert.ok(readA.events.some((event) => event.type === "tool.completed"), readA.body);
   assertTerminal(readA.events);
-  const readB = await sse(await post(`${env.baseUrl}/internal/agent/sessions/${sessionB.sessionId}/runs`, { message: "read secret-b.txt" }));
+  const readB = await sse(await post(`${env.baseUrl}/internal/agent/sessions/${sessionB.sessionId}/runs`, { message: "read secret-b.txt", attachments: [fileB.fileId] }));
   assert.ok(readB.events.some((event) => event.type === "tool.completed"));
   assertTerminal(readB.events);
   const firstTwo = JSON.stringify(env.llm.requests);
@@ -361,15 +362,15 @@ test("real HTTP keeps workspace runtimes, uploaded files, and Agent reads strict
   assert.match(firstTwo, /SNN_WORKSPACE_B_SECRET_9d2/);
 
   const beforeCrossA = env.llm.requests.length;
-  const crossA = await sse(await post(`${env.baseUrl}/internal/agent/sessions/${sessionA2.sessionId}/runs`, { message: "cross a to b" }));
-  assert.ok(crossA.events.some((event) => event.type === "tool.failed"));
-  assertTerminal(crossA.events);
-  assert.doesNotMatch(JSON.stringify(env.llm.requests.slice(beforeCrossA)), /SNN_WORKSPACE_B_SECRET_9d2/);
+  const crossA = await post(`${env.baseUrl}/internal/agent/sessions/${sessionA2.sessionId}/runs`, { message: "cross a to b", attachments: [fileB.fileId] });
+  assert.equal(crossA.status, 404);
+  assert.equal((await crossA.json()).error.code, "AGENT_ATTACHMENT_NOT_FOUND");
+  assert.equal(env.llm.requests.length, beforeCrossA);
   const beforeCrossB = env.llm.requests.length;
-  const crossB = await sse(await post(`${env.baseUrl}/internal/agent/sessions/${sessionB.sessionId}/runs`, { message: "cross b to a" }));
-  assert.ok(crossB.events.some((event) => event.type === "tool.failed"));
-  assertTerminal(crossB.events);
-  assert.doesNotMatch(JSON.stringify(env.llm.requests.slice(beforeCrossB)), /SNN_WORKSPACE_A_SECRET_7e1/);
+  const crossB = await post(`${env.baseUrl}/internal/agent/sessions/${sessionB.sessionId}/runs`, { message: "cross b to a", attachments: [fileA.fileId] });
+  assert.equal(crossB.status, 404);
+  assert.equal((await crossB.json()).error.code, "AGENT_ATTACHMENT_NOT_FOUND");
+  assert.equal(env.llm.requests.length, beforeCrossB);
 });
 
 test("loopback File API ingests, lists, and deletes without path leakage", options, async (t) => {
@@ -406,8 +407,8 @@ test("uploaded workspace file survives Runtime restart and remains read-only", o
   t.after(() => runtimeB.close());
   assert.deepEqual(await runtimeB.ingestion.list(runtimeB.workspaceRecord.id), [uploaded]);
   assert.equal((await post(`${runtimeB.baseUrl}/internal/agent/sessions/${sessionId}/resume`, {})).status, 200);
-  runtimeB.llm.set([{ match: "read resume-note.txt", payloads: toolPayloads("resume-upload-read", "workspace.read", { file_path: "resume-note.txt" }) }, { payloads: textPayloads("resumed upload read") }]);
-  const read = await sse(await post(`${runtimeB.baseUrl}/internal/agent/sessions/${sessionId}/runs`, { message: "read resume-note.txt" }));
+  runtimeB.llm.set([{ match: "read resume-note.txt", payloads: toolPayloads("resume-upload-read", "workspace.open", { file_id: uploaded.fileId }) }, { payloads: textPayloads("resumed upload read") }]);
+  const read = await sse(await post(`${runtimeB.baseUrl}/internal/agent/sessions/${sessionId}/runs`, { message: "read resume-note.txt", attachments: [uploaded.fileId] }));
   assertTerminal(read.events);
   assert.match(JSON.stringify(runtimeB.llm.requests), /SNN_UPLOAD_RESUME_SENTINEL/);
   runtimeB.llm.set([{ match: "write resume-note.txt", payloads: toolPayloads("resume-upload-write", "write", { file_path: "resume-note.txt", content: "no" }) }, { payloads: textPayloads("write denied") }]);

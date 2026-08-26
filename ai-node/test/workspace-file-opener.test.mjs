@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WorkspaceManager } from "../src/agent/workspace/workspace-manager.mjs";
 import { FileIngestionService } from "../src/agent/workspace/file-ingestion-service.mjs";
-import { DocumentExtractionService } from "../src/agent/documents/document-extraction-service.mjs";
+import { DocumentExtractionService, readWorkspaceFileEntry } from "../src/agent/documents/document-extraction-service.mjs";
 import { DEFAULT_DOCUMENT_LIMITS } from "../src/agent/documents/limits.mjs";
 import { WorkspaceFileOpener } from "../src/agent/workspace/workspace-file-opener.mjs";
 import { buildTestPdf, buildTestDocx, docxDocumentXml, buildTestXlsx } from "./helpers/document-fixtures.mjs";
@@ -71,11 +71,11 @@ test("workspace file opener rejects mutated content and corrupt manifests withou
   const env = await makeWorkspace("integrity");
   try {
     const text = await env.upload("integrity.txt", Buffer.from("original identity"), "text/plain");
-    await writeFile(join(env.root, "integrity.txt"), "tampered content!!");
+    await writeFile(join(env.root, (await readWorkspaceFileEntry(env.root, text.fileId)).storedName), "tampered content!!");
     await assert.rejects(() => env.opener.open(text.fileId), (error) => error.code === "AGENT_DOCUMENT_INVALID");
 
     const doc = await env.upload("swap.pdf", buildTestPdf({ pages: [["real pdf"]] }));
-    await writeFile(join(env.root, "swap.pdf"), Buffer.from("%PDF-1.4 not really"));
+    await writeFile(join(env.root, (await readWorkspaceFileEntry(env.root, doc.fileId)).storedName), Buffer.from("%PDF-1.4 not really"));
     await assert.rejects(() => env.opener.open(doc.fileId), (error) => error.code === "AGENT_DOCUMENT_INVALID");
 
     const valid = await env.upload("valid.txt", Buffer.from("kept"), "text/plain");
