@@ -51,6 +51,7 @@ function toolPayloads(callId, name, args) {
 function mockLlm() {
   let scripts = [];
   const requests = [];
+  const hanging = new Set();
   const server = createServer((request, response) => {
     let body = "";
     request.on("data", (chunk) => { body += chunk; });
@@ -63,7 +64,9 @@ function mockLlm() {
       response.write(": open\n\n");
       if (entry?.hang) {
         const keepalive = setInterval(() => response.write(": ping\n\n"), 100);
-        request.once("close", () => clearInterval(keepalive));
+        const active = { keepalive, response };
+        hanging.add(active);
+        request.once("close", () => { clearInterval(keepalive); hanging.delete(active); });
         return;
       }
       for (const payload of entry?.payloads ?? textPayloads("done")) response.write(`data: ${payload}\n\n`);
@@ -75,7 +78,11 @@ function mockLlm() {
     url: undefined,
     set(next) { scripts = next.map((entry) => ({ ...entry })); },
     async listen() { await new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen)); this.url = `http://127.0.0.1:${server.address().port}`; },
-    async close() { await new Promise((resolveClose) => { server.closeAllConnections(); server.close(resolveClose); }); },
+    async close() {
+      for (const active of hanging) { clearInterval(active.keepalive); active.response.destroy(); }
+      hanging.clear();
+      await new Promise((resolveClose) => { server.closeAllConnections(); server.close(resolveClose); });
+    },
   };
 }
 
@@ -84,7 +91,7 @@ async function removeTree(path) {
   const deadline = Date.now() + 10_000;
   for (;;) {
     try {
-      await trackedRm(path);
+      await rm(path, { recursive: true, force: true, maxRetries: 2, retryDelay: 50 });
       return;
     } catch (error) {
       if (Date.now() > deadline) {
@@ -95,19 +102,6 @@ async function removeTree(path) {
       }
       await new Promise((resolveWait) => setTimeout(resolveWait, 250));
     }
-  }
-}
-
-async function trackedRm(path) {
-  const trace = process.env.SNN_TEST_DEBUG_FS === "1";
-  const startedAt = Date.now();
-  if (trace) console.error(`SNN_TEST_DEBUG_FS ${JSON.stringify({ operation: "rm", pathCategory: "temp-root", state: "start" })}`);
-  try {
-    await rm(path, { recursive: true, force: true, maxRetries: 2, retryDelay: 50 });
-    if (trace) console.error(`SNN_TEST_DEBUG_FS ${JSON.stringify({ operation: "rm", pathCategory: "temp-root", state: "complete", elapsedMs: Date.now() - startedAt })}`);
-  } catch (error) {
-    if (trace) console.error(`SNN_TEST_DEBUG_FS ${JSON.stringify({ operation: "rm", pathCategory: "temp-root", state: "reject", code: error?.code, elapsedMs: Date.now() - startedAt })}`);
-    throw error;
   }
 }
 
