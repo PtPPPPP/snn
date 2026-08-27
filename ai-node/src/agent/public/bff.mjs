@@ -14,6 +14,10 @@ const RUN_ID_RE = /^snn-run-[a-z0-9-]{8,80}$/;
 const PREVIEW_EXTENSIONS = new Set([...TEXT_EXTENSIONS, "jsx", "css"]);
 const MAX_PREVIEW_BYTES = 256 * 1024;
 
+// Hard ceiling for a single public upload request body. Must stay aligned
+// with the production FileIngestionService maxUploadBytes in src/index.mjs.
+export const PUBLIC_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
+
 const PUBLIC_SSE_EVENTS = new Set([
   "run.started", "reasoning.started", "reasoning.delta", "reasoning.completed",
   "message.started", "message.delta", "message.completed", "tool.started",
@@ -441,7 +445,7 @@ export function createPublicAgentBff({
               const boundaryMatch = request.headers["content-type"].match(/boundary=([^;]+)/);
               if (!boundaryMatch) throw Object.assign(new Error("Invalid multipart"), { status: 400, code: "INVALID_REQUEST" });
               const boundary = boundaryMatch[1].replace(/^"|"$/g, "");
-              const fileData = await parseMultipartFile(request, boundary, 10 * 1024 * 1024);
+              const fileData = await parseMultipartFile(request, boundary, PUBLIC_UPLOAD_MAX_BYTES);
               if (!fileData) throw Object.assign(new Error("File is required"), { status: 400, code: "AGENT_FILE_REQUIRED" });
               const result = await ingestionService.ingest({ workspaceId: workspace.id, originalName: fileData.filename, contentType: fileData.contentType, body: (async function*(){ yield fileData.data; })() });
               sendJson(response, 201, { file: publicFileForSession(sessionId, result) }, originInfo);

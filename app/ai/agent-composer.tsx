@@ -33,6 +33,7 @@ export default function AgentComposer({
   isStreaming,
   pendingAttachments,
   uploadState,
+  uploadProgress,
   onSend,
   onStop,
   onUpload,
@@ -42,6 +43,7 @@ export default function AgentComposer({
   isStreaming: boolean;
   pendingAttachments: AgentFile[];
   uploadState: Record<string, string>;
+  uploadProgress?: Record<string, number>;
   onSend: (content: string) => void;
   onStop: () => void;
   onUpload: (file: File) => Promise<unknown>;
@@ -52,6 +54,8 @@ export default function AgentComposer({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isUploading = Object.values(uploadState).some((s) => s === "uploading");
+  const progressValues = Object.values(uploadProgress ?? {});
+  const uploadPercent = progressValues.length > 0 ? Math.min(100, Math.max(...progressValues)) : 0;
 
   function submit() {
     const content = value.trim();
@@ -100,7 +104,27 @@ export default function AgentComposer({
   return (
     <form className={styles.composer} data-chat-composer data-testid="agent-composer" onSubmit={handleSubmit} onClick={(e) => { if (e.target === e.currentTarget) textareaRef.current?.focus(); }}>
       {pendingAttachments.length > 0 ? <AgentAttachmentChips files={pendingAttachments} onRemove={onRemovePending} /> : null}
-      {isUploading ? <span className={styles.agentUploadHint} role="status">正在上传…</span> : null}
+      {isUploading ? (
+        <span className={styles.agentUploadStatus} role="status" data-testid="agent-upload-status">
+          <span className={styles.agentUploadHint}>正在上传…</span>
+          {uploadPercent > 0 ? (
+            <>
+              <span
+                className={styles.agentUploadProgress}
+                data-testid="agent-upload-progress"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={uploadPercent}
+                aria-label="文件上传进度"
+              >
+                <span className={styles.agentUploadProgressBar} style={{ width: `${uploadPercent}%` }} />
+              </span>
+              <span className={styles.agentUploadHint}>{uploadPercent}%</span>
+            </>
+          ) : null}
+        </span>
+      ) : null}
       <textarea
         ref={textareaRef}
         className={styles.composerInput}

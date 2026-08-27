@@ -657,6 +657,7 @@ export default function AiChat() {
                     isStreaming={agent.runState === "streaming" || agent.runState === "starting" || agent.runState === "cancelling"}
                     pendingAttachments={agent.pendingAttachments}
                     uploadState={agent.uploadState}
+                    uploadProgress={agent.uploadProgress}
                     onSend={(content) => void agent.sendMessage(content)}
                     onStop={() => void agent.cancelRun()}
                     onUpload={(file) => agent.uploadFile(file)}

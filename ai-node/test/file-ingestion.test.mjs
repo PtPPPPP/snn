@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WorkspaceManager } from "../src/agent/workspace/workspace-manager.mjs";
 import { FileIngestionService } from "../src/agent/workspace/file-ingestion-service.mjs";
+import { PUBLIC_UPLOAD_MAX_BYTES } from "../src/agent/public/bff.mjs";
 
 function body(bytes) { return (async function* () { yield Buffer.from(bytes); })(); }
 
@@ -104,4 +105,24 @@ test("copy-on-write keeps the prior manifest authoritative across storage failur
   const cleanupFailure = new FileIngestionService({ workspaceManager: manager, maxUploadBytes: 64, io: { rm: async (path, options) => { if (String(path).endsWith(oldStored)) throw new Error("old cleanup failed"); return rm(path, options); } } });
   await cleanupFailure.writeEditableText({ workspaceId: workspace.id, virtualPath: "notes.md", content: "new", expected: { kind: "replaceIfVersion", version: old.version } });
   assert.equal((await base.readEditableText({ workspaceId: workspace.id, virtualPath: "notes.md" })).content, "new");
+});
+
+test("production upload ceiling accepts large files and stays aligned across layers", async (t) => {
+  // Regression for the 50MB upload limit: files well above the old 10MB
+  // boundary must ingest cleanly, and the public BFF request cap must
+  // never undercut the production ingestion cap.
+  const root = await mkdtemp(join(tmpdir(), "snn-ingest-big-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const manager = new WorkspaceManager();
+  const workspace = await manager.register(root, { id: "snn-workspace-big" });
+  const service = new FileIngestionService({ workspaceManager: manager, maxUploadBytes: 52_428_800, maxTotalBytes: 524_288_000 });
+
+  const elevenMiB = Buffer.alloc(11 * 1024 * 1024, 97);
+  const uploaded = await service.ingest({ workspaceId: workspace.id, originalName: "big.log", contentType: "text/plain", body: body(elevenMiB) });
+  assert.equal(uploaded.size, elevenMiB.length);
+
+  const overLimit = Buffer.alloc(52_428_801, 98);
+  await assert.rejects(() => service.ingest({ workspaceId: workspace.id, originalName: "huge.log", body: body(overLimit) }), (error) => error.code === "AGENT_FILE_TOO_LARGE");
+
+  assert.ok(PUBLIC_UPLOAD_MAX_BYTES >= 52_428_800, "public BFF upload cap must cover the 50MB production limit");
 });

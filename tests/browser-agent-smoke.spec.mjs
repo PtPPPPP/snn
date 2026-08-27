@@ -220,6 +220,42 @@ test("Removing a pending attachment preserves the workspace file; deleting it re
   await expect(page.getByTestId("files-panel")).toHaveCount(0);
 });
 
+test("Upload status stays visible and XHR uploads complete through the agent API", async ({ page }) => {
+  // Regression for the progress-carrying upload path: uploads now go through
+  // XMLHttpRequest (the only API with upload progress). Playwright route
+  // interception suppresses xhr.upload.onprogress, so the percent bar itself
+  // is exercised against real servers only; here we lock the visible contract:
+  // hint while in flight, clean completion, no ghost state.
+  const sessionId = "snn-agent-dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+  const fileId = "snn-file-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+  let finishUpload;
+  const uploadFinished = new Promise((resolve) => { finishUpload = resolve; });
+  await mockAgentStatus(page, true);
+  await page.route("**/api/agent/sessions", async (route) => {
+    if (route.request().method() === "POST") return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ sessionId, status: "created" }) });
+    if (route.request().method() === "GET") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ sessions: [] }) });
+    return route.continue();
+  });
+  await page.route(`**/api/agent/sessions/${sessionId}/files`, async (route) => {
+    if (route.request().method() === "POST") {
+      await uploadFinished;
+      return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ file: { fileId, originalName: "large.log", size: 2 * 1024 * 1024, kind: "text" } }) });
+    }
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ files: [] }) });
+  });
+
+  await page.goto("/ai/", { waitUntil: "networkidle" });
+  await page.getByRole("tab", { name: /Agent/ }).click();
+  const uploadRequest = page.waitForRequest((request) => request.url().includes(`/api/agent/sessions/${sessionId}/files`) && request.method() === "POST");
+  await page.getByTestId("agent-file-input").setInputFiles({ name: "large.log", mimeType: "text/plain", buffer: Buffer.alloc(2 * 1024 * 1024, 97) });
+  await expect(page.getByText("正在上传…")).toBeVisible();
+  // The 2MB body must reach the endpoint through the XHR path.
+  expect((await uploadRequest).postData()?.length ?? 0).toBeGreaterThan(2 * 1024 * 1024);
+  finishUpload();
+  await expect(page.getByTestId("attachment-chip")).toContainText("large.log");
+  await expect(page.getByText("正在上传…")).toHaveCount(0);
+});
+
 test("A late upload result cannot leak into a newly selected session", async ({ page }) => {
   const sessionA = "snn-agent-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   const sessionB = "snn-agent-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";

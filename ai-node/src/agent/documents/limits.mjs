@@ -37,7 +37,7 @@ const HARD_CEILINGS = Object.freeze({
 });
 
 export const DEFAULT_DOCUMENT_LIMITS = Object.freeze({
-  maxDocumentBytes: 10 * 1024 * 1024,
+  maxDocumentBytes: 50 * 1024 * 1024,
   maxExtractedChars: 120_000,
   maxPdfPages: 200,
   maxArchiveEntries: 512,

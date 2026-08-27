@@ -64,7 +64,7 @@ if (config.agent.enabled) {
     ensureRuntime: defaultWorkspaceManager.ensureReady,
     runtimeState: () => runtimeRegistry?.get(workspace.id)?.state ?? "STOPPED",
   });
-  ingestionService = new FileIngestionService({ workspaceManager, maxUploadBytes: 10_485_760, maxTotalBytes: 104_857_600 });
+  ingestionService = new FileIngestionService({ workspaceManager, maxUploadBytes: 52_428_800, maxTotalBytes: 524_288_000 });
   metadataStore = new SessionMetadataStore(config.agent.sessionMetadataRoot);
   controller = new AgentSessionController({
     manager: defaultWorkspaceManager,

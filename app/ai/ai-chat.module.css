@@ -1419,6 +1419,9 @@
 .agentUploadButton:disabled { opacity: 0.5; cursor: not-allowed; }
 .agentFileInputHidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 .agentUploadHint { color: var(--snn-text-muted); font-family: var(--font-geist-mono), monospace; font-size: 10px; }
+.agentUploadStatus { display: inline-flex; align-items: center; gap: 6px; }
+.agentUploadProgress { position: relative; display: inline-block; width: 96px; height: 4px; border-radius: 2px; border: 1px solid var(--snn-border-soft); background: var(--snn-surface-muted); overflow: hidden; }
+.agentUploadProgressBar { display: block; height: 100%; background: var(--snn-control); transition: width 120ms ease; }
 .agentUploadHintInline { color: var(--snn-text-muted); font-family: var(--font-geist-mono), monospace; font-size: 11px; margin-right: 4px; }
 .toolActivity { padding: 8px 12px; border: 1px dashed var(--snn-border-soft); border-radius: 12px; background: var(--snn-surface-muted); max-width: min(680px, 92%); margin-bottom: 6px; }
 .toolActivityTitle { font-family: var(--font-geist-mono), monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--snn-text-muted); }

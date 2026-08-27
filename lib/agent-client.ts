@@ -92,13 +92,17 @@ async function agentFetch(path: string, init: RequestInit, timeoutMs?: number): 
   }
 }
 
-function throwForStatus(res: Response, body?: unknown): never {
+function throwForStatusCode(status: number, body?: unknown): never {
   const code = (body as { error?: { code?: string } })?.error?.code;
-  if (res.status === 401 || res.status === 403) throw new AgentClientError("auth", res.status, code);
-  if (res.status === 404) throw new AgentClientError("not_found", 404, code);
-  if (res.status === 429) throw new AgentClientError("limit", 429, code);
-  if (res.status >= 400 && res.status < 500) throw new AgentClientError("invalid", res.status, code);
-  throw new AgentClientError("http", res.status, code);
+  if (status === 401 || status === 403) throw new AgentClientError("auth", status, code);
+  if (status === 404) throw new AgentClientError("not_found", 404, code);
+  if (status === 429) throw new AgentClientError("limit", 429, code);
+  if (status >= 400 && status < 500) throw new AgentClientError("invalid", status, code);
+  throw new AgentClientError("http", status, code);
+}
+
+function throwForStatus(res: Response, body?: unknown): never {
+  throwForStatusCode(res.status, body);
 }
 
 export async function getAgentStatus(): Promise<{ online: boolean; agent: boolean; readiness?: AgentRuntimeReadiness }> {
@@ -169,18 +173,38 @@ export async function previewAgentFile(sessionId: string, fileId: string): Promi
   return data;
 }
 
-export async function uploadAgentFile(sessionId: string, file: File): Promise<AgentFile> {
+// Server-enforced per-file upload ceiling (bff.mjs multipart limit and
+// FileIngestionService maxUploadBytes). Kept here so the client can fail
+// fast before pushing a doomed request over a slow link.
+export const AGENT_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
+
+export async function uploadAgentFile(
+  sessionId: string,
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<AgentFile> {
   const formData = new FormData();
   formData.append("file", file, file.name);
-  const res = await agentFetch(`/sessions/${encodeURIComponent(sessionId)}/files`, {
-    method: "POST",
-    body: formData,
+  // XMLHttpRequest instead of fetch: it is the only browser API that
+  // reports upload progress, which matters on slow tunnel links.
+  const result = await new Promise<{ status: number; bodyText: string }>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${getAgentApiBaseUrl()}/sessions/${encodeURIComponent(sessionId)}/files`);
+    xhr.withCredentials = true;
+    if (onProgress) {
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable || event.total === 0) return;
+        onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+      };
+    }
+    xhr.onload = () => resolve({ status: xhr.status, bodyText: xhr.responseText });
+    xhr.onerror = () => reject(new AgentClientError("network"));
+    xhr.ontimeout = () => reject(new AgentClientError("network"));
+    xhr.send(formData);
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throwForStatus(res, body);
-  }
-  const data = (await res.json()) as { file: AgentFile };
+  const body: unknown = (() => { try { return JSON.parse(result.bodyText); } catch { return {}; } })();
+  if (result.status < 200 || result.status >= 300) throwForStatusCode(result.status, body);
+  const data = body as { file: AgentFile };
   if (!data.file?.fileId) throw new AgentClientError("response");
   return data.file;
 }

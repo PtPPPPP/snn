@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AgentClientError,
+  AGENT_UPLOAD_MAX_BYTES,
   cancelAgentRun,
   createAgentSession,
   deleteAgentFile,
@@ -57,7 +58,7 @@ function uploadErrorMessage(error: AgentClientError): string {
   switch (error.detail) {
     case "AGENT_FILE_TOO_LARGE":
     case "REQUEST_TOO_LARGE":
-      return "文件大小超过限制。";
+      return `文件大小超过限制（单文件最大 ${Math.round(AGENT_UPLOAD_MAX_BYTES / (1024 * 1024))}MB）。`;
     case "AGENT_WORKSPACE_QUOTA_EXCEEDED":
       return "当前会话文件容量已达到限制。";
     case "AGENT_SESSION_NOT_FOUND":
@@ -96,6 +97,7 @@ export function useAgent() {
   const [toolActivity, setToolActivity] = useState<ToolActivity[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [uploadState, setUploadState] = useState<Record<string, "uploading" | "ready" | "error">>({});
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [isAgentAvailable, setIsAgentAvailable] = useState<boolean | null>(null);
   const [agentReadiness, setAgentReadiness] = useState<AgentRuntimeReadiness | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -341,6 +343,13 @@ export function useAgent() {
     let sid: string | null = null;
     let sessionGeneration = sessionGenerationRef.current;
     let uploadReserved = false;
+    // Fail fast client-side: oversized files must never start a doomed
+    // transfer over a slow link; the server stays authoritative.
+    if (file.size > AGENT_UPLOAD_MAX_BYTES) {
+      const err = new AgentClientError("invalid", 413, "AGENT_FILE_TOO_LARGE");
+      setError(uploadErrorMessage(err));
+      throw err;
+    }
     try {
       sid = await ensureSession();
       sessionGeneration = sessionGenerationRef.current;
@@ -355,7 +364,16 @@ export function useAgent() {
         setUploadState((prev) => ({ ...prev, [tempId]: "uploading" }));
         setError(null);
       }
-      const uploaded = await uploadAgentFile(sid, file);
+      const uploaded = await uploadAgentFile(sid, file, (percent) => {
+        if (activeSessionIdRef.current !== sid || sessionGenerationRef.current !== sessionGeneration) return;
+        setUploadProgress((prev) => {
+          const current = prev[tempId] ?? -1;
+          // Skip non-advancing noise: progress events can fire very
+          // often on fast links and must not stall the upload loop.
+          if (percent <= current) return prev;
+          return { ...prev, [tempId]: percent };
+        });
+      });
       if (activeSessionIdRef.current === sid && sessionGenerationRef.current === sessionGeneration) {
         filesRevisionRef.current += 1;
         setFiles((prev) => prev.some((item) => item.fileId === uploaded.fileId) ? prev : [...prev, uploaded]);
@@ -384,6 +402,12 @@ export function useAgent() {
       if (sid && uploadReserved) {
         uploadsInFlightBySessionRef.current[sid] = Math.max(0, (uploadsInFlightBySessionRef.current[sid] ?? 1) - 1);
       }
+      setUploadProgress((prev) => {
+        if (!(tempId in prev)) return prev;
+        const next = { ...prev };
+        delete next[tempId];
+        return next;
+      });
       if (sid && activeSessionIdRef.current === sid && sessionGenerationRef.current === sessionGeneration) {
         setTimeout(() => {
           if (activeSessionIdRef.current !== sid || sessionGenerationRef.current !== sessionGeneration) return;
@@ -547,6 +571,7 @@ export function useAgent() {
     toolActivity,
     error,
     uploadState,
+    uploadProgress,
     isAgentAvailable,
     agentReadiness,
     loaded,
