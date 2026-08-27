@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE } from "../lib/site";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -12,26 +13,22 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const TITLE = "SNN｜Smart Neural Network 学生科技社团";
-const DESCRIPTION =
-  "面向人工智能与机器人方向的学生科技社团。一起学习、动手、参赛，把想法做成真正能跑的项目。";
-
 // 部署时通过 NEXT_PUBLIC_SITE_URL 注入正式域名，用于解析 OG 图的绝对地址。
 // 规范化去除尾部斜杠，避免与以 / 开头的资源路径拼接产生 //。
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/+$/, "");
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: TITLE,
-  description: DESCRIPTION,
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
   icons: {
     icon: "/assets/favicon.svg",
     shortcut: "/assets/favicon.svg",
   },
   openGraph: {
-    title: TITLE,
-    description: DESCRIPTION,
-    siteName: "SNN · Smart Neural Network",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    siteName: SITE_NAME,
     locale: "zh_CN",
     type: "website",
     images: [
@@ -39,14 +36,14 @@ export const metadata: Metadata = {
         url: "/assets/og.png",
         width: 1200,
         height: 630,
-        alt: "SNN · Smart Neural Network",
+        alt: SITE_NAME,
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: TITLE,
-    description: DESCRIPTION,
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
     images: ["/assets/og.png"],
   },
 };

@@ -115,15 +115,6 @@ export function deleteConversation(id: string): Promise<void> {
   return enqueueConversation(id, () => tx("readwrite", (store) => store.delete(id)).then(() => undefined));
 }
 
-export function renameConversation(id: string, title: string): Promise<void> {
-  return getConversation(id).then((conv) => {
-    if (!conv) return;
-    conv.title = title;
-    conv.updatedAt = Date.now();
-    return saveConversation(conv);
-  });
-}
-
 export function getActiveConversationId(): string | null {
   try {
     return window.localStorage.getItem(ACTIVE_KEY);
@@ -142,8 +133,4 @@ export function setActiveConversationId(id: string | null): void {
   } catch {
     // localStorage may be unavailable; in-memory state still works.
   }
-}
-
-export function isStoreAvailable(): boolean {
-  return typeof indexedDB !== "undefined";
 }

@@ -1,5 +1,6 @@
 import { ArrowUp } from "./icons";
 import { projects } from "./data";
+import { BRAND_LOGO, BRAND_NAME_EN } from "../../lib/site";
 
 export function Footer() {
   return (
@@ -8,13 +9,13 @@ export function Footer() {
         <a className="brand footer-brand" href="#top" aria-label="返回首页顶部">
           <img
             className="brand-logo"
-            src="/assets/snn-logo-fixed.png"
+            src={BRAND_LOGO.src}
             alt="SNN 社团 Logo"
-            width={1254}
-            height={1254}
+            width={BRAND_LOGO.width}
+            height={BRAND_LOGO.height}
           />
           <span className="brand-divider" aria-hidden="true" />
-          <span className="brand-name">SMART NEURAL NETWORK</span>
+          <span className="brand-name">{BRAND_NAME_EN}</span>
         </a>
         <p className="footer-tagline">AI × ROBOTICS × MAKERS</p>
 
@@ -54,7 +55,7 @@ export function Footer() {
       </div>
 
       <div className="footer-bottom">
-        <span>© 2026 SNN · SMART NEURAL NETWORK</span>
+        <span>© 2026 SNN · {BRAND_NAME_EN}</span>
         <a className="back-to-top" href="#top">
           BACK TO TOP <ArrowUp className="back-to-top-icon" />
         </a>

@@ -25,7 +25,7 @@ export type AgentFilePreview = {
 
 // Client-side mirror of the server preview whitelist (bff.mjs); the server
 // remains authoritative and rejects anything outside it.
-export const PREVIEW_TEXT_EXTENSIONS = new Set([
+const PREVIEW_TEXT_EXTENSIONS = new Set([
   "txt", "md", "markdown", "csv", "json", "log", "xml", "yml", "yaml", "html", "htm",
   "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "java", "c", "h", "cpp", "go", "rs",
   "rb", "sh", "sql", "ini", "toml", "css",

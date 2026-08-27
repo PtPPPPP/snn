@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* ========================================
+   01. Design Tokens
+======================================== */
 :root {
   --paper: #ffffff;
   --paper-soft: rgba(255, 255, 255, 0.88);
@@ -40,9 +43,13 @@
   --snn-shadow-floating: 0 24px 70px rgba(32, 37, 31, 0.16);
 }
 
-.section { scroll-margin-top: 96px; }
-
-.section { border-color: var(--ink-30); }
+/* ========================================
+   02. Reset & Base
+======================================== */
+.section {
+  scroll-margin-top: 96px;
+  border-color: var(--ink-30);
+}
 
 * {
   box-sizing: border-box;
@@ -70,6 +77,9 @@ a {
   color: white;
 }
 
+/* ========================================
+   03. Navigation
+======================================== */
 .site-header {
   position: absolute;
   z-index: 20;
@@ -184,6 +194,9 @@ a {
   height: 12px;
 }
 
+/* ========================================
+   04. Hero
+======================================== */
 .hero {
   position: relative;
   display: grid;
@@ -337,11 +350,12 @@ a {
   animation: robot-enter 900ms cubic-bezier(0.2, 0.72, 0, 1) both;
 }
 
-/* SNN hero art — DIGITAL PLOTTER / NEURAL BLUEPRINT
+/* ========================================
+   05. Hero Art — Digital Plotter / Neural Blueprint
    All motion is driven by a single 10s master timeline injected by
    SnnHeroArt.tsx (absolute keyframes, one shared period). Only the
-   static-state / responsive / accessibility rules live here. */
-
+   static-state / responsive / accessibility rules live here.
+======================================== */
 .blueprint {
   position: absolute;
   z-index: 1;
@@ -449,6 +463,9 @@ a {
   content: "";
 }
 
+/* ========================================
+   06. About
+======================================== */
 .about-grid {
   display: grid;
   grid-template-columns: 0.82fr 1.18fr;
@@ -532,6 +549,9 @@ a {
   line-height: 1.7;
 }
 
+/* ========================================
+   07. Projects
+======================================== */
 .section-projects {
   background: var(--white);
 }
@@ -641,6 +661,9 @@ a {
   color: var(--snn-text-secondary);
 }
 
+/* ========================================
+   08. Activities
+======================================== */
 .activities-heading {
   display: grid;
   grid-template-columns: 1.2fr 0.8fr;
@@ -719,6 +742,9 @@ a {
   width: 100%;
 }
 
+/* ========================================
+   09. Join
+======================================== */
 .section-join {
   display: grid;
   grid-template-columns: 1.15fr 0.85fr;
@@ -861,6 +887,9 @@ footer {
   padding: 0 clamp(24px, 5.5vw, 88px);
 }
 
+/* ========================================
+   10. Footer
+======================================== */
 .footer-top {
   display: grid;
   grid-template-columns: 1fr 1.8fr;
@@ -952,6 +981,9 @@ footer {
   outline-offset: var(--snn-focus-ring-offset);
 }
 
+/* ========================================
+   11. Keyframes
+======================================== */
 @keyframes rotate-blueprint {
   to {
     transform: rotate(360deg);
@@ -978,6 +1010,9 @@ footer {
   }
 }
 
+/* ========================================
+   12. Responsive
+======================================== */
 @media (max-width: 1080px) {
   .site-header {
     height: 88px;
@@ -1402,6 +1437,11 @@ footer {
   }
 }
 
+/* ========================================
+   13. Hero Composition Overrides
+   Full-viewport editorial composition; loaded after the
+   responsive rules above so it takes precedence on desktop.
+======================================== */
 /* SNN homepage hero — full-viewport editorial composition. */
 .site-header {
   position: fixed;

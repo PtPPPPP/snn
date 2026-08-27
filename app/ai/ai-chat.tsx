@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { BRAND_LOGO, BRAND_NAME_EN } from "../../lib/site";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AiClientError, getAiStatus, streamChatMessage } from "../../lib/ai-client";
 import type { AiChatMessage } from "../../lib/ai-client";
@@ -564,8 +565,8 @@ export default function AiChat() {
     <main className={styles.page}>
       <header className={styles.header}>
         <Link className={styles.brand} href="/" aria-label="返回 SNN 首页">
-          <img src="/assets/snn-logo-fixed.png" alt="SNN 社团 Logo" width={1254} height={1254} />
-          <span>SNN AI<small>SMART NEURAL NETWORK</small></span>
+          <img src={BRAND_LOGO.src} alt="SNN 社团 Logo" width={BRAND_LOGO.width} height={BRAND_LOGO.height} />
+          <span>SNN AI<small>{BRAND_NAME_EN}</small></span>
         </Link>
         <div className={styles.headerRight}>
           <ModeSwitch mode={mode} onChange={setMode} agentAvailable={agent.isAgentAvailable} />

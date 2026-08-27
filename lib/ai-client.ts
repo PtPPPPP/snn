@@ -64,7 +64,7 @@ function configuredBaseUrl(): string | undefined {
   return typeof window === "undefined" ? undefined : window.__SNN_AI_API_BASE_URL__;
 }
 
-export function getAiApiBaseUrl(): string {
+function getAiApiBaseUrl(): string {
   const baseUrl = configuredBaseUrl()?.trim() || DEFAULT_AI_API_BASE_URL;
   return baseUrl.replace(/\/+$/, "");
 }

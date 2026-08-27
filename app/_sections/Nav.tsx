@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { BRAND_LOGO } from "../../lib/site";
 
 const NAV_LINKS = [
   { href: "#about", label: "关于我们", id: "about" },
@@ -14,7 +15,7 @@ export function Nav() {
   const [active, setActive] = useState<string>("");
 
   useEffect(() => {
-    const ids = ["about", "activities", "projects", "join"];
+    const ids = NAV_LINKS.map((link) => link.id);
     const sections = ids
       .map((id) => document.getElementById(id))
       .filter((el): el is HTMLElement => el !== null);
@@ -41,10 +42,10 @@ export function Nav() {
       <a className="brand" href="#top" aria-label="SNN 首页">
         <img
           className="brand-logo"
-          src="/assets/snn-logo-fixed.png"
+          src={BRAND_LOGO.src}
           alt="SNN 社团 Logo"
-          width={1254}
-          height={1254}
+          width={BRAND_LOGO.width}
+          height={BRAND_LOGO.height}
         />
         <span className="brand-name">SNN</span>
       </a>
