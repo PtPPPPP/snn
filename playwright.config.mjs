@@ -1,4 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
+import { existsSync } from "node:fs";
+
+const localEdge = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
+const localChrome = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+const localExecutable = process.platform === "win32" ? [localEdge, localChrome].find(existsSync) : undefined;
+const launchOptions = localExecutable ? { executablePath: localExecutable } : {};
 
 export default defineConfig({
   testDir: "./tests",
@@ -10,7 +16,7 @@ export default defineConfig({
   use: {
     baseURL: "http://127.0.0.1:3000",
     headless: true,
-    launchOptions: { executablePath: "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe" },
+    launchOptions,
     ...devices["Desktop Chrome"],
     screenshot: "only-on-failure",
     trace: "retain-on-failure",

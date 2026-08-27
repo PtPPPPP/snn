@@ -23,6 +23,14 @@ export type AgentFilePreview = {
   content: string;
 };
 
+export type AgentRuntimeReadiness = {
+  configured: boolean;
+  state: "disabled" | "pending" | "starting" | "ready" | "failed";
+  runtimeReady: boolean;
+  toolsReady: "unknown";
+  modelToolCallingVerified: "unknown";
+};
+
 // Client-side mirror of the server preview whitelist (bff.mjs); the server
 // remains authoritative and rejects anything outside it.
 const PREVIEW_TEXT_EXTENSIONS = new Set([
@@ -93,13 +101,14 @@ function throwForStatus(res: Response, body?: unknown): never {
   throw new AgentClientError("http", res.status, code);
 }
 
-export async function getAgentStatus(): Promise<{ online: boolean; agent: boolean }> {
+export async function getAgentStatus(): Promise<{ online: boolean; agent: boolean; readiness?: AgentRuntimeReadiness }> {
   try {
     const base = getAgentApiBaseUrl().replace(/\/agent$/, "/ai");
     const res = await fetch(`${base}/status`, { method: "GET", credentials: "include", signal: AbortSignal.timeout(STATUS_TIMEOUT_MS) });
     if (!res.ok) return { online: false, agent: false };
-    const data = (await res.json()) as { online: boolean; capabilities?: { agent?: boolean } };
-    return { online: Boolean(data.online), agent: Boolean(data.capabilities?.agent) };
+    const data = (await res.json()) as { online: boolean; capabilities?: { agent?: boolean; agentReadiness?: AgentRuntimeReadiness } };
+    const readiness = data.capabilities?.agentReadiness;
+    return { online: Boolean(data.online), agent: Boolean(data.capabilities?.agent), ...(readiness ? { readiness } : {}) };
   } catch {
     return { online: false, agent: false };
   }

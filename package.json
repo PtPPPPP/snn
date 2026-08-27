@@ -22,6 +22,7 @@
     "test:rendered-html": "node --test tests/rendered-html.test.mjs",
     "test:browser-smoke": "playwright test",
     "test:mobile-smoke": "playwright test tests/mobile-browser-smoke.spec.mjs",
+    "test:workspace-edit-real-model": "node --test tests/workspace-edit-real-model.test.mjs",
     "preflight:production": "npm run test:production-artifact && node scripts/check-production-readiness.mjs",
     "deploy:production": "npm run build:production && npm run test:production-artifact && wrangler deploy --config dist/server/wrangler.json",
     "verify": "npm run lint && npm run test:ai-state && npm run test:ai-node && npm run test:ai-gateway && npm run build && npm run test:artifact && npm run test:production-artifact && npm run test:production-readiness && npm run test:rendered-html",

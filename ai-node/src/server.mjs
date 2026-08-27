@@ -296,7 +296,21 @@ async function forwardSse(upstreamResponse, response, config, requestId, upstrea
   }
 }
 
-export function createAiNodeServer(config, { fetchImpl = fetch, logger = console, publicBff = null } = {}) {
+function agentCapabilities(config, agentReadiness) {
+  if (!config.agent?.enabled || !config.publicAgent?.enabled || !agentReadiness?.snapshot) return { agent: false };
+  const readiness = agentReadiness.snapshot();
+  return { agent: readiness.runtimeReady, attachments: readiness.runtimeReady, agentReadiness: readiness };
+}
+
+function statusBody(config, online, agentCaps) {
+  const body = online
+    ? { online: true, model: config.model, status: "ready", capabilities: { thinking: true, webSearch: Boolean(config.webSearch), ...agentCaps } }
+    : { online: false, model: null, status: "offline", capabilities: { thinking: false, webSearch: false, ...agentCaps } };
+  if (config.releaseId) body.releaseId = config.releaseId;
+  return body;
+}
+
+export function createAiNodeServer(config, { fetchImpl = fetch, logger = console, publicBff = null, agentReadiness = null } = {}) {
   return createServer(async (request, response) => {
     const startedAt = Date.now();
     const requestId = randomUUID();
@@ -355,19 +369,17 @@ export function createAiNodeServer(config, { fetchImpl = fetch, logger = console
       if (request.method === "GET" && isStatus) {
         try {
           const online = await runtimeReady(config, fetchImpl);
-          const agentCaps = config.agent?.enabled && config.publicAgent?.enabled ? { agent: true, attachments: true } : { agent: false };
+          const agentCaps = agentCapabilities(config, agentReadiness);
           sendJson(
             response,
             200,
-            online
-              ? { online: true, model: config.model, status: "ready", capabilities: { thinking: true, webSearch: Boolean(config.webSearch), ...agentCaps } }
-              : { online: false, model: null, status: "offline", capabilities: { thinking: false, webSearch: false, ...agentCaps } },
+            statusBody(config, online, agentCaps),
             origin,
           );
         } catch (error) {
           upstreamStatus = error.status ?? null;
-          const agentCaps = config.agent?.enabled && config.publicAgent?.enabled ? { agent: true, attachments: true } : { agent: false };
-          sendJson(response, 200, { online: false, model: null, status: "offline", capabilities: { thinking: false, webSearch: false, ...agentCaps } }, origin);
+          const agentCaps = agentCapabilities(config, agentReadiness);
+          sendJson(response, 200, statusBody(config, false, agentCaps), origin);
         }
         return;
       }

@@ -13,6 +13,7 @@ import {
   streamAgentRun,
   uploadAgentFile,
   type AgentFile,
+  type AgentRuntimeReadiness,
   type AgentSession,
 } from "../../lib/agent-client";
 
@@ -96,6 +97,7 @@ export function useAgent() {
   const [error, setError] = useState<string | null>(null);
   const [uploadState, setUploadState] = useState<Record<string, "uploading" | "ready" | "error">>({});
   const [isAgentAvailable, setIsAgentAvailable] = useState<boolean | null>(null);
+  const [agentReadiness, setAgentReadiness] = useState<AgentRuntimeReadiness | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   const activeSessionIdRef = useRef<string | null>(null);
@@ -227,12 +229,19 @@ export function useAgent() {
   const checkAvailability = useCallback(async () => {
     const status = await getAgentStatus();
     setIsAgentAvailable(status.agent);
+    setAgentReadiness(status.readiness ?? null);
   }, []);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- check availability is external
     void checkAvailability();
   }, [checkAvailability]);
+
+  useEffect(() => {
+    if (isAgentAvailable || agentReadiness?.configured !== true || agentReadiness.state === "failed") return;
+    const timer = window.setInterval(() => { void checkAvailability(); }, 5_000);
+    return () => window.clearInterval(timer);
+  }, [agentReadiness, checkAvailability, isAgentAvailable]);
 
   useEffect(() => {
     if (isAgentAvailable) {
@@ -539,6 +548,7 @@ export function useAgent() {
     error,
     uploadState,
     isAgentAvailable,
+    agentReadiness,
     loaded,
     selectSession,
     startNewSession,

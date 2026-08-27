@@ -23,7 +23,7 @@ export default function AgentToolActivity({ items }: { items: ToolActivity[] }) 
 }
 
 function toolLabel(name: string) {
-  if (name === "read") return "读取 Workspace 文件";
+  if (name === "read" || name === "workspace.read") return "读取 Workspace 文件";
   if (name === "write") return "创建 Workspace 文件";
   if (name === "edit") return "编辑 Workspace 文件";
   return name;

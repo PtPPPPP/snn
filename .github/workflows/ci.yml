@@ -40,3 +40,39 @@ jobs:
 
       - name: Test rendered HTML
         run: npm run test:rendered-html
+
+  dsh-workspace-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: PtPPPPP/deepseek-harness
+          ref: 852ae5321a3d68bc0b11c5cc6f3145dde6530500
+          path: deepseek-harness
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.16.0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - name: Install SNN dependencies
+        run: npm ci
+
+      - name: Build pinned DSH runtime
+        working-directory: deepseek-harness
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run pinned DSH workspace editing acceptance
+        env:
+          SNN_DSH_ROOT: ${{ github.workspace }}/deepseek-harness
+        run: npx playwright test tests/workspace-edit-e2e.spec.mjs --workers=1

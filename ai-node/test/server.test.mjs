@@ -18,10 +18,11 @@ const baseConfig = {
   systemPrompt: "你是 SNN AI，由 SNN 社团提供的 AI 助手。",
 };
 
-async function withNode(fetchImpl, run, config = {}) {
+async function withNode(fetchImpl, run, config = {}, dependencies = {}) {
   const server = createAiNodeServer({ ...baseConfig, ...config }, {
     fetchImpl,
     logger: { info() {} },
+    ...dependencies,
   });
 
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -99,6 +100,41 @@ test("status reports ready only after upstream models responds", async () => {
         capabilities: { thinking: true, webSearch: false, agent: false },
       });
     },
+  );
+});
+
+test("status reports public Agent only after the runtime readiness probe succeeds", async () => {
+  const configuredAgent = { enabled: true, host: "127.0.0.1", port: 8788, maxBodyBytes: 16_384, messageMaxLength: 16_384 };
+  const configuredPublicAgent = { enabled: true };
+  const readiness = {
+    snapshot: () => ({ configured: true, state: "failed", runtimeReady: false, toolsReady: "unknown", modelToolCallingVerified: "unknown" }),
+  };
+  await withNode(
+    async () => new Response(JSON.stringify({ data: [{ id: "Qwen3-test" }] })),
+    async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/ai/status`);
+      assert.equal(response.status, 200);
+      assert.deepEqual((await response.json()).capabilities, {
+        thinking: true,
+        webSearch: false,
+        agent: false,
+        attachments: false,
+        agentReadiness: readiness.snapshot(),
+      });
+    },
+    { agent: configuredAgent, publicAgent: configuredPublicAgent },
+    { agentReadiness: readiness },
+  );
+});
+
+test("status exposes the configured deployment revision without exposing configuration paths", async () => {
+  await withNode(
+    async () => new Response(JSON.stringify({ data: [{ id: "Qwen3-test" }] })),
+    async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/ai/status`);
+      assert.equal((await response.json()).releaseId, "923823b");
+    },
+    { releaseId: "923823b" },
   );
 });
 

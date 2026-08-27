@@ -292,7 +292,7 @@ function typeLabel(file: AgentFile): string {
 }
 
 function toolLabel(name: string) {
-  if (name === "read") return "读取文件";
+  if (name === "read" || name === "workspace.read") return "读取文件";
   if (name === "write" || name === "create") return "创建文件";
   if (name === "edit") return "编辑文件";
   if (name === "workspace.open") return "打开文件";

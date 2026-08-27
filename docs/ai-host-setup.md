@@ -58,6 +58,41 @@ QWEN_UPSTREAM_BASE_URL=http://127.0.0.1:8000/v1
 QWEN_MODEL=<运行时真实模型 ID>
 ```
 
+### 启用 Agent 文件编辑时的完整配置
+
+普通聊天能工作，不等于 Agent 文件编辑已经可用。启用 Agent 前，模型电脑必须先在固定 DSH 提交上完成构建，并在 `ai-node/.env` 中填写以下占位符对应的**本机真实值**；不得把密钥或个人绝对路径提交到 Git。
+
+```text
+# 用 git rev-parse --short HEAD 的结果标记当前运行中的 SNN 版本。
+SNN_RELEASE_ID=<CURRENT_SNN_COMMIT>
+
+SNN_AGENT_INTERNAL_ENABLED=true
+SNN_AGENT_PUBLIC_ENABLED=true
+SNN_AGENT_PUBLIC_COOKIE_SECURE=true
+SNN_AI_ALLOWED_ORIGINS=https://snnai.cn
+
+SNN_AGENT_DSH_SDK_PATH=<DSH_ROOT>/packages/sdk/client/lib/index.js
+SNN_AGENT_DSH_TOOL_HOST_PATH=<DSH_ROOT>/packages/fs/tool-fs/lib/index.js
+SNN_AGENT_DSH_RUNTIME_EXECUTABLE=<NODE_24_PATH>/node.exe
+SNN_AGENT_DSH_RUNTIME_ARGUMENTS=["<DSH_ROOT>/packages/examples/jsonrpc-demo/lib/bin.js"]
+SNN_AGENT_DSH_CORDIS_CONFIG=<DSH_ROOT>/examples/jsonrpc-agent/cordis.yml
+SNN_AGENT_DSH_RUNTIME_CWD=<AGENT_DATA_ROOT>/runtime-default
+SNN_AGENT_DSH_PROVIDER=<VALIDATED_DSH_PROVIDER>
+SNN_AGENT_DSH_MODEL=<QWEN_RUNTIME_MODEL_ID>
+
+SNN_AGENT_WORKSPACE_ID=snn-workspace-default
+SNN_AGENT_SESSION_METADATA_ROOT=<AGENT_DATA_ROOT>/session-metadata
+SNN_AGENT_PUBLIC_WORKSPACE_BASE=<AGENT_DATA_ROOT>/public-workspaces
+SNN_AGENT_PUBLIC_OWNERSHIP_ROOT=<AGENT_DATA_ROOT>/ownership
+DSH_SESSION_ROOT=<AGENT_DATA_ROOT>/dsh-sessions
+SNN_AGENT_DSH_ENV_PASSTHROUGH=DEEPSEEK_API_KEY,DEEPSEEK_BASE_URL,DSH_SESSION_ROOT
+SNN_AGENT_DSH_ENV_REQUIRED=DEEPSEEK_API_KEY,DEEPSEEK_BASE_URL,DSH_SESSION_ROOT
+```
+
+`<DSH_ROOT>` 必须是 pinned 提交 `852ae5321a3d68bc0b11c5cc6f3145dde6530500` 的构建目录。Canonical Node 是 `24.16.x`；兼容版本为 Node `>=22.19.x`；Node `22.13.x` 不支持该 DSH。
+
+每个公开 Agent Session 都会获得独立的 Workspace、`DSH_CWD`、`DSH_HOME` 和 `DSH_AGENTS_HOME`。不要手工把这些目录指向公共用户目录，也不要开启 Shell、命令执行或私网抓取。
+
 从项目根目录启动：
 
 ```powershell
@@ -71,6 +106,15 @@ curl.exe http://127.0.0.1:8787/api/ai/status
 ```
 
 状态必须是 `online: true` 后，才继续 Cloudflare 配置。
+
+启用 Agent 后，状态还必须同时满足：
+
+```text
+capabilities.agent = true
+capabilities.agentReadiness.runtimeReady = true
+```
+
+`toolsReady` 和 `modelToolCallingVerified` 当前会如实显示为 `unknown`，直到经过真实模型验收；它们不能被当作已验证。
 
 流式聊天验证：
 
@@ -126,6 +170,29 @@ Gateway Worker 会在访问 Origin 时自动带上 Service Token；没有 Token 
 5. Tunnel 显示 Healthy。
 6. 网站 `/ai/` 显示 Online 并能聊天。
 7. 关闭 AI Node 后，网站 `/ai/` 仍能打开且显示 Offline。
+
+## 6. 真实模型文件编辑验收
+
+这一步会创建一个无敏感内容的临时公开 Agent Session，上传 `Hello world.` 文本，要求模型通过 `workspace.open`、`read` 和 `edit`/`write` 将它改为 `Hello SNN.`，最后删除临时 Session。只有负责模型电脑的人明确允许时才执行。
+
+先确认模型电脑已经运行当前代码：
+
+```powershell
+git pull --ff-only origin main
+git rev-parse --short HEAD
+```
+
+将上一步提交写入 `SNN_RELEASE_ID` 后重启 AI Node，再从项目根目录执行：
+
+```powershell
+$env:SNN_REAL_MODEL_AGENT_BASE_URL = "https://api.snnai.cn/api/agent"
+$env:SNN_REAL_MODEL_ORIGIN = "https://snnai.cn"
+npm run test:workspace-edit-real-model
+```
+
+成功必须显示真实 `tool.completed:read`，以及真实 `tool.completed:edit` 或 `tool.completed:write`，并且下载内容精确等于 `Hello SNN.`。如果环境变量未设置，测试显示 `skipped` 是预期保护行为，不是通过。
+
+如果网站静态界面已经更新但 API 返回的 `releaseId` 缺失、旧版本，或下载接口仍返回 `405`，说明模型电脑上的 AI Node 没有拉取当前 `main` 或没有重启。先解决版本漂移，再排查模型工具调用。
 
 ## 维护建议
 

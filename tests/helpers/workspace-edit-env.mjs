@@ -21,11 +21,14 @@ import { SessionMetadataStore } from "../../ai-node/src/agent/session-metadata-s
 import { FileIngestionService } from "../../ai-node/src/agent/workspace/file-ingestion-service.mjs";
 import { AttachmentContextResolver } from "../../ai-node/src/agent/attachments/attachment-context-resolver.mjs";
 import { WorkspaceRuntimeRegistry } from "../../ai-node/src/agent/workspace-runtime-registry.mjs";
+import { AgentRuntimeReadiness } from "../../ai-node/src/agent/runtime-readiness.mjs";
 import { PublicAgentOwnershipStore } from "../../ai-node/src/agent/public/ownership-store.mjs";
 import { createPublicAgentBff } from "../../ai-node/src/agent/public/bff.mjs";
 
 const repoRoot = process.cwd();
-const dshRoot = path.resolve(repoRoot, "../deepseek-harness");
+const dshRoot = process.env.SNN_DSH_ROOT
+  ? path.resolve(process.env.SNN_DSH_ROOT)
+  : path.resolve(repoRoot, "../deepseek-harness");
 const sdkPath = path.join(dshRoot, "packages/sdk/client/lib/index.js");
 const runnerPath = path.join(dshRoot, "packages/examples/jsonrpc-demo/lib/bin.js");
 const toolHostPath = path.join(dshRoot, "packages/fs/tool-fs/lib/index.js");
@@ -234,6 +237,13 @@ export async function bootWorkspaceEditEnv(label, { fetchAllowPrivateNetworks = 
   const runtimeRegistry = new WorkspaceRuntimeRegistry({
     createManager: async (ws) => (ws.id === defaultWs.id ? defaultManager : createManagerForWs(ws)),
   });
+  const startupManager = await runtimeRegistry.getOrCreate(defaultWs);
+  const agentReadiness = new AgentRuntimeReadiness({
+    configured: true,
+    ensureRuntime: () => startupManager.ensureReady(),
+    runtimeState: () => startupManager.state,
+  });
+  await agentReadiness.warm();
 
   const controller = new AgentSessionController({
     manager: defaultManager,
@@ -276,7 +286,7 @@ export async function bootWorkspaceEditEnv(label, { fetchAllowPrivateNetworks = 
     ownershipStore,
     workspaceBase,
   });
-  const server = createAiNodeServer(serverConfig, { publicBff, logger: { info() {}, error() {} } });
+  const server = createAiNodeServer(serverConfig, { publicBff, agentReadiness, logger: { info() {}, error() {} } });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   bffBaseUrl = `http://127.0.0.1:${server.address().port}`;
 

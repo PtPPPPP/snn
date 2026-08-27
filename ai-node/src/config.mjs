@@ -42,6 +42,12 @@ function readJsonStringArray(value, name) {
   return parsed;
 }
 
+function readReleaseId(value) {
+  if (value === undefined || value.trim() === "") return "";
+  if (!/^[A-Za-z0-9._-]{1,80}$/.test(value)) throw new Error("SNN_RELEASE_ID must contain only letters, numbers, dot, underscore, or hyphen");
+  return value;
+}
+
 function loadAgentConfig(environment) {
   const enabled = readBoolean(environment.SNN_AGENT_INTERNAL_ENABLED, false, "SNN_AGENT_INTERNAL_ENABLED");
   const host = environment.SNN_AGENT_INTERNAL_HOST || "127.0.0.1";
@@ -49,6 +55,7 @@ function loadAgentConfig(environment) {
   const base = {
     enabled,
     host,
+    releaseId: readReleaseId(environment.SNN_RELEASE_ID),
     port: readPositiveInteger(environment.SNN_AGENT_INTERNAL_PORT, 8788, "SNN_AGENT_INTERNAL_PORT"),
     maxBodyBytes: readPositiveInteger(environment.SNN_AGENT_INTERNAL_MAX_BODY_BYTES, 16_384, "SNN_AGENT_INTERNAL_MAX_BODY_BYTES"),
     messageMaxLength: readPositiveInteger(environment.SNN_AGENT_INTERNAL_MESSAGE_MAX_LENGTH, 16_384, "SNN_AGENT_INTERNAL_MESSAGE_MAX_LENGTH"),

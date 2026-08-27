@@ -51,7 +51,7 @@ npm run verify       # 完整验收：lint + AI 单测 + 构建 + 产物校验 +
 - **兼容 runtime**：Node >=22.19.0；Node 22.13.x 不支持 pinned DSH，不能用于真实 Agent 验收。
 - **文本 / 代码**：可以读取、编辑、创建和下载结果。
 - **PDF、DOCX、XLSX**：可以上传、读取和提取内容；只有经过真实 E2E 验证的原生编辑能力才会开放。
-- GitHub CI 验证 SNN 的 Node/AI contract，但不包含 sibling pinned DSH checkout；完整 real DSH 认证使用本地 canonical acceptance。
+- GitHub CI 会 checkout 并构建 pinned DSH，运行真实浏览器到 DSH 的 workspace editing acceptance；`CI_REAL_MODEL_COVERAGE=NONE`，真实 Qwen 工具调用必须由受控模型环境单独执行 `npm run test:workspace-edit-real-model`。
 
 ## 常用命令
 
@@ -61,6 +61,7 @@ npm run verify       # 完整验收：lint + AI 单测 + 构建 + 产物校验 +
 | `npm run build` | React / Vinext 生产构建（Cloudflare Workers） |
 | `npm run build:production` | 与 `build` 相同的明确生产 React 构建 |
 | `npm run deploy:production` | 部署已验证的 Vinext Worker + React 客户端产物到 Cloudflare Workers |
+| `npm run test:workspace-edit-real-model` | 使用明确配置的真实模型端点验证上传、工具调用、修改和下载；未配置时跳过，不视为通过 |
 | `npm run start` | 预览已构建产物 |
 | `npm run verify` | 一键验收：`lint` → `AI 单测` → `build` → `产物校验` → `渲染测试` |
 | `npm test` | `verify` 别名 |

@@ -1,4 +1,5 @@
 import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { loadConfig } from "./config.mjs";
 import { createAiNodeServer } from "./server.mjs";
 import { AgentRuntimeManager } from "./agent/runtime-manager.mjs";
@@ -12,6 +13,7 @@ import { SessionMetadataStore } from "./agent/session-metadata-store.mjs";
 import { FileIngestionService } from "./agent/workspace/file-ingestion-service.mjs";
 import { AttachmentContextResolver } from "./agent/attachments/attachment-context-resolver.mjs";
 import { WorkspaceRuntimeRegistry } from "./agent/workspace-runtime-registry.mjs";
+import { AgentRuntimeReadiness } from "./agent/runtime-readiness.mjs";
 import { PublicAgentOwnershipStore } from "./agent/public/ownership-store.mjs";
 import { createPublicAgentBff } from "./agent/public/bff.mjs";
 
@@ -25,6 +27,7 @@ let metadataStore = null;
 let ownershipStore = null;
 let publicBff = null;
 let internalServer = null;
+let agentReadiness = null;
 
 // Shared workspace manager for both internal single workspace and public per-session workspaces
 if (config.agent.enabled || config.publicAgent?.enabled) {
@@ -44,13 +47,23 @@ if (config.agent.enabled) {
       createRuntime: () => createConfiguredAgentRuntime({
         ...config.agent,
         runtimeCwd: resolvedWorkspace.root,
-        environment: { ...config.agent.environment, DSH_CWD: resolvedWorkspace.root },
+        environment: {
+          ...config.agent.environment,
+          DSH_CWD: resolvedWorkspace.root,
+          DSH_HOME: join(resolvedWorkspace.root, ".home"),
+          DSH_AGENTS_HOME: join(resolvedWorkspace.root, ".agents"),
+        },
       }),
     }),
   });
   const defaultWorkspaceManager = {
     ensureReady: async () => (await runtimeRegistry.getOrCreate(workspace)).ensureReady(),
   };
+  agentReadiness = new AgentRuntimeReadiness({
+    configured: Boolean(config.publicAgent?.enabled),
+    ensureRuntime: defaultWorkspaceManager.ensureReady,
+    runtimeState: () => runtimeRegistry?.get(workspace.id)?.state ?? "STOPPED",
+  });
   ingestionService = new FileIngestionService({ workspaceManager, maxUploadBytes: 10_485_760, maxTotalBytes: 104_857_600 });
   metadataStore = new SessionMetadataStore(config.agent.sessionMetadataRoot);
   controller = new AgentSessionController({
@@ -87,9 +100,12 @@ if (config.publicAgent?.enabled) {
   });
   // Opportunistic TTL sweep on startup
   publicBff.maybeSweep?.().catch(() => {});
+  void agentReadiness.warm().catch((error) => {
+    console.error(JSON.stringify({ component: "agent-readiness", event: "runtime_start_failed", code: typeof error?.code === "string" ? error.code : "AGENT_RUNTIME_START_FAILED" }));
+  });
 }
 
-const server = createAiNodeServer(config, { publicBff });
+const server = createAiNodeServer(config, { publicBff, agentReadiness });
 
 server.listen(config.port, config.host, () => {
   console.info(`SNN AI Node listening on http://${config.host}:${config.port}`);
