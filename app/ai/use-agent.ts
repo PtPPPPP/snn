@@ -193,14 +193,13 @@ export function useAgent() {
     }
     try {
       const list = await listAgentFiles(sessionId);
-      if (
+      const isCurrentSnapshot =
         activeSessionIdRef.current === sessionId &&
         sessionGenerationRef.current === sessionGeneration &&
-        filesRevisionRef.current === filesRevision
-      ) {
-        setFiles(list);
-        setFilesLoading(false);
-      }
+        filesRevisionRef.current === filesRevision;
+      if (!isCurrentSnapshot) return;
+      setFiles(list);
+      setFilesLoading(false);
       // Diff against the previous authoritative manifest snapshot. The first
       // snapshot of a session only seeds state, so resuming a history session
       // does not replay its whole past as fresh changes.
