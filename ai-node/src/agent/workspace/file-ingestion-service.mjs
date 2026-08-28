@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, join, posix } from "node:path";
 import { TEXT_EXTENSIONS } from "../documents/file-access.mjs";
 
@@ -17,7 +17,7 @@ export class FileIngestionService {
     this.maxUploadBytes = maxUploadBytes;
     this.maxFiles = maxFiles;
     this.maxTotalBytes = maxTotalBytes;
-    this.io = { writeFile, rename, rm, readFile, stat, ...io };
+    this.io = { mkdir, writeFile, rename, rm, readFile, stat, ...io };
   }
 
   async ingest({ workspaceId, originalName, contentType = "application/octet-stream", body }) {
@@ -58,6 +58,49 @@ export class FileIngestionService {
     const bytes = await this.io.readFile(target);
     if (bytes.length !== file.size || createHash("sha256").update(bytes).digest("hex") !== file.sha256) throw code("AGENT_FILE_MUTATED", "File integrity check failed");
     return { file: publicFile(file), bytes };
+  }
+  /**
+   * Atomically replaces a manifest-managed binary file while keeping its
+   * server-assigned file id and virtual path. This is intentionally a
+   * server-owned primitive; generic DSH filesystem tools remain text-only.
+   */
+  async replaceFileBytes({ workspaceId, fileId, expectedVersion, bytes }) {
+    if (!FILE_ID.test(fileId)) throw code("AGENT_FILE_NOT_FOUND", "File was not found");
+    if (typeof expectedVersion !== "string" || !/^[a-f0-9]{64}$/i.test(expectedVersion)) throw code("AGENT_FILE_STALE", "File changed since it was read");
+    if (!Buffer.isBuffer(bytes) && !(bytes instanceof Uint8Array)) throw code("AGENT_FILE_INVALID", "Replacement file bytes are invalid");
+    const replacement = Buffer.from(bytes);
+    if (replacement.length === 0 || replacement.length > this.maxUploadBytes) throw code("AGENT_FILE_TOO_LARGE", "File exceeds upload limit");
+    const workspace = this.workspaceManager.resolve(workspaceId);
+    return this.#withWorkspaceLock(workspace, async () => {
+      const manifest = await this.#load(workspace);
+      const current = manifest.files.find((item) => item.fileId === fileId);
+      if (!current) throw code("AGENT_FILE_NOT_FOUND", "File was not found");
+      if (current.sha256 !== expectedVersion) throw code("AGENT_FILE_STALE", "File changed since it was read");
+      await this.readFile({ workspaceId, fileId });
+
+      const storedName = `.snn-upload-${randomUUID()}`;
+      const stage = join(workspace.root, `.${fileId}.stage`);
+      const target = join(workspace.root, storedName);
+      const next = Object.freeze({
+        ...current,
+        storedName,
+        size: replacement.length,
+        kind: "opaque",
+        sha256: createHash("sha256").update(replacement).digest("hex"),
+        updatedAt: Date.now(),
+      });
+      try {
+        await this.io.writeFile(stage, replacement, { flag: "wx" });
+        await this.io.rename(stage, target);
+        await this.#save(workspace, { schemaVersion: VERSION, files: manifest.files.map((item) => item.fileId === fileId ? next : item) });
+      } catch (error) {
+        await this.io.rm(stage, { force: true }).catch(() => {});
+        await this.io.rm(target, { force: true }).catch(() => {});
+        throw error;
+      }
+      await this.io.rm(join(workspace.root, current.storedName), { force: true }).catch(() => {});
+      return { operation: "update", previous: publicFile(current), file: publicFile(next), previousVersion: current.sha256, version: next.sha256 };
+    });
   }
   async resolveVirtualPath({ workspaceId, virtualPath }) {
     const workspace = this.workspaceManager.resolve(workspaceId);
@@ -114,6 +157,16 @@ export class FileIngestionService {
   async #load(workspace) {
     try { return normalize(JSON.parse(await readFile(join(workspace.root, MANIFEST), "utf8"))); }
     catch (error) { if (error?.code === "ENOENT") return { schemaVersion: VERSION, files: [] }; if (error?.code?.startsWith("AGENT_")) throw error; throw code("AGENT_FILE_MANIFEST_INVALID", "Workspace file inventory is invalid"); }
+  }
+  async #withWorkspaceLock(workspace, operation) {
+    const lock = join(workspace.root, ".snn-workspace-manifest.lock");
+    try { await this.io.mkdir(lock); }
+    catch (error) {
+      if (error?.code === "EEXIST") throw code("AGENT_FILE_BUSY", "Workspace is busy");
+      throw error;
+    }
+    try { return await operation(); }
+    finally { await this.io.rm(lock, { force: true }).catch(() => {}); }
   }
   async #save(workspace, manifest) { const temp = join(workspace.root, `${MANIFEST}.${process.pid}.${Date.now()}.tmp`); try { await this.io.writeFile(temp, JSON.stringify(manifest), { flag: "wx" }); await this.io.rename(temp, join(workspace.root, MANIFEST)); } finally { await this.io.rm(temp, { force: true }).catch(() => {}); } }
 }

@@ -39,6 +39,7 @@ async function createWorkspaceBridgeConfig(agentConfig) {
   const directory = await mkdtemp(join(tmpdir(), "snn-agent-cordis-"));
   const pluginPath = fileURLToPath(new URL("./workspace/dsh-workspace-read-plugin.mjs", import.meta.url));
   const filesystemPluginPath = fileURLToPath(new URL("./workspace/dsh-workspace-fs-plugin.mjs", import.meta.url));
+  const spreadsheetPluginPath = fileURLToPath(new URL("./workspace/dsh-workspace-spreadsheet-plugin.mjs", import.meta.url));
   const configPath = join(directory, "cordis.yml");
   const quoted = (value) => JSON.stringify(value);
   // Document limits are server-owned constants serialized into the overlay;
@@ -73,6 +74,10 @@ async function createWorkspaceBridgeConfig(agentConfig) {
     `              workspaceRoot: ${quoted(agentConfig.runtimeCwd)}`,
     `              documentLimits: ${documentLimits}`,
     `              fetchAllowPrivate: ${agentConfig.fetchAllowPrivateNetworks === true}`,
+    "          - id: snn-workspace-spreadsheet",
+    `            name: ${quoted(pathToFileURL(spreadsheetPluginPath).href)}`,
+    "            config:",
+    `              workspaceRoot: ${quoted(agentConfig.runtimeCwd)}`,
     "",
   ].join("\n"), "utf8");
   return { configPath, dispose: () => rm(directory, { recursive: true, force: true }).catch(() => {}) };

@@ -8,6 +8,8 @@ export const BUILT_IN_TOOL_METADATA = Object.freeze([
   defineToolMetadata({ name: "read", displayName: "Read workspace file", risk: "READ", approvalPolicy: "none", category: "workspace" }),
   defineToolMetadata({ name: "write", displayName: "Write workspace file", risk: "WRITE", approvalPolicy: "none", category: "workspace" }),
   defineToolMetadata({ name: "edit", displayName: "Edit workspace file", risk: "WRITE", approvalPolicy: "none", category: "workspace" }),
+  defineToolMetadata({ name: "workspace.spreadsheet.inspect", displayName: "Inspect workbook", risk: "READ", approvalPolicy: "none", category: "spreadsheet" }),
+  defineToolMetadata({ name: "workspace.spreadsheet.patch", displayName: "Modify workbook", risk: "WRITE", approvalPolicy: "none", category: "spreadsheet" }),
   defineToolMetadata({ name: "workspace.execute", displayName: "Execute command", risk: "EXEC", approvalPolicy: "none", category: "process" }),
   defineToolMetadata({ name: "workspace.fetch", displayName: "Fetch URL", risk: "EXTERNAL", approvalPolicy: "none", category: "network" }),
 ]);

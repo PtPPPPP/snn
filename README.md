@@ -50,7 +50,8 @@ npm run verify       # 完整验收：lint + AI 单测 + 构建 + 产物校验 +
 - **Canonical runtime**：Node 24.16.x；pinned DSH 为 `852ae5321a3d68bc0b11c5cc6f3145dde6530500`。
 - **兼容 runtime**：Node >=22.19.0；Node 22.13.x 不支持 pinned DSH，不能用于真实 Agent 验收。
 - **文本 / 代码**：可以读取、编辑、创建和下载结果。
-- **PDF、DOCX、XLSX**：可以上传、读取和提取内容；只有经过真实 E2E 验证的原生编辑能力才会开放。
+- **PDF、DOCX**：可以上传、读取和提取内容，不能修改原文档。
+- **XLSX**：可以通过 DSH 的 `workspace.spreadsheet.inspect` 结构化读取，并通过 `workspace.spreadsheet.patch` 删除恰好匹配的一条数据行；修改必须使用 inspect 返回的文件版本，写回后可下载验证。`.xls`、`.xlsm`、加密工作簿和带外部工作簿链接的文件会被拒绝。
 - GitHub CI 会 checkout 并构建 pinned DSH，运行真实浏览器到 DSH 的 workspace editing acceptance；`CI_REAL_MODEL_COVERAGE=NONE`，真实 Qwen 工具调用必须由受控模型环境单独执行 `npm run test:workspace-edit-real-model`。
 
 ## 常用命令

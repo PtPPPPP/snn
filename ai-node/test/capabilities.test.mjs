@@ -31,13 +31,15 @@ test("capability resolver grants only registered available safe reads", async ()
         { toolName: "workspace.open", decision: "allow" },
       ],
     });
-    for (const id of ["workspace.write", "workspace.execute", "workspace.fetch"]) {
+    for (const id of ["workspace.write", "workspace.execute", "workspace.fetch", "workspace.spreadsheet.inspect", "workspace.spreadsheet.patch"]) {
       assert.equal(capability.allowedToolIds.includes(id), false);
     }
     // The editor skill adds guarded public web fetching but never shell execution.
     const editor = resolver.resolve({ workspace, skillId: "workspace-editor" });
-    assert.deepEqual(editor.allowedToolIds, ["fs.read", "fs.write", "fs.edit", "workspace.open", "workspace.extract", "workspace.fetch"]);
+    assert.deepEqual(editor.allowedToolIds, ["fs.read", "fs.write", "fs.edit", "workspace.open", "workspace.extract", "workspace.fetch", "workspace.spreadsheet.inspect", "workspace.spreadsheet.patch"]);
     assert.ok(editor.dshToolPolicy.rules.some((rule) => rule.toolName === "workspace.fetch" && rule.decision === "allow"));
+    assert.ok(editor.dshToolPolicy.rules.some((rule) => rule.toolName === "workspace.spreadsheet.inspect" && rule.decision === "allow"));
+    assert.ok(editor.dshToolPolicy.rules.some((rule) => rule.toolName === "workspace.spreadsheet.patch" && rule.decision === "allow"));
     assert.equal(editor.allowedToolIds.includes("workspace.execute"), false);
     assert.throws(() => resolver.resolve({ workspace, skillId: "missing" }), (error) => error.code === "SNN_SKILL_NOT_FOUND");
   } finally { await rm(root, { recursive: true, force: true }); }

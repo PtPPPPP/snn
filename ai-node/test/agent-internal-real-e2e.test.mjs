@@ -6,6 +6,11 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
+import { loadWorkbook, workbookToBytes } from "@office-kit/xlsx/io";
+import { fromBuffer } from "@office-kit/xlsx/node";
+import { createWorkbook, addWorksheet } from "@office-kit/xlsx/workbook";
+import { setCell } from "@office-kit/xlsx/worksheet";
 import { AgentRuntimeManager } from "../src/agent/runtime-manager.mjs";
 import { AgentSessionController } from "../src/agent/session-controller.mjs";
 import { BUILT_IN_TOOL_METADATA } from "../src/agent/built-in-tools.mjs";
@@ -727,6 +732,17 @@ function toolNames(events) {
   return events.filter((event) => event.type === "tool.started").map((event) => event.data?.payload?.name);
 }
 
+async function buildSpreadsheetWorkbook() {
+  const workbook = createWorkbook();
+  const people = addWorksheet(workbook, "人员信息");
+  for (const [row, values] of [[1, ["姓名", "性别"]], [2, ["测试用户甲", "男"]], [3, ["目标用户827", "女"]], [4, ["测试用户乙", "男"]]]) {
+    values.forEach((value, index) => setCell(people, row, index + 1, value));
+  }
+  const notes = addWorksheet(workbook, "说明");
+  setCell(notes, 1, 1, "SNN_SPREADSHEET_SECOND_SHEET_SENTINEL");
+  return Buffer.from(await workbookToBytes(workbook));
+}
+
 /** Assert the raw extraction payload never rode the public SSE tool lifecycle. */
 function assertRawToolOutputContained(events, marker) {
   for (const event of events) {
@@ -820,6 +836,34 @@ test("uploaded XLSX sheets and cells reach the Agent across multiple worksheets"
   assert.match(answer, /Revenue/);
   assert.match(answer, /SNN_XLSX_SHEET2_VALUE_3344/);
   assert.doesNotMatch(body, /sharedStrings|xl\/worksheets/);
+});
+
+test("real pinned DSH child inspects, patches, and verifies one uploaded XLSX row", options, async (t) => {
+  const env = await bootRealInternal("spreadsheet-edit", { skillId: "workspace-editor" });
+  t.after(() => env.close());
+  const xlsx = await buildSpreadsheetWorkbook();
+  const fileId = await uploadFile(env, "people.xlsx", xlsx, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  const expectedVersion = createHash("sha256").update(xlsx).digest("hex");
+  const { sessionId } = await (await post(`${env.baseUrl}/internal/agent/sessions`, { workspaceId: env.workspaceRecord.id })).json();
+  env.llm.set([
+    { match: "remove target user", payloads: toolPayloads("sheet-inspect-before", "workspace.spreadsheet.inspect", { file_id: fileId, sheet: "人员信息", column: "姓名", equals: "目标用户827" }) },
+    { match: "remove target user", payloads: toolPayloads("sheet-patch", "workspace.spreadsheet.patch", { file_id: fileId, expected_version: expectedVersion, sheet: "人员信息", column: "姓名", equals: "目标用户827" }) },
+    { match: "remove target user", payloads: toolPayloads("sheet-inspect-after", "workspace.spreadsheet.inspect", { file_id: fileId, sheet: "人员信息", column: "姓名", equals: "目标用户827" }) },
+    { payloads: textPayloads("目标用户827 已从人员信息工作表删除，原工作簿已更新。") },
+  ]);
+  const { body, events } = await sse(await post(`${env.baseUrl}/internal/agent/sessions/${sessionId}/runs`, { message: "remove target user from people.xlsx", attachments: [fileId] }));
+  assertTerminal(events);
+  assert.deepEqual(toolNames(events), ["workspace.spreadsheet.inspect", "workspace.spreadsheet.patch", "workspace.spreadsheet.inspect"]);
+  assert.match(deltaText(events), /已从人员信息工作表删除/);
+  assert.doesNotMatch(body, /snn-http-e2e-ws|\.snn-upload-/);
+
+  const downloaded = await env.ingestion.readFile({ workspaceId: env.workspaceRecord.id, fileId });
+  const workbook = await loadWorkbook(fromBuffer(downloaded.bytes));
+  const people = workbook.sheets.find((entry) => entry.kind === "worksheet" && entry.sheet.title === "人员信息")?.sheet;
+  const notes = workbook.sheets.find((entry) => entry.kind === "worksheet" && entry.sheet.title === "说明")?.sheet;
+  assert.equal(people?.rows.get(2)?.get(1)?.value, "测试用户甲");
+  assert.equal(people?.rows.get(3)?.get(1)?.value, "测试用户乙");
+  assert.equal(notes?.rows.get(1)?.get(1)?.value, "SNN_SPREADSHEET_SECOND_SHEET_SENTINEL");
 });
 
 test("prompt-injection document cannot expand capability: write stays denied on the real child", options, async (t) => {

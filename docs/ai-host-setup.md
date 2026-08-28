@@ -173,7 +173,7 @@ Gateway Worker 会在访问 Origin 时自动带上 Service Token；没有 Token 
 
 ## 6. 真实模型文件编辑验收
 
-这一步会创建一个无敏感内容的临时公开 Agent Session，上传 `Hello world.` 文本，要求模型通过 `workspace.open`、`read` 和 `edit`/`write` 将它改为 `Hello SNN.`，最后删除临时 Session。只有负责模型电脑的人明确允许时才执行。
+这一步会创建无敏感内容的临时公开 Agent Session，分别验收文本文件和 XLSX 工作簿。文本验收要求模型通过 `workspace.open`、`read` 和 `edit`/`write` 将 `Hello world.` 改为 `Hello SNN.`；XLSX 验收要求模型按 inspect → patch → inspect 的顺序删除合成工作簿中的精确目标行，并下载后重新打开验证。所有临时 Session 最后都会删除。只有负责模型电脑的人明确允许时才执行。
 
 先确认模型电脑已经运行当前代码：
 
@@ -190,7 +190,7 @@ $env:SNN_REAL_MODEL_ORIGIN = "https://snnai.cn"
 npm run test:workspace-edit-real-model
 ```
 
-成功必须显示真实 `tool.completed:read`，以及真实 `tool.completed:edit` 或 `tool.completed:write`，并且下载内容精确等于 `Hello SNN.`。如果环境变量未设置，测试显示 `skipped` 是预期保护行为，不是通过。
+成功必须显示真实 `tool.completed:read`，以及真实 `tool.completed:edit` 或 `tool.completed:write`；同时必须显示真实 `tool.completed:workspace.spreadsheet.inspect` 和 `tool.completed:workspace.spreadsheet.patch`。下载的文本内容必须精确等于 `Hello SNN.`；下载的 XLSX 必须可以重新打开，且仅目标行消失、非目标行和第二工作表保持。如果环境变量未设置，测试显示 `skipped` 是预期保护行为，不是通过。
 
 如果网站静态界面已经更新但 API 返回的 `releaseId` 缺失、旧版本，或下载接口仍返回 `405`，说明模型电脑上的 AI Node 没有拉取当前 `main` 或没有重启。先解决版本漂移，再排查模型工具调用。
 

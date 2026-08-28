@@ -6,6 +6,11 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
+import { loadWorkbook, workbookToBytes } from "@office-kit/xlsx/io";
+import { fromBuffer } from "@office-kit/xlsx/node";
+import { createWorkbook, addWorksheet } from "@office-kit/xlsx/workbook";
+import { setCell } from "@office-kit/xlsx/worksheet";
 import { AgentRuntimeManager } from "../src/agent/runtime-manager.mjs";
 import { AgentSessionController } from "../src/agent/session-controller.mjs";
 import { BUILT_IN_TOOL_METADATA } from "../src/agent/built-in-tools.mjs";
@@ -188,6 +193,15 @@ function assertTerminal(events, exp = "run.completed") {
   assert.equal(terms.length, 1); assert.equal(terms[0].type, exp);
 }
 
+async function buildPublicSpreadsheet() {
+  const workbook = createWorkbook();
+  const people = addWorksheet(workbook, "人员信息");
+  for (const [row, values] of [[1, ["姓名", "性别"]], [2, ["测试用户甲", "男"]], [3, ["目标用户827", "女"]], [4, ["测试用户乙", "男"]]]) {
+    values.forEach((value, index) => setCell(people, row, index + 1, value));
+  }
+  return Buffer.from(await workbookToBytes(workbook));
+}
+
 test("public create sessions are isolated per owner with dedicated workspaces", options, async (t) => {
   const env = await bootPublicReal("isolated");
   t.after(() => env.close());
@@ -244,6 +258,42 @@ test("public upload/list/delete and attachment run via BFF reaches real DSH", op
   assert.equal(del.status, 204);
   const list2 = await (await fetch(`${env.baseUrl}/api/agent/sessions/${sid}/files`, { headers: { origin, cookie } })).json();
   assert.equal(list2.files.length, 0);
+});
+
+test("public multipart XLSX run patches one row and downloads a verified workbook", options, async (t) => {
+  const env = await bootPublicReal("spreadsheet-patch");
+  t.after(() => env.close());
+  const origin = "https://snnai.cn";
+  const created = await fetch(`${env.baseUrl}/api/agent/sessions`, { method: "POST", headers: { origin, "content-type": "application/json" }, body: "{}" });
+  assert.equal(created.status, 201);
+  const sessionId = (await created.json()).sessionId;
+  const cookie = created.headers.get("set-cookie").split(";", 1)[0];
+  const xlsx = await buildPublicSpreadsheet();
+  const form = new FormData();
+  form.set("file", new Blob([xlsx], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), "人员信息.xlsx");
+  const uploaded = await fetch(`${env.baseUrl}/api/agent/sessions/${sessionId}/files`, { method: "POST", headers: { origin, cookie }, body: form });
+  const uploadedBody = await uploaded.text();
+  assert.equal(uploaded.status, 201, uploadedBody);
+  const file = JSON.parse(uploadedBody).file;
+  const expectedVersion = createHash("sha256").update(xlsx).digest("hex");
+  env.llm.set([
+    { match: "remove target user", payloads: toolPayloads("public-sheet-inspect-before", "workspace.spreadsheet.inspect", { file_id: file.fileId, sheet: "人员信息", column: "姓名", equals: "目标用户827" }) },
+    { match: "remove target user", payloads: toolPayloads("public-sheet-patch", "workspace.spreadsheet.patch", { file_id: file.fileId, expected_version: expectedVersion, sheet: "人员信息", column: "姓名", equals: "目标用户827" }) },
+    { match: "remove target user", payloads: toolPayloads("public-sheet-inspect-after", "workspace.spreadsheet.inspect", { file_id: file.fileId, sheet: "人员信息", column: "姓名", equals: "目标用户827" }) },
+    { payloads: textPayloads("目标用户827 已删除，工作簿已更新。") },
+  ]);
+  const run = await fetch(`${env.baseUrl}/api/agent/sessions/${sessionId}/runs`, { method: "POST", headers: { origin, cookie, "content-type": "application/json" }, body: JSON.stringify({ message: "remove target user", attachments: [file.fileId] }) });
+  assert.equal(run.status, 200);
+  const { events } = await sse(run);
+  assertTerminal(events);
+  assert.deepEqual(toolNames(events), ["workspace.spreadsheet.inspect", "workspace.spreadsheet.patch", "workspace.spreadsheet.inspect"]);
+
+  const downloaded = await fetch(`${env.baseUrl}/api/agent/sessions/${sessionId}/files/${file.fileId}`, { headers: { origin, cookie } });
+  assert.equal(downloaded.status, 200);
+  const workbook = await loadWorkbook(fromBuffer(Buffer.from(await downloaded.arrayBuffer())));
+  const people = workbook.sheets.find((entry) => entry.kind === "worksheet" && entry.sheet.title === "人员信息")?.sheet;
+  assert.equal(people?.rows.get(2)?.get(1)?.value, "测试用户甲");
+  assert.equal(people?.rows.get(3)?.get(1)?.value, "测试用户乙");
 });
 
 test("public mixed attachments (txt+pdf+xlsx) via BFF", options, async (t) => {
