@@ -66,6 +66,12 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm build
 
+      # Keep the built DSH dependency tree outside this checkout before npm ci
+      # creates SNN's node_modules. The two projects intentionally pin different
+      # React type trees and must not see or prune one another.
+      - name: Isolate pinned DSH runtime
+        run: mv deepseek-harness "${RUNNER_TEMP}/snn-pinned-dsh"
+
       # DSH is checked out inside this repository. Build it before installing
       # SNN dependencies so TypeScript cannot walk to the parent node_modules
       # and mix SNN's React 19 types with DSH's locked React 18 types.
@@ -77,5 +83,5 @@ jobs:
 
       - name: Run pinned DSH workspace editing acceptance
         env:
-          SNN_DSH_ROOT: ${{ github.workspace }}/deepseek-harness
+          SNN_DSH_ROOT: ${{ runner.temp }}/snn-pinned-dsh
         run: npx playwright test tests/workspace-edit-e2e.spec.mjs --workers=1
