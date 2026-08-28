@@ -84,4 +84,4 @@ jobs:
       - name: Run pinned DSH workspace editing acceptance
         env:
           SNN_DSH_ROOT: ${{ runner.temp }}/snn-pinned-dsh
-        run: npx playwright test tests/workspace-edit-e2e.spec.mjs --workers=1
+        run: npx playwright test tests/workspace-edit-e2e.spec.mjs --workers=1 --reporter=github
