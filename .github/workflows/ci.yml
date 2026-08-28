@@ -60,14 +60,17 @@ jobs:
         with:
           version: 11.7.0
 
-      - name: Install SNN dependencies
-        run: npm ci
-
       - name: Build pinned DSH runtime
         working-directory: deepseek-harness
         run: |
           pnpm install --frozen-lockfile
           pnpm build
+
+      # DSH is checked out inside this repository. Build it before installing
+      # SNN dependencies so TypeScript cannot walk to the parent node_modules
+      # and mix SNN's React 19 types with DSH's locked React 18 types.
+      - name: Install SNN dependencies
+        run: npm ci
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
