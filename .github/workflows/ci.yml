@@ -78,6 +78,11 @@ jobs:
       - name: Install SNN dependencies
         run: npm ci
 
+      # The browser acceptance serves the verified Worker/React build from
+      # dist/server and dist/client; a clean runner has no pre-existing dist.
+      - name: Build SNN browser fixture
+        run: npm run build
+
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
