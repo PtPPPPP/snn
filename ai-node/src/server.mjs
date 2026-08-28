@@ -15,6 +15,11 @@ function corsHeaders(origin) {
   return origin
     ? {
         "access-control-allow-origin": origin,
+        // Required for the frontend's credentials:"include" cross-origin calls
+        // (e.g. agent-client getAgentStatus from snnai.cn -> api.snnai.cn).
+        // Only ever sent for allowlisted origins (requestOrigin gates it), and
+        // the echoed origin is exact (never a wildcard), so this is safe.
+        "access-control-allow-credentials": "true",
         vary: "Origin",
       }
     : {};
@@ -136,18 +141,185 @@ async function runtimeReady(config, fetchImpl) {
   return true;
 }
 
-function buildUpstreamBody(config, messages, stream, thinking, webSearch) {
-  if (webSearch) {
-    return JSON.stringify({
-      model: config.webSearch.model,
-      messages: [{ role: "system", content: config.systemPrompt }, ...messages],
-      stream,
-      max_tokens: config.maxOutputTokens,
-      enable_search: true,
-      search_options: { forced_search: true },
-      enable_thinking: thinking,
-    });
+function lastUserQuery(messages) {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i].role === "user" && messages[i].content) {
+      return messages[i].content;
+    }
   }
+  return "";
+}
+
+async function fetchSearchResults(config, query, fetchImpl, externalSignal) {
+  const url = new URL("search", `${config.webSearch.baseUrl}/`);
+  url.searchParams.set("q", query);
+  url.searchParams.set("format", "json");
+
+  const response = await fetchUpstream(
+    fetchImpl,
+    url.toString(),
+    { method: "GET" },
+    config.webSearch.timeoutMs,
+    externalSignal,
+  );
+
+  const data = await response.json();
+  const raw = Array.isArray(data?.results) ? data.results : [];
+
+  return raw
+    .filter(
+      (item) =>
+        item &&
+        typeof item.url === "string" &&
+        item.url &&
+        typeof item.title === "string" &&
+        item.title,
+    )
+    .slice(0, config.webSearch.results)
+    .map((item) => ({
+      title: item.title.trim(),
+      url: item.url.trim(),
+      snippet: typeof item.content === "string" ? item.content.trim() : "",
+    }));
+}
+
+function buildSearchContext(results) {
+  const lines = results.map((item, index) => {
+    const parts = [`${index + 1}. ${item.title}`, `   URL: ${item.url}`];
+    if (item.snippet) {
+      parts.push(`   ${item.snippet}`);
+    }
+    return parts.join("\n");
+  });
+
+  return [
+    "以下是系统在你提问前替你查好的实时联网搜索结果（来源：SearXNG 聚合搜索）。",
+    "你没有工具、函数或代码执行能力，不需要也绝不能调用 searxng_web_search 或任何函数；",
+    "禁止输出 tool_call、function、parameter 等标签块——直接基于下面的结果用纯文本回答：",
+    "",
+    ...lines,
+    "",
+    "要求：优先采用搜索结果中的信息；引用关键事实时标注来源编号（如 [1]）并附 URL；",
+    "如果搜索结果与问题无关或信息不足，直接说明并明确区分你的既有知识与搜索到的内容，不要编造来源。",
+  ].join("\n");
+}
+
+function withSearchContext(config, messages, results) {
+  const systemContent = `${config.systemPrompt}\n\n${buildSearchContext(results)}`;
+  return [{ role: "system", content: systemContent }, ...messages];
+}
+
+async function applySearchContext(config, messages, webSearch, fetchImpl, externalSignal) {
+  if (!webSearch || !config.webSearch) {
+    return { messages, systemContent: config.systemPrompt };
+  }
+
+  const results = await fetchSearchResults(config, lastUserQuery(messages), fetchImpl, externalSignal);
+  if (results.length === 0) {
+    return { messages, systemContent: config.systemPrompt };
+  }
+
+  const withContext = withSearchContext(config, messages, results);
+  return { systemContent: withContext[0].content, messages: withContext.slice(1) };
+}
+
+function currentServerTimeLine(now = new Date()) {
+  const local = now.toLocaleString("zh-CN", { hour12: false, timeZoneName: "short" });
+  return `当前服务器时间：${local}（${now.toISOString()} UTC）。回答涉及"现在/今天/最近"的问题时以该时间为准，不要声称无法获取时间。`;
+}
+
+// 兜底：模型偶尔会幻觉出不存在的工具调用块（如 <tool_call>...）。
+// 这些块绝不该到达客户端。非流式直接正则剥除；流式用状态机，
+// 避免把恰好跨 chunk 的标签截成半截发给前端。
+const TOOL_CALL_OPEN = "<tool_call>";
+const TOOL_CALL_CLOSE = "</tool_call>";
+
+function stripToolCallBlocks(text) {
+  if (typeof text !== "string") {
+    return text;
+  }
+  return text
+    .replace(new RegExp(TOOL_CALL_OPEN + "[\\s\\S]*?" + TOOL_CALL_CLOSE, "g"), "")
+    .replace(new RegExp(TOOL_CALL_OPEN + "[\\s\\S]*$", ""), "");
+}
+
+function createToolCallFilter() {
+  let pending = "";
+  let inside = false;
+
+  function prefixOverlap(text) {
+    const max = Math.min(text.length, TOOL_CALL_OPEN.length - 1);
+    for (let len = max; len > 0; len -= 1) {
+      if (text.endsWith(TOOL_CALL_OPEN.slice(0, len))) {
+        return len;
+      }
+    }
+    return 0;
+  }
+
+  return {
+    // 输入一个 content delta，返回可以安全发给客户端的文本。
+    push(chunk) {
+      if (typeof chunk !== "string" || chunk.length === 0) {
+        return "";
+      }
+      // 上一 chunk 扣下的尾巴（可能是半个开/闭标签）必须拼回来，否则跨 chunk 的标签会漏检。
+      chunk = pending + chunk;
+      pending = "";
+      let out = "";
+      let cursor = 0;
+      while (cursor < chunk.length) {
+        if (!inside) {
+          const idx = chunk.indexOf(TOOL_CALL_OPEN, cursor);
+          if (idx === -1) {
+            const rest = chunk.slice(cursor);
+            const hold = prefixOverlap(rest);
+            out += rest.slice(0, rest.length - hold);
+            pending = rest.slice(rest.length - hold);
+            break;
+          }
+          out += chunk.slice(cursor, idx);
+          // 跳过整个开标签，从块内容开始找闭合标签。
+          cursor = idx + TOOL_CALL_OPEN.length;
+          pending = "";
+          inside = true;
+        } else {
+          const idx = chunk.indexOf(TOOL_CALL_CLOSE, cursor);
+          if (idx === -1) {
+            pending = chunk.slice(cursor);
+            // 只保留可能成为 TOOL_CALL_CLOSE 前缀的尾巴，丢弃块内其余内容。
+            const max = Math.min(pending.length, TOOL_CALL_CLOSE.length - 1);
+            let hold = 0;
+            for (let len = max; len > 0; len -= 1) {
+              if (pending.endsWith(TOOL_CALL_CLOSE.slice(0, len))) {
+                hold = len;
+                break;
+              }
+            }
+            pending = pending.slice(pending.length - hold);
+            break;
+          }
+          cursor = idx + TOOL_CALL_CLOSE.length;
+          inside = false;
+          pending = "";
+        }
+      }
+      return out;
+    },
+    // 流结束：未闭合的块丢弃，其余 pending 文本放行。
+    flush() {
+      if (inside) {
+        pending = "";
+        return "";
+      }
+      const out = pending;
+      pending = "";
+      return out;
+    },
+  };
+}
+
+function buildUpstreamBody(config, messages, stream, thinking, systemContent = config.systemPrompt) {
   const thinkingParameters = thinking
     ? {
         chat_template_kwargs: {
@@ -175,7 +347,7 @@ function buildUpstreamBody(config, messages, stream, thinking, webSearch) {
 
   return JSON.stringify({
     model: config.model,
-    messages: [{ role: "system", content: config.systemPrompt }, ...messages],
+    messages: [{ role: "system", content: `${systemContent}\n\n${currentServerTimeLine()}` }, ...messages],
     stream,
     max_tokens: config.maxOutputTokens,
     ...thinkingParameters,
@@ -194,6 +366,7 @@ async function forwardSse(upstreamResponse, response, config, requestId, upstrea
   let reasoningObserved = false;
   let reasoningStartedAt = null;
   let thinkingMs = null;
+  const toolCallFilter = createToolCallFilter();
 
   function readWithIdleTimeout() {
     return new Promise((resolve, reject) => {
@@ -219,6 +392,10 @@ async function forwardSse(upstreamResponse, response, config, requestId, upstrea
 
     if (event.done) {
       done = true;
+      const tail = toolCallFilter.flush();
+      if (tail) {
+        writeSse(response, "delta", { text: tail });
+      }
       writeSse(response, "done", {
         model,
         requestId,
@@ -249,10 +426,13 @@ async function forwardSse(upstreamResponse, response, config, requestId, upstrea
 
     const text = delta?.content;
     if (typeof text === "string" && text.length > 0) {
-      if (reasoningObserved && thinkingMs === null) {
+      const safe = toolCallFilter.push(text);
+      if (reasoningObserved && thinkingMs === null && safe.length > 0) {
         thinkingMs = Math.round(performance.now() - reasoningStartedAt);
       }
-      writeSse(response, "delta", { text });
+      if (safe.length > 0) {
+        writeSse(response, "delta", { text: safe });
+      }
     }
   }
 
@@ -426,26 +606,28 @@ export function createAiNodeServer(config, { fetchImpl = fetch, logger = console
 
       if (isChat) {
         try {
-          const target = webSearch ? config.webSearch : { baseUrl: config.upstreamBaseUrl, apiKey: config.upstreamApiKey, model: config.model };
+          const search = await applySearchContext(config, messages, webSearch, fetchImpl);
           const upstreamResponse = await fetchUpstream(
             fetchImpl,
-            upstreamUrl(target.baseUrl, "chat/completions"),
+            upstreamUrl(config.upstreamBaseUrl, "chat/completions"),
             {
               method: "POST",
-              headers: upstreamHeaders(target.apiKey),
-              body: buildUpstreamBody(config, messages, false, thinking, webSearch),
+              headers: upstreamHeaders(config.upstreamApiKey),
+              body: buildUpstreamBody(config, search.messages, false, thinking, search.systemContent),
             },
             config.chatConnectTimeoutMs,
           );
           upstreamStatus = upstreamResponse.status;
           const upstreamBody = await upstreamResponse.json();
-          const reply = upstreamBody?.choices?.[0]?.message?.content;
-          if (typeof reply !== "string" || !reply.trim()) {
+          const rawReply = upstreamBody?.choices?.[0]?.message?.content;
+          const reply = typeof rawReply === "string" ? stripToolCallBlocks(rawReply).trim() : "";
+          if (!reply) {
+            upstreamStatus = 502;
             sendJson(response, 502, { error: "SNN AI node is unavailable", requestId }, origin);
             return;
           }
 
-          sendJson(response, 200, { reply: reply.trim(), model: target.model, requestId }, origin);
+          sendJson(response, 200, { reply, model: config.model, requestId }, origin);
         } catch (error) {
           upstreamStatus = error.status ?? null;
           sendJson(
@@ -473,14 +655,14 @@ export function createAiNodeServer(config, { fetchImpl = fetch, logger = console
 
       beginSse(response, origin);
       try {
-        const target = webSearch ? config.webSearch : { baseUrl: config.upstreamBaseUrl, apiKey: config.upstreamApiKey, model: config.model };
+        const search = await applySearchContext(config, messages, webSearch, fetchImpl, upstreamAbortController.signal);
         const upstreamResponse = await fetchUpstream(
           fetchImpl,
-          upstreamUrl(target.baseUrl, "chat/completions"),
+          upstreamUrl(config.upstreamBaseUrl, "chat/completions"),
           {
             method: "POST",
-            headers: upstreamHeaders(target.apiKey),
-            body: buildUpstreamBody(config, messages, true, thinking, webSearch),
+            headers: upstreamHeaders(config.upstreamApiKey),
+            body: buildUpstreamBody(config, search.messages, true, thinking, search.systemContent),
           },
             config.chatConnectTimeoutMs,
             upstreamAbortController.signal,
@@ -493,7 +675,7 @@ export function createAiNodeServer(config, { fetchImpl = fetch, logger = console
           requestId,
           upstreamAbortController,
           thinking,
-          target.model,
+          config.model,
         );
       } catch (error) {
         upstreamStatus = error.status ?? null;

@@ -314,14 +314,23 @@ test("thinking mode uses Qwen-compatible parameters without modifying user messa
   );
 });
 
-test("web search uses the separately configured Qwen endpoint and forces native search", async () => {
+test("web search queries local SearXNG and injects results into the local model prompt", async () => {
+  let searchUrl;
   let upstreamUrl;
-  let upstreamHeaders;
   let upstreamBody;
   await withNode(
     async (url, init) => {
+      if (url.includes("/search")) {
+        searchUrl = url;
+        return Response.json({
+          results: [
+            { title: "AI 新闻一", url: "https://example.com/a", content: "摘要一" },
+            { title: "AI 新闻二", url: "https://example.com/b", content: "摘要二" },
+            { title: "坏数据", url: "" },
+          ],
+        });
+      }
       upstreamUrl = url;
-      upstreamHeaders = new Headers(init.headers);
       upstreamBody = JSON.parse(init.body);
       return sseResponse(['data: {"choices":[{"delta":{"content":"联网回答"}}]}\n\n', "data: [DONE]\n\n"]);
     },
@@ -334,13 +343,135 @@ test("web search uses the separately configured Qwen endpoint and forces native 
       assert.equal(response.status, 200);
       assert.match(await response.text(), /联网回答/);
     },
-    { webSearch: { baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", apiKey: "test-search-key", model: "qwen3-max" } },
+    { webSearch: { baseUrl: "http://127.0.0.1:8080", results: 2, timeoutMs: 40 } },
   );
-  assert.equal(upstreamUrl, "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions");
-  assert.equal(upstreamHeaders.get("authorization"), "Bearer test-search-key");
-  assert.equal(upstreamBody.enable_search, true);
-  assert.deepEqual(upstreamBody.search_options, { forced_search: true });
-  assert.equal(upstreamBody.enable_thinking, true);
+  assert.match(searchUrl, /^http:\/\/127\.0\.0\.1:8080\/search\?q=.*&format=json$/);
+  assert.equal(upstreamUrl, "http://127.0.0.1:8000/v1/chat/completions");
+  assert.equal(upstreamBody.model, "Qwen3-test");
+  const system = upstreamBody.messages[0];
+  assert.equal(system.role, "system");
+  assert.ok(system.content.startsWith(baseConfig.systemPrompt));
+  assert.match(system.content, /SearXNG/);
+  assert.match(system.content, /1\. AI 新闻一/);
+  assert.match(system.content, /https:\/\/example\.com\/a/);
+  assert.match(system.content, /摘要一/);
+  assert.match(system.content, /2\. AI 新闻二/);
+  assert.ok(!system.content.includes("坏数据"));
+  assert.match(system.content, /当前服务器时间：/);
+  assert.equal(upstreamBody.messages.at(-1).content, "今天有什么新闻？");
+  assert.equal(upstreamBody.enable_search, undefined);
+});
+
+test("web search with empty SearXNG results falls back to the plain local prompt", async () => {
+  let upstreamBody;
+  await withNode(
+    async (url, init) => {
+      if (url.includes("/search")) {
+        return Response.json({ results: [] });
+      }
+      upstreamBody = JSON.parse(init.body);
+      return new Response(JSON.stringify({ choices: [{ message: { content: "普通回答" } }] }));
+    },
+    async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/ai/chat`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ messages: [{ role: "user", content: "你好" }], webSearch: true }),
+      });
+      assert.equal(response.status, 200);
+      const data = await response.json();
+      assert.equal(data.reply, "普通回答");
+      assert.equal(data.model, "Qwen3-test");
+    },
+    { webSearch: { baseUrl: "http://127.0.0.1:8080", results: 5, timeoutMs: 40 } },
+  );
+  assert.ok(upstreamBody.messages[0].content.startsWith(baseConfig.systemPrompt));
+  assert.match(upstreamBody.messages[0].content, /当前服务器时间：/);
+});
+
+test("stream strips hallucinated tool-call blocks before deltas reach the client", async () => {
+  await withNode(
+    async () =>
+      sseResponse([
+        'data: {"choices":[{"delta":{"content":"好的，我来查。\\n<tool_call>\\n<function=searxng_web_search"}}]}\n\n',
+        'data: {"choices":[{"delta":{"content":"(query=\\"time.is 北京时间\\")\\n</parameter>\\n</function>\\n</tool_call> 已查询到北京时间。"}}]}\n\n',
+        'data: [DONE]\n\n',
+      ]),
+    async (baseUrl) => {
+      const response = await fetch(baseUrl + "/api/ai/chat/stream", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ messages: [{ role: "user", content: "你自己网页搜索 time.is" }] }),
+      });
+      const body = await response.text();
+
+      assert.equal(response.status, 200);
+      assert.ok(!body.includes("tool_call"), "tool_call 标签不应到达客户端");
+      assert.ok(!body.includes("searxng_web_search"), "幻觉工具名不应到达客户端");
+      assert.ok(!body.includes("function="), "函数调用块不应到达客户端");
+      assert.ok(!body.includes("parameter"), "函数参数块不应到达客户端");
+      assert.ok(body.includes("好的，我来查。"), "块前文本应保留");
+      assert.ok(body.includes("已查询到北京时间。"), "块后文本应保留");
+      assert.ok(body.includes("event: done"), "流应正常结束");
+    },
+  );
+});
+
+test("chat reply strips hallucinated tool-call blocks", async () => {
+  await withNode(
+    async () =>
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content:
+                  '<tool_call>\n<function=searxng_web_search>\n<parameter=query>time.is</parameter>\n</function>\n</tool_call> 北京时间是 14:30。',
+              },
+            },
+          ],
+        }),
+      ),
+    async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/ai/chat`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ messages: [{ role: "user", content: "你自己搜 time.is" }] }),
+      });
+      const body = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.equal(body.reply, "北京时间是 14:30。");
+    },
+  );
+});
+
+test("web search toggle off skips SearXNG even when search is configured", async () => {
+  let searchHit = false;
+  let upstreamBody;
+  await withNode(
+    async (url, init) => {
+      if (url.includes("/search")) {
+        searchHit = true;
+        return Response.json({ results: [{ title: "不该被查到", url: "https://example.com/x" }] });
+      }
+      upstreamBody = JSON.parse(init.body);
+      return new Response(JSON.stringify({ choices: [{ message: { content: "普通回答" } }] }));
+    },
+    async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/ai/chat`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ messages: [{ role: "user", content: "你好" }] }),
+      });
+      assert.equal(response.status, 200);
+      assert.equal((await response.json()).reply, "普通回答");
+    },
+    { webSearch: { baseUrl: "http://127.0.0.1:8080", results: 5, timeoutMs: 40 } },
+  );
+  assert.equal(searchHit, false, "未开启开关时不应请求 SearXNG");
+  assert.ok(upstreamBody.messages[0].content.startsWith(baseConfig.systemPrompt));
+  assert.doesNotMatch(upstreamBody.messages[0].content, /SearXNG 聚合搜索/);
 });
 
 test("thinking stream emits reasoning_start before delta and reports observed reasoning", async () => {

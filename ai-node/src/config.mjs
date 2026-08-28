@@ -120,9 +120,14 @@ function normalizeUpstreamBaseUrl(value) {
   return parsed.toString().replace(/\/+$/, "");
 }
 
-function normalizeWebSearchBaseUrl(value) {
+function normalizeSearchBaseUrl(value) {
   const parsed = new URL(value);
-  if (parsed.protocol !== "https:") throw new Error("QWEN_WEB_SEARCH_BASE_URL must use HTTPS");
+  if (
+    !(parsed.protocol === "http:" && parsed.hostname === "127.0.0.1") &&
+    !(parsed.protocol === "https:" && parsed.hostname === "127.0.0.1")
+  ) {
+    throw new Error("SNN_SEARCH_BASE_URL must use http(s)://127.0.0.1");
+  }
   return parsed.toString().replace(/\/+$/, "");
 }
 
@@ -137,13 +142,20 @@ export function loadConfig(environment = process.env) {
     .map((origin) => origin.trim())
     .filter(Boolean);
 
-  const webSearchBaseUrl = environment.QWEN_WEB_SEARCH_BASE_URL?.trim();
-  const webSearchApiKey = environment.QWEN_WEB_SEARCH_API_KEY || "";
-  const webSearchModel = environment.QWEN_WEB_SEARCH_MODEL?.trim() || "";
-  const webSearchConfigured = Boolean(webSearchBaseUrl && webSearchApiKey && webSearchModel);
-  if ((webSearchBaseUrl || webSearchApiKey || webSearchModel) && !webSearchConfigured) {
-    throw new Error("QWEN web search requires base URL, API key, and model");
-  }
+  // Chat web search runs through a local SearXNG aggregate endpoint; a
+  // loopback-only base URL keeps search traffic off the public network.
+  const searchBaseUrl = environment.SNN_SEARCH_BASE_URL?.trim();
+  const searchConfigured = Boolean(searchBaseUrl);
+  const searchResults = readPositiveInteger(
+    environment.SNN_SEARCH_RESULTS,
+    5,
+    "SNN_SEARCH_RESULTS",
+  );
+  const searchTimeoutMs = readPositiveInteger(
+    environment.SNN_SEARCH_TIMEOUT_MS,
+    20_000,
+    "SNN_SEARCH_TIMEOUT_MS",
+  );
 
   const agent = loadAgentConfig(environment);
   const publicAgent = loadPublicAgentConfig(environment, agent);
@@ -156,7 +168,13 @@ export function loadConfig(environment = process.env) {
     ),
     upstreamApiKey: environment.QWEN_UPSTREAM_API_KEY || "",
     model: environment.QWEN_MODEL || "",
-    webSearch: webSearchConfigured ? { baseUrl: normalizeWebSearchBaseUrl(webSearchBaseUrl), apiKey: webSearchApiKey, model: webSearchModel } : null,
+    webSearch: searchConfigured
+      ? {
+          baseUrl: normalizeSearchBaseUrl(searchBaseUrl),
+          results: searchResults,
+          timeoutMs: searchTimeoutMs,
+        }
+      : null,
     statusTimeoutMs: readPositiveInteger(
       environment.AI_STATUS_TIMEOUT_MS,
       4_000,
