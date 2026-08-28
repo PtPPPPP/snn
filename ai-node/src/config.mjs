@@ -1,3 +1,5 @@
+import { dirname, join } from "node:path";
+
 const DEFAULT_ALLOWED_ORIGINS = ["http://127.0.0.1:8765", "http://localhost:8765"];
 
 function readPositiveInteger(value, fallback, name) {
@@ -108,6 +110,11 @@ function loadPublicAgentConfig(environment, agentConfig) {
   if (!agentConfig.enabled) throw new Error("SNN_AGENT_PUBLIC_ENABLED requires SNN_AGENT_INTERNAL_ENABLED=true");
   if (!base.workspaceBase) throw new Error("SNN_AGENT_PUBLIC_WORKSPACE_BASE is required when SNN_AGENT_PUBLIC_ENABLED=true");
   if (!base.ownershipRoot) throw new Error("SNN_AGENT_PUBLIC_OWNERSHIP_ROOT is required when SNN_AGENT_PUBLIC_ENABLED=true");
+  // Chunked-upload staging lives beside the other public-agent state, never
+  // inside a browser-reachable or Agent-visible path.
+  base.uploadStagingRoot =
+    environment.SNN_AGENT_PUBLIC_UPLOAD_STAGING_ROOT ||
+    join(dirname(base.ownershipRoot), "uploads-staging");
   return base;
 }
 

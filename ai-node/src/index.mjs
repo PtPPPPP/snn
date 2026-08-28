@@ -11,6 +11,7 @@ import { WorkspaceManager } from "./agent/workspace/workspace-manager.mjs";
 import { createDefaultCapabilityResolver } from "./agent/capabilities/built-ins.mjs";
 import { SessionMetadataStore } from "./agent/session-metadata-store.mjs";
 import { FileIngestionService } from "./agent/workspace/file-ingestion-service.mjs";
+import { ChunkedUploadService } from "./agent/workspace/chunked-upload-service.mjs";
 import { AttachmentContextResolver } from "./agent/attachments/attachment-context-resolver.mjs";
 import { WorkspaceRuntimeRegistry } from "./agent/workspace-runtime-registry.mjs";
 import { AgentRuntimeReadiness } from "./agent/runtime-readiness.mjs";
@@ -25,6 +26,7 @@ let controller = null;
 let ingestionService = null;
 let metadataStore = null;
 let ownershipStore = null;
+let chunkedUploads = null;
 let publicBff = null;
 let internalServer = null;
 let agentReadiness = null;
@@ -37,7 +39,9 @@ if (config.agent.enabled || config.publicAgent?.enabled) {
 if (config.publicAgent?.enabled) {
   await mkdir(config.publicAgent.workspaceBase, { recursive: true });
   await mkdir(config.publicAgent.ownershipRoot, { recursive: true });
+  await mkdir(config.publicAgent.uploadStagingRoot, { recursive: true });
   ownershipStore = new PublicAgentOwnershipStore(config.publicAgent.ownershipRoot);
+  chunkedUploads = new ChunkedUploadService({ root: config.publicAgent.uploadStagingRoot, maxFileBytes: 52_428_800 });
 }
 
 if (config.agent.enabled) {
@@ -97,6 +101,7 @@ if (config.publicAgent?.enabled) {
     ingestionService,
     ownershipStore,
     workspaceBase: config.publicAgent.workspaceBase,
+    chunkedUploads,
   });
   // Opportunistic TTL sweep on startup
   publicBff.maybeSweep?.().catch(() => {});

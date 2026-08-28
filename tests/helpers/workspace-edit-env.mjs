@@ -19,6 +19,7 @@ import { WorkspaceManager } from "../../ai-node/src/agent/workspace/workspace-ma
 import { createDefaultCapabilityResolver } from "../../ai-node/src/agent/capabilities/built-ins.mjs";
 import { SessionMetadataStore } from "../../ai-node/src/agent/session-metadata-store.mjs";
 import { FileIngestionService } from "../../ai-node/src/agent/workspace/file-ingestion-service.mjs";
+import { ChunkedUploadService } from "../../ai-node/src/agent/workspace/chunked-upload-service.mjs";
 import { AttachmentContextResolver } from "../../ai-node/src/agent/attachments/attachment-context-resolver.mjs";
 import { WorkspaceRuntimeRegistry } from "../../ai-node/src/agent/workspace-runtime-registry.mjs";
 import { AgentRuntimeReadiness } from "../../ai-node/src/agent/runtime-readiness.mjs";
@@ -196,6 +197,7 @@ export async function bootWorkspaceEditEnv(label, { fetchAllowPrivateNetworks = 
   const ownershipRoot = await mkdtemp(path.join(tmpdir(), "snn-5b7-own-"));
   const metadataRoot = await mkdtemp(path.join(tmpdir(), "snn-5b7-meta-"));
   const persistence = await mkdtemp(path.join(tmpdir(), "snn-5b7-sess-"));
+  const stagingRoot = await mkdtemp(path.join(tmpdir(), "snn-5b7-stage-"));
   const defaultWsRoot = await mkdtemp(path.join(tmpdir(), "snn-5b7-default-"));
   const fixture = path.join(fixtureBase, `.snn-5b7-${label}`);
   await mkdir(fixture, { recursive: true });
@@ -223,7 +225,7 @@ export async function bootWorkspaceEditEnv(label, { fetchAllowPrivateNetworks = 
   const defaultWs = await workspaceManager.register(defaultWsRoot, { id: "snn-workspace-default" });
   const metadataStore = new SessionMetadataStore(metadataRoot);
   const ownershipStore = new PublicAgentOwnershipStore(ownershipRoot);
-  const ingestion = new FileIngestionService({ workspaceManager });
+  const ingestion = new FileIngestionService({ workspaceManager, maxUploadBytes: 52_428_800, maxTotalBytes: 524_288_000 });
   const attachmentResolver = new AttachmentContextResolver({ fileInventory: ingestion });
 
   const runtimeConfig = {
@@ -261,6 +263,7 @@ export async function bootWorkspaceEditEnv(label, { fetchAllowPrivateNetworks = 
     enabled: true,
     workspaceBase,
     ownershipRoot,
+    uploadStagingRoot: path.join(stagingRoot, "staging"),
     cookieName: "snn_agent_owner",
     cookieSecure: false,
     sessionTtlMs: 24 * 60 * 60 * 1000,
@@ -285,6 +288,7 @@ export async function bootWorkspaceEditEnv(label, { fetchAllowPrivateNetworks = 
     ingestionService: ingestion,
     ownershipStore,
     workspaceBase,
+    chunkedUploads: new ChunkedUploadService({ root: publicConfig.uploadStagingRoot }),
   });
   const server = createAiNodeServer(serverConfig, { publicBff, agentReadiness, logger: { info() {}, error() {} } });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));

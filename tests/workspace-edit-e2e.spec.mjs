@@ -204,4 +204,38 @@ test.describe("workspace editing black box", () => {
       await web.close();
     }
   });
+
+  test("large file uploads through the chunked protocol and preserves bytes", async ({ browser }) => {
+    // MODEL_PROVIDER_UNUSED / RUNTIME_AND_TOOLS_REAL: exercises the browser
+    // chunked upload path (5 MiB > the 4 MiB direct threshold) against the
+    // real BFF staging + finalize, then verifies byte integrity on download.
+    const SIZE = 5 * 1024 * 1024;
+    const original = Buffer.alloc(SIZE);
+    for (let offset = 0; offset < SIZE; offset += 4096) original.write("snn", offset);
+    const context = await browser.newContext({ acceptDownloads: true });
+    try {
+      const page = await context.newPage();
+      const pageErrors = [];
+      page.on("pageerror", (error) => pageErrors.push(error.message));
+
+      await page.goto(`${env.frontendUrl}/ai/`, { waitUntil: "domcontentloaded" });
+      await expect(page.getByRole("tab", { name: /Agent/ })).toBeVisible({ timeout: 30_000 });
+      await page.getByRole("tab", { name: /Agent/ }).click();
+      await expect(page.getByRole("tab", { name: /Agent/ })).toHaveAttribute("aria-selected", "true", { timeout: 30_000 });
+
+      await page.getByTestId("agent-file-input").setInputFiles({ name: "large.bin", mimeType: "application/octet-stream", buffer: original });
+      await expect(page.getByTestId("attachment-chip")).toContainText("large.bin", { timeout: 30_000 });
+      await expect(page.getByTestId("files-panel")).toContainText("large.bin", { timeout: 30_000 });
+
+      const downloadPromise = page.waitForEvent("download");
+      await page.getByRole("link", { name: "下载 large.bin" }).click();
+      const download = await downloadPromise;
+      const downloaded = await readFile(await download.path());
+      expect(downloaded.length).toBe(SIZE);
+      expect(downloaded.equals(original)).toBe(true);
+      expect(pageErrors).toEqual([]);
+    } finally {
+      await context.close();
+    }
+  });
 });

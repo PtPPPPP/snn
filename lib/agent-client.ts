@@ -178,30 +178,133 @@ export async function previewAgentFile(sessionId: string, fileId: string): Promi
 // fast before pushing a doomed request over a slow link.
 export const AGENT_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
 
-export async function uploadAgentFile(
-  sessionId: string,
-  file: File,
-  onProgress?: (percent: number) => void,
-): Promise<AgentFile> {
-  const formData = new FormData();
-  formData.append("file", file, file.name);
+// Files above this threshold use the chunked protocol. The public origin
+// answers an upload only after its whole body has arrived, so a single
+// 13-50 MiB request succeeds only while the user's link to the Cloudflare
+// edge sustains high throughput; through the fixed ~100 s edge origin
+// timeout, evening-peak links fail with 524/502. 4 MiB chunks land far
+// inside that window even on degraded links.
+export const AGENT_CHUNKED_UPLOAD_THRESHOLD = 4 * 1024 * 1024;
+const CHUNK_RETRYABLE_STATUS = new Set([502, 503, 504, 524]);
+const CHUNK_MAX_ATTEMPTS = 3;
+
+async function xhrSend(
+  method: string,
+  path: string,
+  body: Blob | FormData | null,
+  onProgress?: (loaded: number) => void,
+): Promise<{ status: number; bodyText: string }> {
   // XMLHttpRequest instead of fetch: it is the only browser API that
   // reports upload progress, which matters on slow tunnel links.
-  const result = await new Promise<{ status: number; bodyText: string }>((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", `${getAgentApiBaseUrl()}/sessions/${encodeURIComponent(sessionId)}/files`);
+    xhr.open(method, `${getAgentApiBaseUrl()}${path}`);
     xhr.withCredentials = true;
     if (onProgress) {
       xhr.upload.onprogress = (event) => {
-        if (!event.lengthComputable || event.total === 0) return;
-        onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+        if (event.lengthComputable && event.total > 0) onProgress(event.loaded);
       };
     }
     xhr.onload = () => resolve({ status: xhr.status, bodyText: xhr.responseText });
     xhr.onerror = () => reject(new AgentClientError("network"));
     xhr.ontimeout = () => reject(new AgentClientError("network"));
-    xhr.send(formData);
+    xhr.send(body);
   });
+}
+
+async function putChunkWithRetry(
+  sessionId: string,
+  uploadId: string,
+  index: number,
+  blob: Blob,
+  onLoaded: (loaded: number) => void,
+): Promise<void> {
+  let lastError: unknown = new AgentClientError("network");
+  for (let attempt = 0; attempt < CHUNK_MAX_ATTEMPTS; attempt += 1) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
+    try {
+      const result = await xhrSend(
+        "PUT",
+        `/sessions/${encodeURIComponent(sessionId)}/uploads/${encodeURIComponent(uploadId)}/chunks/${index}`,
+        blob,
+        onLoaded,
+      );
+      if (result.status >= 200 && result.status < 300) return;
+      const body: unknown = (() => { try { return JSON.parse(result.bodyText); } catch { return {}; } })();
+      if (CHUNK_RETRYABLE_STATUS.has(result.status)) {
+        lastError = new AgentClientError("http", result.status);
+        continue;
+      }
+      throwForStatusCode(result.status, body);
+    } catch (error) {
+      if (error instanceof AgentClientError && error.code !== "network") throw error;
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+async function uploadAgentFileChunked(
+  sessionId: string,
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<AgentFile> {
+  const createRes = await agentFetch(`/sessions/${encodeURIComponent(sessionId)}/uploads`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ originalName: file.name, contentType: file.type || "application/octet-stream", totalSize: file.size }),
+  });
+  if (!createRes.ok) {
+    throwForStatus(createRes, await createRes.json().catch(() => ({})));
+  }
+  const created = (await createRes.json()) as { upload?: { uploadId?: string; chunkSize?: number } };
+  const uploadId = created.upload?.uploadId;
+  const chunkSize = created.upload?.chunkSize;
+  if (typeof uploadId !== "string" || typeof chunkSize !== "number" || chunkSize < 1) {
+    throw new AgentClientError("response");
+  }
+  // Abandoned staging is swept server-side by TTL; cancel up front on any
+  // client-side failure so a doomed upload does not occupy the open quota.
+  try {
+    let confirmed = 0;
+    for (let index = 0, offset = 0; offset < file.size; index += 1, offset += chunkSize) {
+      const blob = file.slice(offset, Math.min(offset + (chunkSize as number), file.size));
+      await putChunkWithRetry(sessionId, uploadId, index, blob, (loaded) => {
+        onProgress?.(Math.min(99, Math.round(((confirmed + loaded) / file.size) * 100)));
+      });
+      confirmed += blob.size;
+      onProgress?.(Math.min(99, Math.round((confirmed / file.size) * 100)));
+    }
+    const completeRes = await agentFetch(`/sessions/${encodeURIComponent(sessionId)}/uploads/${encodeURIComponent(uploadId)}/complete`, { method: "POST" });
+    if (!completeRes.ok) {
+      throwForStatus(completeRes, await completeRes.json().catch(() => ({})));
+    }
+    const data = (await completeRes.json()) as { file?: AgentFile };
+    if (!data.file?.fileId) throw new AgentClientError("response");
+    onProgress?.(100);
+    return data.file;
+  } catch (error) {
+    void agentFetch(`/sessions/${encodeURIComponent(sessionId)}/uploads/${encodeURIComponent(uploadId)}`, { method: "DELETE" }).catch(() => {});
+    throw error;
+  }
+}
+
+export async function uploadAgentFile(
+  sessionId: string,
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<AgentFile> {
+  if (file.size > AGENT_CHUNKED_UPLOAD_THRESHOLD) {
+    return uploadAgentFileChunked(sessionId, file, onProgress);
+  }
+  const formData = new FormData();
+  formData.append("file", file, file.name);
+  const result = await xhrSend(
+    "POST",
+    `/sessions/${encodeURIComponent(sessionId)}/files`,
+    formData,
+    onProgress ? (loaded) => onProgress(Math.min(100, Math.round((loaded / file.size) * 100))) : undefined,
+  );
   const body: unknown = (() => { try { return JSON.parse(result.bodyText); } catch { return {}; } })();
   if (result.status < 200 || result.status >= 300) throwForStatusCode(result.status, body);
   const data = body as { file: AgentFile };

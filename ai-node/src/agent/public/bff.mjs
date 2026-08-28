@@ -35,6 +35,7 @@ export function createPublicAgentBff({
   ownershipStore,
   workspaceBase,
   logger = console,
+  chunkedUploads = null,
 }) {
   if (!publicConfig) throw new TypeError("publicConfig is required");
   const guard = new PublicResourceGuard(publicConfig.limits);
@@ -55,6 +56,7 @@ export function createPublicAgentBff({
         try { await cleanupSession(sessionId, { silent: true }); } catch {}
       }
     } catch {}
+    try { await chunkedUploads?.sweepExpired(now); } catch {}
   }
 
   function isPublicAgentPath(path) {
@@ -100,10 +102,11 @@ export function createPublicAgentBff({
   }
 
   function publicErrorStatus(code) {
-    if (["AGENT_SESSION_NOT_FOUND", "AGENT_ATTACHMENT_NOT_FOUND", "AGENT_FILE_NOT_FOUND"].includes(code)) return 404;
-    if (code === "AGENT_FILE_MUTATED") return 409;
-    if (["AGENT_FILE_INVALID", "AGENT_FILE_REQUIRED", "AGENT_FILE_CONFLICT", "AGENT_ATTACHMENT_UNSUPPORTED"].includes(code)) return 400;
-    if (["AGENT_FILE_TOO_LARGE", "AGENT_WORKSPACE_QUOTA_EXCEEDED", "REQUEST_TOO_LARGE", "AGENT_PREVIEW_TOO_LARGE"].includes(code)) return 413;
+    if (["AGENT_SESSION_NOT_FOUND", "AGENT_ATTACHMENT_NOT_FOUND", "AGENT_FILE_NOT_FOUND", "AGENT_UPLOAD_NOT_FOUND"].includes(code)) return 404;
+    if (["AGENT_FILE_MUTATED", "AGENT_UPLOAD_INCOMPLETE", "AGENT_UPLOAD_ALREADY_FINALIZED", "AGENT_CHUNK_CONFLICT"].includes(code)) return 409;
+    if (["AGENT_FILE_INVALID", "AGENT_FILE_REQUIRED", "AGENT_FILE_CONFLICT", "AGENT_ATTACHMENT_UNSUPPORTED", "AGENT_CHUNK_INVALID"].includes(code)) return 400;
+    if (["AGENT_FILE_TOO_LARGE", "AGENT_WORKSPACE_QUOTA_EXCEEDED", "REQUEST_TOO_LARGE", "AGENT_PREVIEW_TOO_LARGE", "AGENT_CHUNK_TOO_LARGE"].includes(code)) return 413;
+    if (code === "AGENT_UPLOAD_LIMIT") return 429;
     if (code === "AGENT_PREVIEW_UNSUPPORTED") return 415;
     if (code === "AGENT_RUNTIME_INCOMPATIBLE") return 503;
     if (typeof code === "string" && code.startsWith("AGENT_PUBLIC_")) return 429;
@@ -351,6 +354,65 @@ export function createPublicAgentBff({
       return true;
     }
 
+    // Chunked uploads: declare -> PUT chunks -> complete / cancel. Guarded by
+    // the same origin + ownership rules as the direct file path.
+    const uploadMatch = /^\/api\/agent\/sessions\/([^/]+)\/uploads(?:\/([^/]+))?(?:\/(chunks|complete))?(?:\/([0-9]+))?$/.exec(path);
+    if (uploadMatch && (method === "POST" || method === "PUT" || method === "DELETE")) {
+      const [, sessionId, uploadId, uploadAction, chunkIndexRaw] = uploadMatch;
+      if (!SESSION_ID_RE.test(sessionId)) {
+        sendError(response, Object.assign(new Error("Invalid session"), { status: 400, code: "INVALID_SESSION_ID" }), originInfo, path);
+        return true;
+      }
+      const isCreate = method === "POST" && !uploadId;
+      const isChunk = method === "PUT" && uploadId && uploadAction === "chunks" && chunkIndexRaw !== undefined;
+      const isComplete = method === "POST" && uploadId && uploadAction === "complete";
+      const isCancel = method === "DELETE" && uploadId && !uploadAction;
+      if (!isCreate && !isChunk && !isComplete && !isCancel) return false;
+      if (!originInfo.allowed) { sendJson(response, 403, { error: { code: "FORBIDDEN_ORIGIN", message: "Origin is not allowed" } }, originInfo); return true; }
+      const uploadToken = getOwnerToken(request);
+      if (!uploadToken) {
+        sendError(response, Object.assign(new Error("Agent session is not available"), { status: 404, code: "AGENT_SESSION_NOT_FOUND" }), originInfo, path);
+        return true;
+      }
+      try { await verifyOwnership(sessionId, uploadToken); } catch (e) { sendError(response, e, originInfo, path); return true; }
+      await ownershipStore.touch(sessionId).catch(() => {});
+      await maybeSweep();
+      if (!chunkedUploads) {
+        sendError(response, Object.assign(new Error("Upload was not found"), { status: 404, code: "AGENT_UPLOAD_NOT_FOUND" }), originInfo, path);
+        return true;
+      }
+      try {
+        if (isCreate) {
+          let body;
+          try { body = await readJsonBody(request, 4096); } catch { throw Object.assign(new Error("Invalid request"), { status: 400, code: "INVALID_REQUEST" }); }
+          const upload = await chunkedUploads.create({
+            sessionId,
+            originalName: body?.originalName,
+            contentType: body?.contentType,
+            totalSize: body?.totalSize,
+          });
+          sendJson(response, 201, { upload }, originInfo);
+        } else if (isChunk) {
+          const bytes = await readBoundedRaw(request, chunkedUploads.chunkSize);
+          const result = await chunkedUploads.putChunk({ sessionId, uploadId, index: Number(chunkIndexRaw), bytes });
+          sendJson(response, 200, { ...result }, originInfo);
+        } else if (isComplete) {
+          const file = await chunkedUploads.complete({
+            sessionId,
+            uploadId,
+            ingest: async ({ originalName, contentType, stream }) => {
+              const { workspace } = await resolveWorkspaceForSession(sessionId);
+              return ingestionService.ingest({ workspaceId: workspace.id, originalName, contentType, body: stream });
+            },
+          });
+          sendJson(response, 201, { file: publicFileForSession(sessionId, file) }, originInfo);
+        } else {
+          sendJson(response, 200, await chunkedUploads.cancel({ sessionId, uploadId }), originInfo);
+        }
+      } catch (e) { sendError(response, e, originInfo, path); }
+      return true;
+    }
+
     // All other session sub-routes need sessionId
     const sessionSubMatch = /^\/api\/agent\/sessions\/([^/]+)\/(files|runs)(?:\/([^/]+)(?:\/(preview))?)?$/.exec(path);
     if (!sessionSubMatch) return false;
@@ -513,6 +575,19 @@ export function createPublicAgentBff({
     if (len === 0) return undefined;
     try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); }
     catch { throw Object.assign(new Error("Invalid JSON"), { status: 400, code: "MALFORMED_JSON" }); }
+  }
+
+  async function readBoundedRaw(request, maxBytes) {
+    // Chunk bodies are raw bytes, not multipart: read up to maxBytes and reject
+    // anything beyond so a lying content-length cannot balloon memory.
+    const chunks = [];
+    let len = 0;
+    for await (const chunk of request) {
+      len += chunk.length;
+      if (len > maxBytes) throw Object.assign(new Error("Chunk exceeds the negotiated chunk size"), { status: 413, code: "AGENT_CHUNK_TOO_LARGE" });
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
   }
 
   async function parseMultipartFile(request, boundary, maxBytes) {
