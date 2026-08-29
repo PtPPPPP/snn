@@ -1747,3 +1747,47 @@
     transition: none;
   }
 }
+
+/* Direct workspace text editor — same envelope as the preview, no IDE chrome. */
+.workspaceEditor {
+  flex: 1 1 auto;
+  min-height: 220px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+  border: 1px solid var(--snn-border-soft);
+  border-radius: 10px;
+  background: var(--snn-surface);
+  color: var(--snn-text);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  resize: vertical;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.workspaceEditor:focus-visible {
+  outline: var(--snn-focus-ring-width) solid var(--snn-focus-ring);
+  outline-offset: var(--snn-focus-ring-offset);
+}
+
+.workspaceEditorNotice {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--snn-border-soft);
+  border-radius: 10px;
+  background: var(--snn-surface);
+}
+
+.workspaceEditorNotice p {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--snn-text-secondary);
+}
+
+.workspaceEditorNoticeActions {
+  display: flex;
+  gap: 8px;
+}

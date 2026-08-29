@@ -2,6 +2,7 @@ import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { TEXT_EXTENSIONS } from "../documents/file-access.mjs";
+import { isEditableTextFile } from "../workspace/file-ingestion-service.mjs";
 import { hashOwnerToken } from "./ownership-store.mjs";
 import { generateOwnerToken, getOwnerTokenFromRequest, buildOwnerCookie, DEFAULT_COOKIE_NAME } from "./cookie.mjs";
 import { PublicResourceGuard } from "./resource-guard.mjs";
@@ -13,6 +14,10 @@ const RUN_ID_RE = /^snn-run-[a-z0-9-]{8,80}$/;
 // semantics. The download endpoint keeps its `attachment` contract.
 const PREVIEW_EXTENSIONS = new Set([...TEXT_EXTENSIONS, "jsx", "css"]);
 const MAX_PREVIEW_BYTES = 256 * 1024;
+// Direct user editing reuses the preview envelope: a file is editable exactly
+// when it loads as preview (UTF-8 text within this bound). Keeping both limits
+// identical makes the boundary easy to reason about.
+const MAX_DIRECT_EDIT_BYTES = MAX_PREVIEW_BYTES;
 
 // Hard ceiling for a single public upload request body. Must stay aligned
 // with the production FileIngestionService maxUploadBytes in src/index.mjs.
@@ -103,7 +108,7 @@ export function createPublicAgentBff({
 
   function publicErrorStatus(code) {
     if (["AGENT_SESSION_NOT_FOUND", "AGENT_ATTACHMENT_NOT_FOUND", "AGENT_FILE_NOT_FOUND", "AGENT_UPLOAD_NOT_FOUND"].includes(code)) return 404;
-    if (["AGENT_FILE_MUTATED", "AGENT_UPLOAD_INCOMPLETE", "AGENT_UPLOAD_ALREADY_FINALIZED", "AGENT_CHUNK_CONFLICT"].includes(code)) return 409;
+    if (["AGENT_FILE_MUTATED", "AGENT_FILE_STALE", "AGENT_FILE_EDIT_CONFLICT", "AGENT_UPLOAD_INCOMPLETE", "AGENT_UPLOAD_ALREADY_FINALIZED", "AGENT_CHUNK_CONFLICT"].includes(code)) return 409;
     if (["AGENT_FILE_INVALID", "AGENT_FILE_REQUIRED", "AGENT_FILE_CONFLICT", "AGENT_ATTACHMENT_UNSUPPORTED", "AGENT_CHUNK_INVALID"].includes(code)) return 400;
     if (["AGENT_FILE_TOO_LARGE", "AGENT_WORKSPACE_QUOTA_EXCEEDED", "REQUEST_TOO_LARGE", "AGENT_PREVIEW_TOO_LARGE", "AGENT_CHUNK_TOO_LARGE"].includes(code)) return 413;
     if (code === "AGENT_UPLOAD_LIMIT") return 429;
@@ -414,7 +419,7 @@ export function createPublicAgentBff({
     }
 
     // All other session sub-routes need sessionId
-    const sessionSubMatch = /^\/api\/agent\/sessions\/([^/]+)\/(files|runs)(?:\/([^/]+)(?:\/(preview))?)?$/.exec(path);
+    const sessionSubMatch = /^\/api\/agent\/sessions\/([^/]+)\/(files|runs)(?:\/([^/]+)(?:\/(preview|content))?)?$/.exec(path);
     if (!sessionSubMatch) return false;
     const [, sessionId, sub, subId, action] = sessionSubMatch;
     if (!SESSION_ID_RE.test(sessionId)) {
@@ -459,7 +464,7 @@ export function createPublicAgentBff({
             let content;
             try { content = new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
             catch { throw Object.assign(new Error("This file type cannot be previewed"), { status: 415, code: "AGENT_PREVIEW_UNSUPPORTED" }); }
-            sendJson(response, 200, { fileId: file.fileId, name: file.originalName, mime: file.contentType, size: file.size, truncated: false, content }, originInfo);
+            sendJson(response, 200, { fileId: file.fileId, name: file.originalName, mime: file.contentType, size: file.size, truncated: false, content, sha256: file.sha256 }, originInfo);
           } catch (e) { sendError(response, e, originInfo, path); }
           return true;
         }
@@ -491,6 +496,35 @@ export function createPublicAgentBff({
             await ingestionService.remove({ workspaceId: workspace.id, fileId });
             response.writeHead(204, corsHeaders(originInfo.origin, originInfo.allowed));
             response.end();
+          } catch (e) { sendError(response, e, originInfo, path); }
+          return true;
+        }
+        if (method === "PUT" && subId && action === "content") {
+          // Direct user editing: optimistic concurrency on baseSha256, reuse of
+          // the agent-authoritative writeEditableText mutation path.
+          try {
+            const { workspace } = await resolveWorkspaceForSession(sessionId);
+            const body = await readJsonBody(request, MAX_DIRECT_EDIT_BYTES + 4096);
+            if (!body || typeof body.content !== "string" || typeof body.baseSha256 !== "string" || !/^[a-f0-9]{64}$/i.test(body.baseSha256)) {
+              throw Object.assign(new Error("Invalid request"), { status: 400, code: "INVALID_REQUEST" });
+            }
+            if (Buffer.byteLength(body.content, "utf8") > MAX_DIRECT_EDIT_BYTES) {
+              throw Object.assign(new Error("File exceeds direct edit size limit"), { status: 413, code: "AGENT_FILE_TOO_LARGE" });
+            }
+            const current = await ingestionService.readFile({ workspaceId: workspace.id, fileId: subId });
+            if (!isEditableTextFile(current.file)) throw Object.assign(new Error("File is not editable"), { status: 415, code: "AGENT_FILE_NOT_EDITABLE" });
+            try { new TextDecoder("utf-8", { fatal: true }).decode(current.bytes); }
+            catch { throw Object.assign(new Error("File is not valid UTF-8"), { status: 415, code: "AGENT_FILE_NOT_EDITABLE" }); }
+            if (current.file.sha256 !== body.baseSha256) {
+              throw Object.assign(new Error("File was modified by another operation"), { status: 409, code: "AGENT_FILE_EDIT_CONFLICT" });
+            }
+            const result = await ingestionService.writeEditableText({
+              workspaceId: workspace.id,
+              virtualPath: current.file.virtualPath,
+              content: body.content,
+              expected: { kind: "replaceIfVersion", version: body.baseSha256 },
+            });
+            sendJson(response, 200, { file: publicFileForSession(sessionId, result.file), sha256: result.version }, originInfo);
           } catch (e) { sendError(response, e, originInfo, path); }
           return true;
         }

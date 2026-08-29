@@ -21,6 +21,17 @@ export type AgentFilePreview = {
   size: number;
   truncated: boolean;
   content: string;
+  sha256?: string;
+};
+
+export type AgentFileUpdateRequest = {
+  content: string;
+  baseSha256: string;
+};
+
+export type AgentFileUpdateResult = {
+  file: AgentFile;
+  sha256: string;
 };
 
 export type AgentRuntimeReadiness = {
@@ -170,6 +181,39 @@ export async function previewAgentFile(sessionId: string, fileId: string): Promi
   }
   const data = (await res.json()) as AgentFilePreview;
   if (typeof data.content !== "string") throw new AgentClientError("response");
+  return data;
+}
+
+// Direct user editing mirror of the server's TEXT_EXTENSIONS editable-text
+// whitelist (file-ingestion-service isEditableTextPath). Files outside this
+// set (PDF/DOCX/XLSX/binary) never show an Edit button, matching the
+// server's 415 before the user can hit it.
+export const AGENT_DIRECT_EDIT_EXTENSIONS = new Set([
+  "txt", "md", "markdown", "csv", "json", "log", "xml", "yml", "yaml", "html", "htm",
+  "ts", "tsx", "js", "mjs", "cjs", "py", "java", "c", "h", "cpp", "go", "rs",
+  "rb", "sh", "sql", "ini", "toml",
+]);
+
+export function isDirectEditableFileName(name: string): boolean {
+  const extension = /\.([a-z0-9]+)$/i.exec(name)?.[1]?.toLowerCase();
+  return extension === undefined || AGENT_DIRECT_EDIT_EXTENSIONS.has(extension);
+}
+
+export async function updateAgentFileContent(
+  sessionId: string,
+  fileId: string,
+  request: AgentFileUpdateRequest,
+): Promise<AgentFileUpdateResult> {
+  const res = await agentFetch(`/sessions/${encodeURIComponent(sessionId)}/files/${encodeURIComponent(fileId)}/content`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) {
+    throwForStatus(res, await res.json().catch(() => ({})));
+  }
+  const data = (await res.json()) as AgentFileUpdateResult;
+  if (!data.file?.fileId || typeof data.sha256 !== "string") throw new AgentClientError("response");
   return data;
 }
 

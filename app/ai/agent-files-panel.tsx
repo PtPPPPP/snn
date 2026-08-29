@@ -4,8 +4,10 @@ import { useState } from "react";
 import {
   AgentClientError,
   getAgentFileUrl,
+  isDirectEditableFileName,
   isPreviewableAgentFile,
   previewAgentFile,
+  updateAgentFileContent,
   type AgentFile,
   type AgentFilePreview,
 } from "../../lib/agent-client";
@@ -17,6 +19,20 @@ type PreviewState = {
   sessionId: string;
   status: "loading" | "ready" | "unsupported" | "tooLarge" | "error";
   data?: AgentFilePreview;
+};
+
+// Editor lifecycle: one nullable object scoped to (sessionId, fileId). The
+// status field keeps the modes mutually exclusive (editing/saving/conflict);
+// the editor deliberately survives workspace-list changes so a file deleted
+// mid-edit surfaces a 404 on save instead of silently dropping user input.
+type EditState = {
+  fileId: string;
+  name: string;
+  sessionId: string;
+  content: string;
+  originalContent: string;
+  baseSha256: string;
+  status: "editing" | "saving" | "conflict" | "deleted" | "error";
 };
 
 // One authoritative Workspace presentation: Files, Recent Changes, and Agent
@@ -51,6 +67,8 @@ export default function AgentWorkspacePanel({
   onClose: () => void;
 }) {
   const [preview, setPreview] = useState<PreviewState | null>(null);
+  const [edit, setEdit] = useState<EditState | null>(null);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   // Preview is only valid for the session it was opened in and while the file
   // still exists in the authoritative manifest. Deriving it (rather than
@@ -60,9 +78,18 @@ export default function AgentWorkspacePanel({
     preview && preview.sessionId === sessionId && files.some((f) => f.fileId === preview.file.fileId)
       ? preview
       : null;
+  // The editor is session-scoped but independent of the live manifest: it
+  // survives a concurrent deletion so the save attempt can report 404.
+  const activeEdit = edit && edit.sessionId === sessionId ? edit : null;
+  const editDirty = activeEdit !== null && activeEdit.content !== activeEdit.originalContent;
+  // Orphaned editor from a previous session: never saveable, discard is
+  // explicit so unsaved work is never silently dropped.
+  const orphanedEdit = edit && edit.sessionId !== sessionId ? edit : null;
 
   async function openPreview(file: AgentFile) {
     if (!sessionId) return;
+    setEdit(null);
+    setConfirmDiscard(false);
     setPreview({ file, sessionId, status: "loading" });
     try {
       const data = await previewAgentFile(sessionId, file.fileId);
@@ -78,9 +105,87 @@ export default function AgentWorkspacePanel({
     }
   }
 
+  function startEdit() {
+    if (!activePreview?.data?.sha256 || !sessionId) return;
+    setEdit({
+      fileId: activePreview.file.fileId,
+      name: activePreview.file.originalName,
+      sessionId,
+      content: activePreview.data.content,
+      originalContent: activePreview.data.content,
+      baseSha256: activePreview.data.sha256,
+      status: "editing",
+    });
+    setConfirmDiscard(false);
+  }
+
+  function requestExitEdit() {
+    if (editDirty) {
+      setConfirmDiscard(true);
+      return;
+    }
+    setEdit(null);
+    setConfirmDiscard(false);
+  }
+
+  async function saveEdit() {
+    if (!activeEdit || !sessionId) return;
+    if (activeEdit.status !== "editing" || activeEdit.content === activeEdit.originalContent) return;
+    setEdit({ ...activeEdit, status: "saving" });
+    try {
+      const result = await updateAgentFileContent(activeEdit.sessionId, activeEdit.fileId, {
+        content: activeEdit.content,
+        baseSha256: activeEdit.baseSha256,
+      });
+      // Authoritative refresh: the manifest now carries the new updatedAt, so
+      // Recent Changes derive a real Modified entry instead of a fake one.
+      onRetryLoad();
+      setPreview((cur) =>
+        cur && cur.file.fileId === activeEdit.fileId && cur.sessionId === activeEdit.sessionId
+          ? {
+              ...cur,
+              file: { ...cur.file, size: result.file.size, updatedAt: result.file.updatedAt },
+              status: "ready",
+              data: { ...(cur.data as AgentFilePreview), content: activeEdit.content, size: result.file.size, sha256: result.sha256 },
+            }
+          : cur,
+      );
+      setEdit(null);
+      setConfirmDiscard(false);
+    } catch (error) {
+      const status = error instanceof AgentClientError ? error.status : undefined;
+      if (status === 409) {
+        setEdit((cur) => (cur ? { ...cur, status: "conflict" } : cur));
+      } else if (status === 404) {
+        setEdit((cur) => (cur ? { ...cur, status: "deleted" } : cur));
+        onRetryLoad();
+      } else {
+        setEdit((cur) => (cur ? { ...cur, status: "error" } : cur));
+      }
+    }
+  }
+
+  function onEditorKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+      event.preventDefault();
+      if (editDirty && activeEdit.status === "editing") void saveEdit();
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      requestExitEdit();
+    }
+  }
+
   const downloadHref = activePreview
     ? activePreview.file.downloadUrl ?? (sessionId ? getAgentFileUrl(sessionId, activePreview.file.fileId) : undefined)
     : undefined;
+  const canEdit =
+    activePreview?.status === "ready" &&
+    activePreview.data?.sha256 !== undefined &&
+    !activePreview.data.truncated &&
+    activePreview.data.content.length <= 256 * 1024 &&
+    isDirectEditableFileName(activePreview.file.originalName);
 
   return (
     <aside
@@ -97,12 +202,92 @@ export default function AgentWorkspacePanel({
         </button>
       </div>
 
-      {activePreview ? (
+      {activeEdit ? (
+        <div className={styles.workspacePreview}>
+          <div className={styles.workspacePreviewBar}>
+            <button type="button" className={styles.workspaceBack} onClick={requestExitEdit} aria-label="返回文件列表">
+              ← 文件
+            </button>
+            <span className={styles.workspacePreviewName} title={activeEdit.name}>
+              {activeEdit.name}
+              {editDirty ? " ●" : ""}
+            </span>
+            <button
+              type="button"
+              className={styles.workspacePreviewDownload}
+              onClick={() => void saveEdit()}
+              disabled={activeEdit.status === "saving" || !editDirty}
+              data-testid="editor-save"
+              aria-label={`保存 ${activeEdit.name}`}
+            >
+              {activeEdit.status === "saving" ? "保存中…" : "保存"}
+            </button>
+          </div>
+          {activeEdit.status === "conflict" ? (
+            <div className={styles.workspaceEditorNotice} role="alert">
+              <p>文件已被其他操作修改，未覆盖最新版本。</p>
+              <button
+                type="button"
+                className={styles.workspaceRetry}
+                onClick={() => {
+                  const file = files.find((f) => f.fileId === activeEdit.fileId);
+                  setEdit(null);
+                  setConfirmDiscard(false);
+                  if (file) void openPreview(file);
+                }}
+              >
+                加载最新版本
+              </button>
+            </div>
+          ) : null}
+          {activeEdit.status === "deleted" ? (
+            <div className={styles.workspaceEditorNotice} role="alert">
+              <p>文件已不存在，无法保存。</p>
+              <button type="button" className={styles.workspaceRetry} onClick={() => { setEdit(null); setConfirmDiscard(false); }}>
+                知道了
+              </button>
+            </div>
+          ) : null}
+          {activeEdit.status === "error" ? (
+            <p className={styles.workspaceEditorNotice} role="alert">
+              保存失败，请重试。
+            </p>
+          ) : null}
+          {confirmDiscard ? (
+            <div className={styles.workspaceEditorNotice} role="alertdialog" aria-label="未保存的修改">
+              <p>有未保存的修改，确定放弃吗？</p>
+              <div className={styles.workspaceEditorNoticeActions}>
+                <button type="button" className={styles.workspaceRetry} onClick={() => { setEdit(null); setConfirmDiscard(false); }}>
+                  放弃修改
+                </button>
+                <button type="button" className={styles.agentFilesPreview} onClick={() => setConfirmDiscard(false)}>
+                  继续编辑
+                </button>
+              </div>
+            </div>
+          ) : null}
+          <textarea
+            className={styles.workspaceEditor}
+            value={activeEdit.content}
+            onChange={(event) => setEdit((cur) => (cur ? { ...cur, content: event.target.value, status: cur.status === "saving" ? "saving" : "editing" } : cur))}
+            onKeyDown={onEditorKeyDown}
+            disabled={activeEdit.status === "saving"}
+            spellCheck={false}
+            aria-label={`编辑 ${activeEdit.name}`}
+            data-testid="workspace-editor"
+          />
+        </div>
+      ) : activePreview ? (
         <div className={styles.workspacePreview}>
           <div className={styles.workspacePreviewBar}>
             <button type="button" className={styles.workspaceBack} onClick={() => setPreview(null)} aria-label="返回文件列表">
               ← 文件
             </button>
+            {canEdit ? (
+              <button type="button" className={styles.agentFilesPreview} onClick={startEdit} aria-label={`编辑 ${activePreview.file.originalName}`} data-testid="editor-open">
+                编辑
+              </button>
+            ) : null}
             {downloadHref ? (
               <a className={styles.workspacePreviewDownload} href={downloadHref} download={activePreview.file.originalName} aria-label={`下载 ${activePreview.file.originalName}`}>
                 下载
@@ -117,7 +302,7 @@ export default function AgentWorkspacePanel({
           ) : activePreview.status === "unsupported" ? (
             <p className={styles.workspacePreviewNotice}>此文件类型暂不支持预览，可下载查看。</p>
           ) : activePreview.status === "tooLarge" ? (
-            <p className={styles.workspacePreviewNotice}>文件过大，无法直接预览，可下载查看。</p>
+            <p className={styles.workspacePreviewNotice}>文件过大，暂不支持直接编辑，可下载查看。</p>
           ) : activePreview.status === "error" ? (
             <p className={styles.workspacePreviewNotice} role="alert">无法加载预览，请重试。</p>
           ) : (
@@ -132,6 +317,14 @@ export default function AgentWorkspacePanel({
         </div>
       ) : (
         <div className={styles.workspaceBody}>
+          {orphanedEdit ? (
+            <div className={styles.workspaceEditorNotice} role="alert">
+              <p>上一个会话有未保存的修改（{orphanedEdit.name}）。</p>
+              <button type="button" className={styles.workspaceRetry} onClick={() => { setEdit(null); setConfirmDiscard(false); }}>
+                放弃修改
+              </button>
+            </div>
+          ) : null}
           <section className={styles.workspaceSection} aria-label="文件">
             <div className={styles.workspaceSectionHeader}>
               <span>Files</span>

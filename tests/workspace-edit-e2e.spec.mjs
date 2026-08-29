@@ -205,8 +205,7 @@ test.describe("workspace editing black box", () => {
     }
   });
 
-  test("large file uploads through the chunked protocol and preserves bytes", async ({ browser }) => {
-    // MODEL_PROVIDER_UNUSED / RUNTIME_AND_TOOLS_REAL: exercises the browser
+  test("large file uploads through the chunked protocol and preserves bytes", async ({ browser }) => {    // MODEL_PROVIDER_UNUSED / RUNTIME_AND_TOOLS_REAL: exercises the browser
     // chunked upload path (5 MiB > the 4 MiB direct threshold) against the
     // real BFF staging + finalize, then verifies byte integrity on download.
     const SIZE = 5 * 1024 * 1024;
@@ -233,6 +232,116 @@ test.describe("workspace editing black box", () => {
       const downloaded = await readFile(await download.path());
       expect(downloaded.length).toBe(SIZE);
       expect(downloaded.equals(original)).toBe(true);
+      expect(pageErrors).toEqual([]);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("direct workspace editing: user edits in the panel and the agent reads the new version", async ({ browser }) => {
+    // MODEL_PROVIDER_SCRIPTED / RUNTIME_AND_TOOLS_REAL: the browser save goes
+    // through the real BFF -> writeEditableText -> manifest; the scripted
+    // model then reads the file through the real DSH read tool, so the tool
+    // result carries the updated bytes to the model.
+    const context = await browser.newContext({ acceptDownloads: true });
+    try {
+      const page = await context.newPage();
+      const pageErrors = [];
+      page.on("pageerror", (error) => pageErrors.push(error.message));
+
+      await page.goto(`${env.frontendUrl}/ai/`, { waitUntil: "domcontentloaded" });
+      await expect(page.getByRole("tab", { name: /Agent/ })).toBeVisible({ timeout: 30_000 });
+      await page.getByRole("tab", { name: /Agent/ }).click();
+      await expect(page.getByRole("tab", { name: /Agent/ })).toHaveAttribute("aria-selected", "true", { timeout: 30_000 });
+
+      await page.getByTestId("agent-file-input").setInputFiles({ name: "direct-edit.md", mimeType: "text/markdown", buffer: Buffer.from("DIRECT_EDIT_ORIGINAL_92841") });
+      await expect(page.getByTestId("files-panel")).toContainText("direct-edit.md", { timeout: 30_000 });
+
+      // Open the preview, enter edit mode, change the content, save.
+      await page.getByRole("button", { name: "预览 direct-edit.md" }).click();
+      await expect(page.getByTestId("editor-open")).toBeVisible({ timeout: 30_000 });
+      await page.getByTestId("editor-open").click();
+      const editor = page.getByTestId("workspace-editor");
+      await expect(editor).toBeVisible({ timeout: 30_000 });
+      await expect(editor).toHaveValue("DIRECT_EDIT_ORIGINAL_92841");
+      await editor.fill("DIRECT_EDIT_UPDATED_92841");
+      await page.getByTestId("editor-save").click();
+      await expect(page.getByTestId("editor-save")).toBeHidden({ timeout: 30_000 });
+      // View mode shows the saved content, not a stale preview.
+      await expect(page.locator("pre").filter({ hasText: "DIRECT_EDIT_UPDATED_92841" })).toBeVisible({ timeout: 30_000 });
+
+      // Recent Changes derive the real Modified entry from the manifest.
+      await page.getByRole("button", { name: "返回文件列表" }).click();
+      const changes = page.getByTestId("workspace-changes");
+      await expect(changes).toContainText("direct-edit.md", { timeout: 30_000 });
+      await expect(changes).toContainText("修改", { timeout: 30_000 });
+
+      // Download returns the exact saved bytes.
+      const downloadPromise = page.waitForEvent("download");
+      await page.getByRole("link", { name: "下载 direct-edit.md" }).click();
+      const download = await downloadPromise;
+      const content = await readFile(await download.path(), "utf8");
+      expect(content).toBe("DIRECT_EDIT_UPDATED_92841");
+
+      // Agent read-after-user-edit: the scripted model calls the real read
+      // tool; the real file content must appear in the upstream request body.
+      env.upstream.set([
+        { payloads: toolPayloads("de-read-1", "read", { file_path: "direct-edit.md" }) },
+        { payloads: textPayloads("已读取文件。") },
+      ]);
+      await page.getByTestId("agent-input").fill("读取我上传的 direct-edit.md，告诉我文件里的完整字符串。");
+      await page.getByTestId("agent-send-button").click();
+      const activity = page.getByTestId("workspace-activity");
+      await expect(activity).toContainText("读取文件", { timeout: 60_000 });
+      await expect(page.getByTestId("agent-assistant-message").last()).toContainText("已读取文件", { timeout: 60_000 });
+      const sawUpdatedContent = env.upstream.requests.some((request) => JSON.stringify(request).includes("DIRECT_EDIT_UPDATED_92841"));
+      expect(sawUpdatedContent).toBe(true);
+
+      // XSS probe: saved script content renders as text and never executes.
+      await page.getByRole("button", { name: "预览 direct-edit.md" }).click();
+      await page.getByTestId("editor-open").click();
+      await page.getByTestId("workspace-editor").fill('<script>window.__xss_executed=1</script>SNN_XSS_PROBE');
+      await page.getByTestId("editor-save").click();
+      await expect(page.getByTestId("editor-save")).toBeHidden({ timeout: 30_000 });
+      await expect(page.locator("pre").filter({ hasText: "SNN_XSS_PROBE" })).toContainText("<script>");
+      const xssExecuted = await page.evaluate(() => window.__xss_executed ?? false);
+      expect(xssExecuted).toBe(false);
+      expect(pageErrors).toEqual([]);
+      await context.close();
+    } catch (error) {
+      await context.close();
+      throw error;
+    }
+  });
+
+  test("mobile drawer supports direct text editing end to end", async ({ browser }) => {
+    // MODEL_PROVIDER_UNUSED / RUNTIME_AND_TOOLS_REAL at a 320px mobile viewport:
+    // the workspace drawer hosts the editor without document overflow.
+    const context = await browser.newContext({ acceptDownloads: true, viewport: { width: 320, height: 700 }, hasTouch: true });
+    try {
+      const page = await context.newPage();
+      const pageErrors = [];
+      page.on("pageerror", (error) => pageErrors.push(error.message));
+
+      await page.goto(`${env.frontendUrl}/ai/`, { waitUntil: "domcontentloaded" });
+      await expect(page.getByRole("tab", { name: /Agent/ })).toBeVisible({ timeout: 30_000 });
+      await page.getByRole("tab", { name: /Agent/ }).click();
+      await page.getByTestId("agent-file-input").setInputFiles({ name: "mobile-edit.md", mimeType: "text/markdown", buffer: Buffer.from("MOBILE_ORIGINAL") });
+      // On mobile the workspace is a drawer: open it before touching the files.
+      await page.locator('button[aria-controls="agent-workspace-panel"]').click();
+      await expect(page.getByTestId("files-panel")).toContainText("mobile-edit.md", { timeout: 30_000 });
+
+      await page.getByRole("button", { name: "预览 mobile-edit.md" }).click();
+      await page.getByTestId("editor-open").click();
+      const editor = page.getByTestId("workspace-editor");
+      await expect(editor).toBeVisible({ timeout: 30_000 });
+      await editor.fill("MOBILE_UPDATED_92841");
+      await page.getByTestId("editor-save").click();
+      await expect(page.getByTestId("editor-save")).toBeHidden({ timeout: 30_000 });
+      await expect(page.locator("pre").filter({ hasText: "MOBILE_UPDATED_92841" })).toBeVisible({ timeout: 30_000 });
+      // The editor must not push the document wider than the 320px viewport.
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(overflow).toBeLessThanOrEqual(0);
       expect(pageErrors).toEqual([]);
     } finally {
       await context.close();
