@@ -111,6 +111,7 @@ test("direct edit round trip: save updates authoritative file, download returns 
     const data = await res.json();
     assert.equal(data.file.fileId, file.fileId);
     assert.equal(data.file.size, "DIRECT_EDIT_UPDATED_92841".length);
+    assert.equal(data.file.storedName, undefined, "server-private storedName must never reach the client");
     assert.notEqual(data.sha256, file.sha256);
     assert.match(data.sha256, /^[a-f0-9]{64}$/);
     const download = await fetch(`${baseUrl}/api/agent/sessions/${sessionId}/files/${file.fileId}`, { headers: { origin: ORIGIN, cookie: jar.cookie } });

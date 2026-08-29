@@ -524,7 +524,19 @@ export function createPublicAgentBff({
               content: body.content,
               expected: { kind: "replaceIfVersion", version: body.baseSha256 },
             });
-            sendJson(response, 200, { file: publicFileForSession(sessionId, result.file), sha256: result.version }, originInfo);
+            // writeEditableText returns the raw manifest entry (including the
+            // server-private storedName): project it onto the public shape.
+            const safeFile = {
+              fileId: result.file.fileId,
+              originalName: result.file.originalName,
+              virtualPath: result.file.virtualPath,
+              size: result.file.size,
+              kind: result.file.kind,
+              contentType: result.file.contentType,
+              updatedAt: result.file.updatedAt,
+              sha256: result.file.sha256,
+            };
+            sendJson(response, 200, { file: publicFileForSession(sessionId, safeFile), sha256: result.version }, originInfo);
           } catch (e) { sendError(response, e, originInfo, path); }
           return true;
         }
