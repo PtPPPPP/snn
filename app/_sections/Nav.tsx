@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { BRAND_LOGO } from "../../lib/site";
 
@@ -13,6 +13,27 @@ const NAV_LINKS = [
 
 export function Nav() {
   const [active, setActive] = useState<string>("");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const headerRef = useRef<HTMLElement>(null);
+  const menuRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeOnOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !headerRef.current?.contains(event.target)) setMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setMenuOpen(false);
+      menuRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", closeOnOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [menuOpen]);
 
   useEffect(() => {
     const ids = NAV_LINKS.map((link) => link.id);
@@ -38,7 +59,7 @@ export function Nav() {
   }, []);
 
   return (
-    <header className="site-header">
+    <header className="site-header" ref={headerRef}>
       <a className="brand" href="#top" aria-label="SNN 首页">
         <img
           className="brand-logo"
@@ -50,12 +71,15 @@ export function Nav() {
         <span className="brand-name">SNN</span>
       </a>
 
-      <nav className="main-nav" aria-label="主导航">
+      <button className="nav-menu-toggle" type="button" ref={menuRef} aria-expanded={menuOpen} aria-controls="site-navigation" onClick={() => setMenuOpen(!menuOpen)}>导航</button>
+      <nav className={`main-nav${menuOpen ? " main-nav-open" : ""}`} id="site-navigation" aria-label="主导航">
         {NAV_LINKS.map((link) => (
           <a
             key={link.id}
             href={link.href}
             className={active === link.id ? "active" : undefined}
+            aria-current={active === link.id ? "location" : undefined}
+            onClick={() => setMenuOpen(false)}
           >
             {link.label}
           </a>

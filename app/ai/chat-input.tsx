@@ -100,6 +100,7 @@ export default function ChatInput({
         maxLength={12000}
         disabled={isStreaming}
         aria-label="输入消息"
+        placeholder="向 SNN AI 提问…"
       />
       <div className={styles.composerControls}>
         <button

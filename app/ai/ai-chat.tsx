@@ -217,7 +217,7 @@ export default function AiChat() {
       observer?.disconnect();
       panel.style.removeProperty("--snn-composer-extent");
     };
-  }, []);
+  }, [mode, agent.isAgentAvailable]);
 
   // Load conversations on mount
   useEffect(() => {
@@ -602,6 +602,7 @@ export default function AiChat() {
       >
         <ConversationSidebar
           id="conversation-sidebar"
+          open={sidebarOpen}
           conversations={effectiveConversations}
           activeId={effectiveActiveId}
           statusLabel={mode === "agent" ? (agent.isAgentAvailable ? "AGENT · READY" : agent.isAgentAvailable === false ? "AGENT · UNAVAILABLE" : statusLabel) : statusLabel}

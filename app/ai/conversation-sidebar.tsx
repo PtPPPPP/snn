@@ -1,6 +1,7 @@
 import type { Conversation } from "../../lib/ai-conversation-store";
 import { SIDEBAR } from "../../lib/ai-copy";
 import styles from "./ai-chat.module.css";
+import { useDrawerFocus } from "./use-drawer-focus";
 
 type Props = {
   conversations: Conversation[];
@@ -9,6 +10,7 @@ type Props = {
   statusDetail: string;
   nodeState: "checking" | "offline" | "online";
   id?: string;
+  open: boolean;
   onOpenChange: (open: boolean) => void;
   onNew: () => void;
   onSelect: (id: string) => void;
@@ -28,9 +30,10 @@ function relativeTime(ts: number): string {
   return new Date(ts).toLocaleDateString("zh-CN", { month: "long", day: "numeric" });
 }
 
-export default function ConversationSidebar({ id, conversations, activeId, statusLabel, statusDetail, nodeState, onOpenChange, onNew, onSelect, onDelete }: Props) {
+export default function ConversationSidebar({ id, open, conversations, activeId, statusLabel, statusDetail, nodeState, onOpenChange, onNew, onSelect, onDelete }: Props) {
+  const drawerRef = useDrawerFocus(open, () => onOpenChange(false));
   return (
-    <aside className={styles.sidebar} id={id}>
+    <aside className={styles.sidebar} id={id} ref={drawerRef} aria-label="历史对话侧栏">
       <div className={styles.sidebarHeader}>
         <div><p className={styles.sectionCode}>{SIDEBAR.sectionCode}</p><h1>{SIDEBAR.title}</h1><p className={styles.description}>{SIDEBAR.description}</p></div>
         <button className={styles.sidebarClose} type="button" aria-label="关闭历史" onClick={() => onOpenChange(false)}>✕</button>

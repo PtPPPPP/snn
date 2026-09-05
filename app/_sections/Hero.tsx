@@ -4,7 +4,6 @@ export function Hero() {
   return (
     <section className="hero" id="top">
       <div className="hero-visual" aria-label="SNN 神经网络主视觉"><SnnHeroArt className="hero-art" /></div>
-      <div className="hero-fade" aria-hidden="true" />
       <div className="hero-bottom">
         <div className="hero-copy">
           <h1>与 AI 共创，<br />构建下一步。</h1>

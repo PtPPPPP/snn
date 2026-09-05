@@ -13,6 +13,7 @@ import {
 } from "../../lib/agent-client";
 import type { ToolActivity, WorkspaceChange } from "./use-agent";
 import styles from "./ai-chat.module.css";
+import { useDrawerFocus } from "./use-drawer-focus";
 
 type PreviewState = {
   file: AgentFile;
@@ -67,6 +68,7 @@ export default function AgentWorkspacePanel({
   onClose: () => void;
 }) {
   const [preview, setPreview] = useState<PreviewState | null>(null);
+  const drawerRef = useDrawerFocus(open, onClose);
   const [edit, setEdit] = useState<EditState | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
 
@@ -190,6 +192,8 @@ export default function AgentWorkspacePanel({
   return (
     <aside
       id={id}
+      ref={drawerRef}
+      inert={!open}
       className={`${styles.workspacePanel} ${open ? styles.workspacePanelOpen : styles.workspacePanelClosed}`}
       data-testid="workspace-panel"
       aria-label="Agent 工作区"
