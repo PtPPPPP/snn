@@ -1,0 +1,6 @@
+.playCard { display:block; padding:clamp(24px,4vw,44px); margin-bottom:32px; background:var(--snn-bg-soft); border:1px solid var(--snn-border); color:var(--snn-text); }
+.playCard > span { font-size:11px; letter-spacing:.1em; color:var(--snn-text-secondary); }
+.playCard h3 { font-size:clamp(23px,3vw,36px); margin:12px 0; line-height:1.3; }
+.playCard p { font-size:14px; margin:0 0 20px; color:var(--snn-text-secondary); }
+.playCard strong { font-size:14px; }
+.playCard:hover { border-color:var(--snn-accent); }

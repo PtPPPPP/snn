@@ -172,7 +172,7 @@ for (const [label, profileName] of [["320", "iPhone SE"], ["390", "iPhone 13"], 
     expect(deleteBox?.width ?? 0).toBeGreaterThanOrEqual(40);
     await deleteButton.tap();
 
-    const dialog = page.locator('[role="dialog"]');
+    const dialog = page.getByRole('dialog', {name:'确定删除这个对话吗？',exact:true});
     const cancel = dialog.getByRole("button", { name: "取消" });
     const confirm = dialog.getByRole("button", { name: "删除" });
     await expect(dialog).toBeVisible();

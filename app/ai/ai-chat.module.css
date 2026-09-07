@@ -1784,3 +1784,5 @@
   .composer { padding: 6px 10px; }
   .thinkingToggle { min-height: 36px; }
 }
+
+@media(pointer:coarse){.composerInput{font-size:16px}.thinkingToggle,.modeButton{min-height:44px}}@media(max-width:620px){.header{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}}

@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {initialNetwork,collect,lossGradient,learnBatch} from '../lib/rocket/network-learning.ts';
+test('backprop gradients match finite differences on every parameter',()=>{const w=initialNetwork(),samples=collect(w,17);const g=lossGradient(w,samples);for(let i=0;i<w.length;i++){const a=[...w],b=[...w];a[i]+=1e-5;b[i]-=1e-5;const numeric=(lossGradient(a,samples).loss-lossGradient(b,samples).loss)/2e-5;assert.ok(Math.abs(numeric-g.gradient[i])<1e-5,`${i}: ${numeric} vs ${g.gradient[i]}`);}});
+test('update is exact and collected states follow actual physics',()=>{const w=initialNetwork(),b=learnBatch(w,17);assert.deepEqual(w,initialNetwork());for(let i=0;i<w.length;i++)assert.ok(Math.abs(b.after[i]-(w[i]-.03*b.gradient[i]))<1e-12);assert.ok(b.samples.every(s=>s.next.t>s.state.t));assert.ok(b.gradient.some(x=>Math.abs(x)>1e-6));});

@@ -1,21 +1,11 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import "./fonts.css";
 import "./globals.css";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE } from "../lib/site";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 // 部署时通过 NEXT_PUBLIC_SITE_URL 注入正式域名，用于解析 OG 图的绝对地址。
 // 规范化去除尾部斜杠，避免与以 / 开头的资源路径拼接产生 //。
-const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/+$/, "");
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || (process.env.NODE_ENV === "development" ? "http://127.0.0.1:5173" : "https://snnai.cn")).replace(/\/+$/, "");
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -56,7 +46,7 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className="antialiased"
       >
         {/* Must run synchronously before the client bundle: injects
             window.__SNN_AI_API_BASE_URL__ consumed by lib/ai-client.ts.

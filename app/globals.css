@@ -1062,3 +1062,11 @@ footer {
   .project-row { grid-template-columns: 28px minmax(0, 1fr); grid-template-areas: "index title" "index summary" "index meta"; }
   .project-meta { flex-direction: row; justify-content: space-between; }
 }
+
+/* Responsive usability: preserve content flow on short and touch viewports. */
+@media(max-width:760px){.hero{min-height:clamp(420px,72svh,620px);padding-top:100px;padding-bottom:32px}.hero-art{height:clamp(190px,32svh,280px);top:72px}.site-header{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}.main-nav a,.nav-menu-toggle,.nav-open-pill{min-height:44px;display:inline-flex;align-items:center}.section h2{overflow-wrap:break-word}}
+@media(max-height:500px) and (orientation:landscape){.hero{min-height:400px;padding-top:110px;padding-bottom:32px}.hero-art{height:280px;bottom:20px;top:auto}.site-header{min-height:56px}.section{scroll-margin-top:72px}}
+@media(pointer:coarse){input,textarea,select{font-size:16px}.button{min-height:44px}}
+@supports(padding:max(0px)){.site-footer{padding-bottom:max(24px,env(safe-area-inset-bottom))}}
+
+:root{--font-geist-sans:"Geist";--font-geist-mono:"Geist Mono"}

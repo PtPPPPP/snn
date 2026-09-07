@@ -1,0 +1,107 @@
+{
+  "checkpoint": "results/reproducible/energy_ppo_from_scratch_time/models/pure_energy_ppo_model.zip",
+  "sha256": "b88b87474538d5c49b361ab1d91bd8acd267d13bd6bdcd8398f069715414b40b",
+  "description": "Single deterministic 50m flight, 5kg fuel, 10ms physics, 50ms decisions. Contributions to raw action before clipping; not causal importance or general evaluation.",
+  "samples": 92,
+  "result": "success",
+  "topWeights": [
+    {
+      "index": 32,
+      "weight": 0.14369240403175354,
+      "meanAbsContribution": 0.11074250937728039,
+      "peakAbsContribution": 0.1436722023312631
+    },
+    {
+      "index": 10,
+      "weight": -0.1412888616323471,
+      "meanAbsContribution": 0.11129808853543634,
+      "peakAbsContribution": 0.14119798476549936
+    },
+    {
+      "index": 100,
+      "weight": 0.12843579053878784,
+      "meanAbsContribution": 0.12289510257871772,
+      "peakAbsContribution": 0.12843542687880832
+    },
+    {
+      "index": 16,
+      "weight": 0.12489654868841171,
+      "meanAbsContribution": 0.08948730611066534,
+      "peakAbsContribution": 0.12485064034612912
+    },
+    {
+      "index": 35,
+      "weight": -0.11978016048669815,
+      "meanAbsContribution": 0.0874327422148582,
+      "peakAbsContribution": 0.11970618649126627
+    },
+    {
+      "index": 71,
+      "weight": 0.11938083171844482,
+      "meanAbsContribution": 0.06850202816307775,
+      "peakAbsContribution": 0.11880000165994116
+    },
+    {
+      "index": 1,
+      "weight": 0.09960164874792099,
+      "meanAbsContribution": 0.08287872479979808,
+      "peakAbsContribution": 0.09924806716826717
+    },
+    {
+      "index": 104,
+      "weight": 0.09178601205348969,
+      "meanAbsContribution": 0.07517325247340828,
+      "peakAbsContribution": 0.09118789218547775
+    }
+  ],
+  "topContributions": [
+    {
+      "index": 100,
+      "weight": 0.12843579053878784,
+      "meanAbsContribution": 0.12289510257871772,
+      "peakAbsContribution": 0.12843542687880832
+    },
+    {
+      "index": 10,
+      "weight": -0.1412888616323471,
+      "meanAbsContribution": 0.11129808853543634,
+      "peakAbsContribution": 0.14119798476549936
+    },
+    {
+      "index": 32,
+      "weight": 0.14369240403175354,
+      "meanAbsContribution": 0.11074250937728039,
+      "peakAbsContribution": 0.1436722023312631
+    },
+    {
+      "index": 16,
+      "weight": 0.12489654868841171,
+      "meanAbsContribution": 0.08948730611066534,
+      "peakAbsContribution": 0.12485064034612912
+    },
+    {
+      "index": 35,
+      "weight": -0.11978016048669815,
+      "meanAbsContribution": 0.0874327422148582,
+      "peakAbsContribution": 0.11970618649126627
+    },
+    {
+      "index": 1,
+      "weight": 0.09960164874792099,
+      "meanAbsContribution": 0.08287872479979808,
+      "peakAbsContribution": 0.09924806716826717
+    },
+    {
+      "index": 104,
+      "weight": 0.09178601205348969,
+      "meanAbsContribution": 0.07517325247340828,
+      "peakAbsContribution": 0.09118789218547775
+    },
+    {
+      "index": 71,
+      "weight": 0.11938083171844482,
+      "meanAbsContribution": 0.06850202816307775,
+      "peakAbsContribution": 0.11880000165994116
+    }
+  ]
+}

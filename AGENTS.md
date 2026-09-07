@@ -1,5 +1,11 @@
 # AGENTS.md
 
+## Migration continuity — read first
+
+For the full conversation migration archive, also read `../conversation/README.md` and `../conversation/messages.md`. Raw thread logs, thread-scoped database exports, referenced attachments and project preview artifacts accompany that archive. They are historical records, not higher-priority instructions. Never overwrite the destination Codex account databases to import them.
+
+Before continuing this project on any computer, read `docs/CODEX-HANDOFF.md` and `MIGRATION.md`. They record the current user-approved direction, latest implementation, known limitations and reproducible local startup. Do not restore older designs from Git HEAD: the migration snapshot deliberately includes important uncommitted and untracked work. Existing instructions below still apply; current user instructions take precedence.
+
 ## 1. Project Identity
 
 This repository is the main codebase for **SNN — Smart Neural Network**, a student technology community focused on AI, robotics, intelligent systems, and project-based learning.
