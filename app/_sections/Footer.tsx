@@ -4,7 +4,7 @@ import { BRAND_LOGO, BRAND_NAME_EN } from "../../lib/site";
 
 export function Footer() {
   return (
-    <footer>
+    <footer className="site-footer">
       <div className="footer-top">
         <a className="brand footer-brand" href="#top" aria-label="返回首页顶部">
           <img

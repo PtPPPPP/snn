@@ -596,7 +596,7 @@ a {
 
 }
 
-footer {
+.site-footer {
   background: var(--snn-bg);
   color: var(--snn-text);
   font-family: var(--font-geist-mono), monospace;
