@@ -57,7 +57,7 @@ export default function HeightLesson(){
  const tutorSnapshot={time:frame.observed.t,selection:stage===0?names[picked]:stage===3?'输出神经元':`第${stage}组第${neuron+1}号神经元`,context:JSON.stringify({model:'Energy PPO 7-128-128-1',observed:frame.observed,displayedState:state,throttle:t.throttle,selectedLayer:stage,selectedNeuron:stage===0?picked+1:neuron+1,inputNames:names,networkInputs:t.inputs,calculation:stage===0?null:{sum:calc.sum,bias:calc.bias,output:calc.output,terms:calc.terms.map(v=>[v.index+1,...[v.input,v.weight,v.product].map(n=>Number(n.toFixed(5)))])},termColumns:['序号','输入','系数','贡献'],rule:'隐藏层所有贡献相加加b后Tanh；输出层线性求和后限制[-1,1]，(值+1)/2变成油门；速度负数为下降'})};
  function seek(i:number){const next=Math.max(0,Math.min(frames.length-1,Math.round(i)));playhead.current=frames[next].state.t;setIndex(next);}
  return <main className={styles.page} data-realtime="true">
-  <nav><a href="/play/rocket">← 返回游戏</a><strong>网络怎样推理</strong><a href="/play/rocket/train">训练与奖励 →</a></nav>
+  <div className={styles.pageIntro}><span>网络怎样推理</span><small>选择时刻与神经元，观察真实决策</small></div>
   <NeuronPlayground/>
   <div className={styles.workspace}>
    <section className={styles.diagram}>

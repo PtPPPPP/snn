@@ -55,3 +55,125 @@
 
 @media(max-height:500px) and (orientation:landscape){.workspace{display:flex;flex-direction:column}.diagram{width:100%}.networkViewport{overflow-x:auto;overflow-y:hidden}.networkViewport svg{width:100%;min-width:650px;height:350px;max-height:none}.inspector{width:100%;border-left:0;padding:12px 0 0;border-top:1px solid var(--snn-border);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}.inspector .tutor{margin-top:0}.page nav{position:static}}
 @media(pointer:coarse){.networkTools select,.tutor textarea{font-size:16px}.graphOptions button,.playbackMore summary,.calcDetails>summary{min-height:44px}.playbackMore summary{display:flex;align-items:center}.directHint{font-size:11px}}
+.page{max-width:1320px;min-height:calc(100svh - 113px)}.pageIntro{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:2px 0 12px;color:var(--snn-text-secondary);font-size:13px}.pageIntro small{font-size:11px;color:var(--snn-text-muted)}.page button,.page select,.page textarea{border-radius:var(--snn-radius-sm)}.steps button{border-radius:0}@media(max-width:550px){.pageIntro small{display:none}}
+
+/* Inference workbench: quiet rectangular sections, fine blue-grey controls. */
+.page {
+  --lesson-ink: #355f7e;
+  --lesson-line: #d8e2eb;
+  --lesson-wash: #f2f6f9;
+  --lesson-muted: #6b7d8e;
+}
+.pageIntro { padding: 5px 0 0; }
+.pageIntro > span { font-weight: 550; letter-spacing: .02em; }
+.neuronIntro { border-color: var(--lesson-line); }
+.neuronIntro summary { color: var(--lesson-muted); }
+.steps button { color: var(--lesson-muted); transition: color 140ms, background 140ms; }
+.steps button[aria-current], .steps button[aria-selected=true] { color: var(--lesson-ink); }
+.steps button:hover { background: var(--lesson-wash); }
+.networkTools b { font-weight: 550; color: var(--lesson-ink); }
+.directHint, .legend { color: var(--lesson-muted); }
+.inspector, .flightTimeline, .resultCompare, .tutor, .page footer { border-color: var(--lesson-line); }
+.page button, .page select { transition: border-color 140ms, background-color 140ms, color 140ms; }
+.playbackLine button, .networkTools select, .tutor button, .graphOptions button {
+  border-color: var(--lesson-line);
+  border-radius: 4px;
+  color: var(--lesson-ink);
+  background: var(--snn-bg);
+}
+.page button:hover:not(:disabled), .networkTools select:hover { border-color: #92aabe; background: var(--lesson-wash); }
+.page button:focus-visible, .page select:focus-visible, .page textarea:focus-visible, .page input:focus-visible {
+  outline: 2px solid #7096b2;
+  outline-offset: 3px;
+}
+.explanation h2 { color: #2c4458; font-weight: 550; font-size: 19px; letter-spacing: -.02em; }
+.explanation p { color: #536779; line-height: 1.8; }
+.equation {
+  background: var(--lesson-wash);
+  border-left: 2px solid #8ca7bc;
+  border-radius: 0;
+  padding: 12px 14px;
+  color: #435b70;
+  line-height: 1.9;
+}
+.equation strong, .equation b { color: var(--lesson-ink); font-weight: 550; font-size: 13px; }
+.resultCompare { gap: 0; padding: 11px 0; }
+.resultCompare > div + div { border-left: 1px solid var(--lesson-line); padding-left: 18px; }
+.resultCompare small { color: var(--lesson-muted); }
+.resultCompare b { font-size: 25px; color: var(--lesson-ink); letter-spacing: -.025em; font-weight: 500; }
+.compactReadings { padding: 2px 0 7px; color: var(--lesson-muted); }
+.compactReadings b { color: var(--lesson-ink); font-weight: 550; }
+.playbackLine { gap: 12px; color: var(--lesson-muted); }
+.playbackLine input { accent-color: var(--lesson-ink); }
+.playbackMore { color: var(--lesson-muted); }
+.tutor h2 { color: #2c4458; font-weight: 550; letter-spacing: -.01em; }
+.questionContext {
+  background: var(--lesson-wash);
+  padding: 8px 10px;
+  margin: 10px 0;
+  border-left: 2px solid #8ca7bc;
+  color: var(--lesson-ink);
+}
+.questionContext button { background: var(--snn-bg); }
+.tutor textarea {
+  border: 1px solid var(--lesson-line);
+  border-radius: 4px;
+  padding: 11px 12px;
+  line-height: 1.65;
+  color: #344f65;
+  background: #fcfdfe;
+}
+.tutor textarea::placeholder { color: #8595a3; }
+.tutor form button { background: var(--lesson-ink); border-color: var(--lesson-ink); color: white; }
+.tutor form button:hover:not(:disabled) { background: #274b66; color: white; }
+.tutor form button:disabled { background: #e3eaf0; border-color: #e3eaf0; color: #7b8d9c; opacity: 1; }
+.tutorQuestions button { background: transparent; color: #627a8e; }
+.page footer { color: var(--lesson-muted); letter-spacing: .02em; line-height: 1.8; }
+@media (pointer: coarse) {
+  .questionContext button, .tutorQuestions button, .playbackLine button { min-height: 44px; }
+}
+@media (max-width: 650px) {
+  .questionContext { padding: 8px; gap: 8px; }
+  .questionContext > span { min-width: 0; }
+  .explanation h2 { font-size: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page button, .page select { transition: none; }
+}
+
+:is(.playbackLine, .miniControls) input[type=range] { appearance: none; background: transparent; cursor: ew-resize; }
+:is(.playbackLine, .miniControls) input[type=range]::-webkit-slider-runnable-track { height: 4px; background: #dbe5ed; border-radius: 2px; }
+:is(.playbackLine, .miniControls) input[type=range]::-webkit-slider-thumb { appearance: none; width: 16px; height: 16px; margin-top: -6px; border-radius: 50%; background: var(--lesson-ink); border: 3px solid var(--snn-bg); box-shadow: 0 0 0 1px #8da8bc; }
+:is(.playbackLine, .miniControls) input[type=range]::-moz-range-track { height: 4px; background: #dbe5ed; border-radius: 2px; }
+:is(.playbackLine, .miniControls) input[type=range]::-moz-range-thumb { width: 10px; height: 10px; border-radius: 50%; background: var(--lesson-ink); border: 3px solid var(--snn-bg); box-shadow: 0 0 0 1px #8da8bc; }
+
+/* The introductory neuron uses the same visual language as the live inspector. */
+.neuronIntro[open] { padding-bottom: 14px; }
+.neuronIntro[open] > summary { color: var(--lesson-ink); font-weight: 550; }
+.neuronIntro > p { color: var(--lesson-muted); font-size: 11px; }
+.miniControls { padding: 10px 0 12px; border-bottom: 1px solid var(--lesson-line); gap: 20px; }
+.miniControls label { color: var(--lesson-muted); font-size: 11px; }
+.miniControls b { color: var(--lesson-ink); font-size: 15px; font-weight: 550; }
+.miniControls input { height: 36px; }
+.neuronIntro button { border-color: var(--lesson-line); border-radius: 4px; color: var(--lesson-ink); }
+.neuronIntro button[aria-pressed=true] { background: var(--lesson-wash); border-color: #8ca7bc; }
+.miniViewport { margin: 10px 0; color: #435b70; }
+.miniViewport svg { font-variant-numeric: tabular-nums; }
+.miniFlow { stroke-width: 1.25; stroke-dasharray: 3 8; }
+.miniViewport circle[r="22"], .miniViewport circle[r="31"] { fill: var(--lesson-wash); stroke-width: 1.25; }
+.miniTabs { gap: 0; border-bottom: 1px solid var(--lesson-line); }
+.miniTabs button { min-width: 110px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; min-height: 40px; color: var(--lesson-muted); }
+.miniTabs button[aria-pressed=true] { border-bottom-color: var(--lesson-ink); background: var(--lesson-wash); color: var(--lesson-ink); }
+.neuronIntro .miniExplanation { margin-top: 10px; padding: 12px 14px; background: var(--lesson-wash); border-left: 2px solid #8ca7bc; color: #435b70; }
+@media (max-width: 650px) { .miniControls { gap: 10px 16px; }.miniTabs button { min-width: 0; flex: 1; min-height: 44px; } }
+
+/* Match the training studio: overview first, optional precise selection. */
+.networkViewSwitch{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:6px 0;color:var(--lesson-muted,#6f8597);font-size:10px;}
+.networkViewSwitch>div{display:flex;gap:6px;flex-shrink:0;}
+.networkViewSwitch button{border:1px solid transparent;background:transparent;color:var(--lesson-ink,#355f7e);font:inherit;padding:5px 8px;cursor:pointer;min-height:30px;}
+.networkViewSwitch button[aria-pressed=true]{background:#edf3f7;border-color:#b5c8d7;}
+.networkViewport[data-expanded]{overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;}
+.networkViewport[data-expanded=false] svg{width:100%;min-width:0;height:auto;max-height:370px;}
+.networkViewport[data-expanded=true] svg{width:1100px;min-width:1100px;height:auto;max-height:none;}
+@media(max-width:650px){.networkViewSwitch{flex-wrap:wrap;}.networkViewSwitch>span{width:100%;}.networkViewSwitch>div{margin-left:auto;}.networkViewport[data-expanded=false] svg{max-height:none;}}
+@media(pointer:coarse){.networkViewSwitch button{min-height:44px;}}

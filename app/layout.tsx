@@ -38,6 +38,8 @@ export const metadata: Metadata = {
   },
 };
 
+import { Nav } from './_sections/Nav';
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -53,6 +55,7 @@ export default function RootLayout({
             async/defer would race hydration and break AI endpoint resolution. */}
         {/* eslint-disable-next-line @next/next/no-sync-scripts */}
         <script src="/ai-config.js"></script>
+        <Nav />
         {children}
       </body>
     </html>

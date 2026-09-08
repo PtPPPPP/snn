@@ -1,91 +1,17 @@
 "use client";
-
-import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { BRAND_LOGO } from "../../lib/site";
-
-const NAV_LINKS = [
-  { href: "#about", label: "关于我们", id: "about" },
-  { href: "#projects", label: "项目", id: "projects" },
-  { href: "#activities", label: "活动", id: "activities" },
-  { href: "#join", label: "加入", id: "join" },
-];
-
-export function Nav() {
-  const [active, setActive] = useState<string>("");
-  const [menuOpen, setMenuOpen] = useState(false);
-  const headerRef = useRef<HTMLElement>(null);
-  const menuRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const closeOnOutside = (event: PointerEvent) => {
-      if (event.target instanceof Node && !headerRef.current?.contains(event.target)) setMenuOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setMenuOpen(false);
-      menuRef.current?.focus();
-    };
-    document.addEventListener("pointerdown", closeOnOutside);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", closeOnOutside);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [menuOpen]);
-
-  useEffect(() => {
-    const ids = NAV_LINKS.map((link) => link.id);
-    const sections = ids
-      .map((id) => document.getElementById(id))
-      .filter((el): el is HTMLElement => el !== null);
-
-    if (sections.length === 0) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setActive(entry.target.id);
-          }
-        }
-      },
-      { rootMargin: "-45% 0px -50% 0px", threshold: 0 },
-    );
-
-    sections.forEach((section) => observer.observe(section));
-    return () => observer.disconnect();
-  }, []);
-
-  return (
-    <header className="site-header" ref={headerRef}>
-      <a className="brand" href="#top" aria-label="SNN 首页">
-        <img
-          className="brand-logo"
-          src={BRAND_LOGO.src}
-          alt="SNN 社团 Logo"
-          width={BRAND_LOGO.width}
-          height={BRAND_LOGO.height}
-        />
-        <span className="brand-name">SNN</span>
-      </a>
-
-      <button className="nav-menu-toggle" type="button" ref={menuRef} aria-expanded={menuOpen} aria-controls="site-navigation" onClick={() => setMenuOpen(!menuOpen)}>导航</button>
-      <nav className={`main-nav${menuOpen ? " main-nav-open" : ""}`} id="site-navigation" aria-label="主导航">
-        {NAV_LINKS.map((link) => (
-          <a
-            key={link.id}
-            href={link.href}
-            className={active === link.id ? "active" : undefined}
-            aria-current={active === link.id ? "location" : undefined}
-            onClick={() => setMenuOpen(false)}
-          >
-            {link.label}
-          </a>
-        ))}
-      </nav>
-      <Link className="nav-open-pill" href="/ai/" aria-label="进入 SNN AI">进入 SNN AI</Link>
-    </header>
-  );
+import {useEffect,useRef,useState} from 'react';
+import Link from 'next/link';
+import {usePathname} from 'next/navigation';
+import {BRAND_LOGO} from '../../lib/site';
+import s from './Nav.module.css';
+const links=[['/','首页'],['/#projects','项目'],['/#activities','活动'],['/#join','加入'],['/ai','SNN AI'],['/play/rocket','火箭实验']];
+const labs=[['/play/rocket','01','回收挑战'],['/play/rocket/explain','02','怎样推理'],['/play/rocket/train','03','怎样学习']];
+export function Nav(){
+ const path=(usePathname()||'/').replace(/\/$/,'')||'/';const lab=path.startsWith('/play/rocket');
+ const [open,setOpen]=useState(false);const shell=useRef<HTMLElement>(null),toggle=useRef<HTMLButtonElement>(null);
+ useEffect(()=>{if(!open)return;const outside=(e:PointerEvent)=>{if(e.target instanceof Node&&!shell.current?.contains(e.target))setOpen(false);};const escape=(e:KeyboardEvent)=>{if(e.key==='Escape'){setOpen(false);toggle.current?.focus();}};document.addEventListener('pointerdown',outside);document.addEventListener('keydown',escape);return()=>{document.removeEventListener('pointerdown',outside);document.removeEventListener('keydown',escape);};},[open]);
+ return <header ref={shell} className={s.shell} data-site-shell data-lab={lab}>
+  <div className={s.bar}><Link className={s.brand} href="/" aria-label="SNN 首页"><img src={BRAND_LOGO.src} alt="SNN 社团 Logo" width="32" height="32"/><span>SNN<small>SMART NEURAL NETWORK</small></span></Link><button ref={toggle} className={s.toggle} aria-expanded={open} aria-controls="site-navigation" onClick={()=>setOpen(!open)}>导航</button><nav id="site-navigation" aria-label="主导航" className={`${s.links} ${open?s.open:''}`}>{links.map(([href,label])=>{const active=href==='/play/rocket'?lab:path===href;return <Link href={href} key={href} aria-current={active?'page':undefined} onClick={()=>setOpen(false)}>{label}</Link>;})}</nav></div>
+  {lab&&<div className={s.labBar}><span className={s.labTitle}>学习实验室 <i>/</i> 火箭回收</span><nav aria-label="实验导航">{labs.map(([href,n,label])=><Link key={href} href={href} aria-current={path===href?'page':undefined}><small>{n}</small>{label}</Link>)}</nav></div>}
+ </header>;
 }

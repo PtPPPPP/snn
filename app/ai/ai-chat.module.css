@@ -1786,3 +1786,4 @@
 }
 
 @media(pointer:coarse){.composerInput{font-size:16px}.thinkingToggle,.modeButton{min-height:44px}}@media(max-width:620px){.header{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}}
+.page{height:calc(100dvh - 65px)}.header{min-height:52px;padding:4px 24px;background:var(--snn-bg-soft)}.workspaceTitle{font-size:12px;color:var(--snn-text-secondary);font-weight:500}.headerRight{margin-left:auto}@media(max-width:420px){.workspaceTitle{display:none}}

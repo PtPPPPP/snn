@@ -1070,3 +1070,12 @@ footer {
 @supports(padding:max(0px)){.site-footer{padding-bottom:max(24px,env(safe-area-inset-bottom))}}
 
 :root{--font-geist-sans:"Geist";--font-geist-mono:"Geist Mono"}
+:root{--snn-shell-height:65px}body:has([data-site-shell][data-lab=true]){--snn-shell-height:113px}.section{scroll-margin-top:84px}.hero{padding-top:64px}@media(max-width:760px){.hero{padding-top:48px}}
+
+/* Keep the landing composition aligned with the shared site shell. */
+.hero { min-height: clamp(520px, 74svh, 740px); justify-content: center; padding-inline: max(28px, calc((100vw - 1264px) / 2)); }
+.hero-art { right: max(28px, calc((100vw - 1264px) / 2)); bottom: 40px; height: min(60svh, 560px); }
+@media (max-width: 760px) {
+  .hero { min-height: clamp(460px, 72svh, 620px); justify-content: flex-end; padding-inline: 20px; }
+  .hero-art { top: 24px; right: 16px; height: clamp(190px, 30svh, 260px); }
+}

@@ -1,5 +1,3 @@
-import Link from "next/link";
-import styles from "./hero.module.css";
 import { projects } from "./data";
 import { ArrowUpRight } from "./icons";
 
@@ -16,11 +14,6 @@ export function ProjectsSection() {
           项目不按专业设限。你可以从算法、控制、硬件、产品或视觉表达中的任一位置加入。
         </p>
       </div>
-      <Link className={styles.playCard} href="/play/rocket">
-        <span>PLAY / 亲手试试</span><h3>你能赢过 AI 驾驶员吗？</h3>
-        <p>拖动油门，控制推力。挑战 Energy PPO，把火箭稳稳带回地面。</p>
-        <strong>开始火箭回收挑战 →</strong>
-      </Link>
       <div className="project-list">
         {projects.map((project) => (
           <a

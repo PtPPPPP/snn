@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import {useEffect,useRef,useState} from 'react';
 import {DT,initialState,step,policyThrottle,type Policy} from '../../../lib/rocket/physics.mjs';
 import FlightScene from './flight-scene';
@@ -69,7 +68,7 @@ export default function RocketGame(){
  const result=phase==='done'?(h.result==='success'&&a.result!=='success'?'你赢了，成功带回火箭！':h.result!=='success'&&a.result==='success'?'AI 先胜一局，再试一次。':h.result!=='success'?'双方都没能软着陆，再挑战一次。':Math.abs(h.fuel-a.fuel)<.01?'双方成功，燃料消耗接近。':h.fuel>a.fuel?'你赢了，这次你更省燃料！':'双方成功，AI 更省燃料。'):'';
  return <main className={styles.page}>
   <div className={styles.cockpit}>
-  <nav className={styles.nav}><Link href="/">← SNN</Link><span>回收行动 / LANDING LAB</span><button onClick={toggleSound} aria-pressed={sound}>{sound?'声音开':'声音关'}</button><a href={`/play/rocket/explain?h=${h.h}&v=${h.v}&fuel=${h.fuel}&thrust=${h.thrust}`} onClick={()=>{if(game.current.phase==='running'){game.current.phase='paused';setPhase('paused');}}}>网络原理与推理 →</a><a href="/play/rocket/train">训练与奖励 →</a></nav>
+  <div className={styles.sessionTools}><span>回收挑战</span><button onClick={toggleSound} aria-pressed={sound}>{sound?"声音开":"声音关"}</button></div>
   <div className={styles.modeBar}>{[['learn','01 初次回收'],['duel','02 挑战 AI'],['fuel','03 节油挑战']].map(([value,label])=><button key={value} aria-pressed={stage===value} disabled={phase==='running'||phase==='paused'} onClick={()=>selectStage(value)}>{label}</button>)}</div>
   <div className={styles.mission}><div><h1>{stage==='learn'?'先把火箭带回家。':stage==='duel'?'这一局，挑战 AI。':'稳稳落地，还要省油。'}</h1><p>{stage==='learn'?'先练习软着陆，AI 在旁边示范。':'同一高度、同一燃料，看看谁回收得更好。'}</p></div><details className={styles.settings}><summary>设置 · {speed}× / {startHeight} m</summary><div>
    <label>对手<select value={opponent} disabled={phase==='running'||phase==='paused'} onChange={e=>choose(e.target.value as keyof typeof names)}><option value="energy">Energy PPO</option></select></label>

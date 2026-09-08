@@ -1,52 +1,66 @@
 "use client";
-import {useEffect,useMemo,useState} from 'react';
-import {actions,forward,initialNetwork,learnBatch} from '../../../../lib/rocket/network-learning';
+import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import WeightHeatmap from './weight-heatmap';
+import {traceNormalized,loadPPORecord,type PPORecord} from '../../../../lib/rocket/ppo-record';
+import {nodeCalculation} from '../../../../lib/rocket/decision-lesson.mjs';
 import s from './network.module.css';
-const stages=['前向计算','环境前进','反向求梯度','更新与对照'];
-const f=(x:number)=>x.toFixed(4),color=(x:number)=>x>=0?'#315e80':'#ad773b';
-const pos=(l:number,i:number)=>({x:[80,300,530][l],y:l===0?105+i*80:70+i*75});
-const edges=Array.from({length:28},(_,n)=>n<12?{id:Math.floor(n/3)*4+n%3,from:pos(0,n%3),to:pos(1,Math.floor(n/3)),label:`输入 ${n%3+1} → 隐藏 ${Math.floor(n/3)+1}`,layer:0,input:n%3}:{id:16+Math.floor((n-12)/4)*5+(n-12)%4,from:pos(1,(n-12)%4),to:pos(2,Math.floor((n-12)/4)),label:`隐藏 ${(n-12)%4+1} → ${Math.floor((n-12)/4)===3?'价值输出':`策略 ${Math.floor((n-12)/4)+1}`}`,layer:1,input:(n-12)%4});
+const names=['高度','速度','燃料','实际推力','刹车能力比较','燃料储备比较','安全速度比较'];
+const fmt=(v:number)=>Math.abs(v)>0&&Math.abs(v)<.0001?v.toExponential(2):v.toFixed(4);
 export default function TrainingLab(){
- const [batch,setBatch]=useState(()=>learnBatch(initialNetwork(),17)),[round,setRound]=useState(1);
- const [stage,setStage]=useState(0),[playing,setPlaying]=useState(true),[index,setIndex]=useState(0),[edge,setEdge]=useState(0);
- const [motion,setMotion]=useState(0),[updated,setUpdated]=useState(false);
- useEffect(()=>{const query=window.matchMedia('(prefers-reduced-motion: reduce)');const stop=()=>{if(query.matches)setPlaying(false);};stop();query.addEventListener('change',stop);return()=>query.removeEventListener('change',stop);},[]);
- const sample=batch.samples[index],selected=edges[edge];
- const before=useMemo(()=>forward(batch.before,sample.x),[batch,sample]),after=useMemo(()=>forward(batch.after,sample.x),[batch,sample]);
- const shown=stage===3&&updated?after:before;
- useEffect(()=>{if(!playing)return;let raf=0,last=0,acc=0;const tick=(now:number)=>{const dt=last?Math.min((now-last)/1000,.1):0;last=now;if(!document.hidden){acc+=dt;setMotion(v=>(v+dt/3)%1);if(acc>=5){acc=0;setStage(v=>(v+1)%4);}}raf=requestAnimationFrame(tick);};raf=requestAnimationFrame(tick);return()=>cancelAnimationFrame(raf);},[playing]);
- function selectStage(n:number){setStage(n);setPlaying(false);setMotion(0);}
- function nextBatch(){setBatch(learnBatch(batch.after,17+round));setRound(v=>v+1);setIndex(0);setStage(0);setUpdated(false);setMotion(0);}
- const gradient=batch.gradient[selected.id],old=batch.before[selected.id],next=batch.after[selected.id],input=selected.layer===0?sample.x[selected.input]:before.hidden[selected.input];
- const height=stage===1?sample.state.h+(sample.next.h-sample.state.h)*motion:sample.state.h;
- return <main className={s.page}>
-  <nav><a href="/play/rocket">← 返回游戏</a><strong>网络怎样学习</strong><a href="/play/rocket/explain">怎样推理 →</a></nav>
-  <header><div><small>02 / INSIDE LEARNING</small><h1>一次经历，怎样改变网络？</h1><p>看数据向前计算，再看梯度向后传递。最后，对照同一输入下的新旧决策。</p></div><span>教学 Actor–Critic<br/>3 输入 · 4 隐藏单元 · 策略与价值输出</span></header>
-  <div className={s.toolbar}><button onClick={()=>setPlaying(!playing)}>{playing?'暂停讲解':'自动讲解'}</button><button onClick={()=>selectStage((stage+1)%4)}>下一步 →</button><span>第 {round} 批 · 4 次飞行 · {batch.samples.length} 条经历</span><button onClick={()=>{setBatch(learnBatch(initialNetwork(),17));setRound(1);setIndex(0);setUpdated(false);setStage(0);}}>重新开始</button></div>
-  <div className={s.steps}>{stages.map((name,i)=><button key={name} aria-current={stage===i?'step':undefined} onClick={()=>selectStage(i)}><small>0{i+1}</small>{name}</button>)}</div>
+ const [data,setData]=useState<PPORecord|null>(null),[error,setError]=useState(''),[attempt,setAttempt]=useState(0);
+ useEffect(()=>{const controller=new AbortController();loadPPORecord('/rocket/ppo-initialization.json',controller.signal).then(setData).catch(e=>{if(!controller.signal.aborted)setError(e.message);});return()=>controller.abort();},[attempt]);
+ if(!data)return <main className={s.page}><header><div><h1>网络怎样学习</h1><p>{error||'正在加载完整 PPO 网络与真实训练记录…'}</p></div></header>{error&&<button onClick={()=>{setError('');setAttempt(v=>v+1);}}>重试</button>}</main>;
+ return <PPOPlayer data={data}/>;
+}
+function PPOPlayer({data}:{data:PPORecord}){
+ const [clock,setClock]=useState(0),[speed,setSpeed]=useState(32),[playing,setPlaying]=useState(()=>typeof window==='undefined'||!window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+ const introHold=useRef(1),elapsed=useRef(0),duration=data.rounds.length*8;
+ const [edgeChoice,setEdgeChoice]=useState<number|null>(null);
+ const [layer,setLayer]=useState(3),[node,setNode]=useState(0),[sampleIndex,setSampleIndex]=useState(0);
+
+ useEffect(()=>{if(!playing)return;let raf=0,last=0;function tick(now:number){const dt=last?Math.min((now-last)/1000,.1):0;last=now;if(!document.hidden){if(introHold.current>0){introHold.current-=dt;}else{const previous=elapsed.current;elapsed.current=(elapsed.current+dt*speed)%duration;if(elapsed.current<previous)introHold.current=1;setClock(elapsed.current);}}raf=requestAnimationFrame(tick);}raf=requestAnimationFrame(tick);return()=>cancelAnimationFrame(raf);},[playing,speed,duration]);
+ const roundIndex=Math.min(data.rounds.length-1,Math.floor(clock/8)),progress=(clock%8)/8,phase=progress<.375?0:progress<.75?1:2;
+ const round=data.rounds[roundIndex],sample=round.samples[Math.min(sampleIndex,round.samples.length-1)],oldModel=data.models[roundIndex],newModel=data.models[roundIndex+1];
+ const before=useMemo(()=>traceNormalized(oldModel,sample.inputs),[oldModel,sample]);
+ const pick=useCallback((l:number,n:number)=>{setLayer(l);setNode(n);setEdgeChoice(null);},[]);
+ const calc=useMemo(()=>layer===0?null:nodeCalculation(before,oldModel,layer-1,node),[before,oldModel,layer,node]);
+ const row=layer?oldModel.layers[layer-1].weight[node]:[],newRow=layer?newModel.layers[layer-1].weight[node]:[];
+ const largest=row.reduce((best,v,i)=>Math.abs(newRow[i]-v)>Math.abs(newRow[best]-row[best])?i:best,0);
+ const strongest=edgeChoice===null?largest:Math.min(row.length-1,edgeChoice);
+ const heatLimit=useMemo(()=>{const values=data.models.slice(1).flatMap(m=>m.layers.flatMap((l,k)=>l.weight.flatMap((r,j)=>r.map((w,i)=>Math.abs(w-data.models[0].layers[k].weight[j][i]))))).sort((a,b)=>a-b);return values[Math.floor(values.length*.99)]||.01;},[data]);
+ const heatPick=useCallback((l:number,n:number,i:number)=>{setLayer(l);setNode(n);setEdgeChoice(i);},[]);
+ const gradient=layer?round.gradient[layer-1].weight[node][strongest]:0;
+ function seek(v:number){introHold.current=v===0?1:0;elapsed.current=Math.max(0,Math.min(duration-.001,v));setClock(elapsed.current);setPlaying(false);}
+ const label=layer===0?names[node]:layer===3?'输出神经元':`第 ${layer} 组 · ${node+1} 号神经元`;
+ return <main className={`${s.page} ${s.recordPage}`} data-weight-updating={phase===2}>
+  <header><div><small>03 / LEARNING LAB</small><h1>看权重，逐渐长出纹理。</h1><p>从变化为零的统一底色，看到训练如何留下冷暖交织的纹理。</p></div><span>从初始化开始的真实 PPO 记录<br/>7 → 128 → 128 → 1 · 完整策略网络</span></header>
   <div className={s.workspace}><section className={s.network}>
-   <div className={s.networkHead}><b>{['状态进来，算出动作概率','权重不动，火箭状态改变','从训练目标向后计算梯度',updated?'权重已更新，重新前向计算':'梯度已算好，等待更新权重'][stage]}</b><span>连线：{stage===2?'梯度':stage===3?'权重调整量':'输入贡献'}</span></div>
-   <div className={s.diagramScroll}><svg viewBox="0 0 670 365" role="group" aria-label="完整教学网络，点击连线查看计算">
-    <text x="80" y="24" textAnchor="middle">3 个状态输入</text><text x="300" y="24" textAnchor="middle">4 个隐藏神经元</text><text x="530" y="24" textAnchor="middle">策略 / 价值</text>
-    {edges.map((e,i)=>{const v=stage===2?batch.gradient[e.id]:stage===3?batch.after[e.id]-batch.before[e.id]:(e.layer===0?sample.x[e.input]:shown.hidden[e.input])*batch.before[e.id];const strength=Math.min(1,Math.abs(v)*(stage>=2?15:2)),local=Math.max(0,Math.min(1,motion*2-(stage===2?1-e.layer:e.layer))),travel=stage===2?1-local:local;return <g key={e.id} role="button" tabIndex={0} aria-label={e.label} aria-pressed={edge===i} onClick={()=>setEdge(i)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();setEdge(i);}}}><line x1={e.from.x} y1={e.from.y} x2={e.to.x} y2={e.to.y} stroke="transparent" strokeWidth="12"/><line x1={e.from.x} y1={e.from.y} x2={e.to.x} y2={e.to.y} stroke={color(v)} strokeOpacity={edge===i?1:.15+strength*.7} strokeWidth={edge===i?3:1+strength*2}/>{playing&&(stage===0||stage===2)&&<circle cx={e.from.x+(e.to.x-e.from.x)*travel} cy={e.from.y+(e.to.y-e.from.y)*travel} r={edge===i?4:2} fill={color(v)} opacity={edge===i?1:.5}/>}</g>;})}
-    {sample.x.map((v,i)=><g key={i}><circle cx="80" cy={pos(0,i).y} r="21" fill="#f3f7fa" stroke="#315e80"/><text x="80" y={pos(0,i).y+4} textAnchor="middle">{v.toFixed(2)}</text><text x="80" y={pos(0,i).y+37} textAnchor="middle">{['高度 ÷ 50','速度 ÷ 20','燃料 ÷ 5'][i]}</text></g>)}
-    {shown.hidden.map((v,i)=><g key={i}><circle cx="300" cy={pos(1,i).y} r="22" fill={color(v)} fillOpacity={.1+Math.abs(v)*.35} stroke={color(v)}/><text x="300" y={pos(1,i).y+4} textAnchor="middle">{v.toFixed(2)}</text></g>)}
-    {shown.outputs.map((v,i)=><g key={i}><circle cx="530" cy={pos(2,i).y} r="24" fill={i===3?'#f7efe5':'#edf3f7'} stroke={i===3?'#ad773b':'#315e80'}/><text x="530" y={pos(2,i).y+4} textAnchor="middle">{i===3?v.toFixed(2):Math.round(shown.prob[i]*100)+'%'}</text><text x="568" y={pos(2,i).y+4}>{i===3?'预期回报':`油门 ${actions[i]*100}%`}</text></g>)}
-    <text x="300" y="350" textAnchor="middle">隐藏单元：乘系数 → 相加 → tanh 压缩</text>
-   </svg></div>
-   <div className={s.selection}><label>查看连接<select aria-label="查看连接" value={edge} onChange={e=>setEdge(Number(e.target.value))}>{edges.map((e,i)=><option key={e.id} value={i}>{e.label}</option>)}</select></label><p>蓝：正值 · 橙：负值 · 深浅表示绝对值。触屏可用下拉选择；网络图可横向移动。</p></div>
-   <div className={s.timeline}><label>选择经历 <b>第 {sample.episode+1} 次飞行 · {sample.state.t.toFixed(2)} s</b><input type="range" aria-label="选择经历" min="0" max={batch.samples.length-1} value={index} onChange={e=>{setIndex(Number(e.target.value));setMotion(0);}}/></label><span>{index+1} / {batch.samples.length}</span></div>
-   <div className={s.environment}><svg viewBox="0 0 100 110" aria-label="火箭高度变化" role="img"><path d="M5 96H95" stroke="#718498"/><g transform={`translate(50,${90-Math.min(120,height)/120*65})`}><path d="M-6 0V-18L0-28L6-18V0ZM-6-6L-12 2M6-6L12 2" fill="none" stroke="#315e80" strokeWidth="2"/>{sample.action>0&&<path d="M-3 2L0 10L3 2" fill="#ad773b"/>}</g></svg><div><b>动作送入物理环境</b><p>本次尝试油门 {actions[sample.action]*100}%</p><p>高度 {sample.state.h.toFixed(2)} → {sample.next.h.toFixed(2)} m<br/>速度 {sample.state.v.toFixed(2)} → {sample.next.v.toFixed(2)} m/s</p><small>推进 {(sample.next.t-sample.state.t).toFixed(2)} 秒；状态改变，权重保持不变。</small></div><div><small>本步奖励</small><strong>{sample.reward.toFixed(3)}</strong><small>随后折扣回报</small><strong>{sample.ret.toFixed(3)}</strong></div></div>
+   <div className={s.networkHead}><b>{label}</b><span>暖色：增加 · 冷色：减少 · 相对初始化</span></div>
+   <div className={s.nodePicker}><label>查看层 <select aria-label="选择网络层" value={layer} onChange={e=>pick(Number(e.target.value),0)}>{['输入层','第一组 · 128 个','第二组 · 128 个','输出层'].map((v,i)=><option key={i} value={i}>{v}</option>)}</select></label>{layer<3&&<label>神经元 <select aria-label="选择神经元编号" value={node} onChange={e=>setNode(Number(e.target.value))}>{Array.from({length:layer===0?7:128},(_,i)=><option key={i} value={i}>{i+1}{layer===0?' · '+names[i]:''}</option>)}</select></label>}</div>
+   <WeightHeatmap initial={data.models[0]} current={oldModel} next={newModel} inputs={sample.inputs} progress={progress} limit={heatLimit} playing={playing} layer={layer} node={node} source={strongest} onPick={heatPick}/>
+   <div className={s.heatLegend}><span>−{heatLimit.toFixed(3)}</span><i/><span>+{heatLimit.toFixed(3)}</span></div>
+   <div className={s.roundPlayer} aria-label="训练回放控制">
+    <div className={s.roundHeading}><strong>{clock===0?'初始化':`第 ${roundIndex+1}`} / {data.rounds.length} 轮</strong><span data-training-phase={phase}>{['前向传播 →','← 反向传播','权重更新 · 前后对照'][phase]}</span></div>
+    <div className={s.roundTrack}><button onClick={()=>setPlaying(!playing)}>{playing?'暂停播放':'继续播放'}</button><input type="range" aria-label="训练轮次" min={0} max={duration-.001} step="any" value={clock} onChange={e=>seek(Number(e.target.value))}/><label>速度 <select aria-label="播放速度" value={speed} onChange={e=>setSpeed(Number(e.target.value))}>{[.25,1,2,4,8,16,32,64].map(v=><option key={v} value={v}>{v}×</option>)}</select></label></div>
+    <div className={s.playPresets}><button onClick={()=>{setSpeed(32);setPlaying(true);}} aria-pressed={speed===32}>快速总览 · 32×</button><button onClick={()=>{setSpeed(1);setPlaying(true);}} aria-pressed={speed===1}>慢速细看 · 1×</button><details className={s.morePlayback}><summary>更多控制</summary><div><button aria-label="上一轮" onClick={()=>seek(Math.max(0,roundIndex-1)*8)}>← 上一轮</button><button aria-label="下一轮" onClick={()=>seek((roundIndex+1)*8)}>下一轮 →</button><button onClick={()=>seek(0)}>回到开头</button><small>真实记录回放 · 每轮 {round.steps.toLocaleString()} 个采样步；拖动进度条可定位并暂停。</small></div></details></div>
+   </div>
+   <p className={s.weightLegend}>同一底色表示“相对初始值，变化为零”，不表示所有权重相等。全程固定色阶，超出 ±{heatLimit.toFixed(3)} 的改变量饱和显示；不会每轮拉伸色阶。{phase===2?'正在逐层展开本轮真实改变量，过渡色仅用于演示':'当前显示本轮更新前'}。</p>
+   <div className={s.samplePicker}><label>本轮样本 <select aria-label="训练样本" value={Math.min(sampleIndex,round.samples.length-1)} onChange={e=>setSampleIndex(Number(e.target.value))}>{round.samples.map((v,i)=><option key={i} value={i}>采样步 {v.index+1}</option>)}</select></label><span>固定输入对照 · 输出是均值，采样动作含探索噪声</span></div>
   </section><aside className={s.inspector}>
-   <small>跟着所选经历 / {stages[stage]}</small><h2>{['它为什么选这个油门？','新状态从哪里来？','哪些系数需要怎样调整？','同一个输入，决策变了吗？'][stage]}</h2>
-   {stage===0&&<><p>策略先算出三个分数，再用 softmax 换算成总和为 100% 的概率。按概率抽样得到实际动作；探索时不一定选择概率最大的一项。</p><div className={s.probabilities}>{before.prob.map((p,i)=><div key={i}><span>{actions[i]*100}% 油门</span><i style={{width:`${p*100}%`}}/><b>{(p*100).toFixed(1)}% {sample.action===i?'← 本次选中':''}</b></div>)}</div><p>价值输出 {f(before.value)}：网络对“从这个状态继续飞，后面能得到多少回报”的估计。</p></>}
-   {stage===1&&<><p>油门影响推力，推力、重力和阻力共同改变速度，再改变高度。环境返回下一状态和奖励。</p><div className={s.formula}>新速度 = 旧速度 + 加速度 × 小步长<br/>新高度 = 旧高度 + 新速度 × 小步长</div><p>积分步长为 0.01 秒，每 0.1 秒选择动作。新状态进入下一次前向计算。</p><div className={s.formula}>保存：状态 → 动作 → 奖励 → 下一状态</div><p>收集本批 {batch.samples.length} 条经历时，使用的始终是同一组旧权重。</p></>}
-   {stage===2&&<><p>用后续经历估计回报，再与原先预期比较。优势在更新前固定算好。</p><div className={s.formula}>优势 = 回报 − 原先预期<br/>{f(sample.ret)} − ({f(before.value)}) = <b>{f(sample.advantage)}</b></div><p>{sample.advantage>=0?'这次比预期好，策略目标倾向提高该动作的概率。':'这次比预期差，策略目标倾向降低该动作的概率。'}最终更新综合整批经历与价值误差，单个动作的概率不保证按这一条经历的方向变化。</p><p>梯度从输出向隐藏层计算。共享隐藏层同时收到策略和价值两部分梯度。</p></>}
-   {stage===3&&<><p>保持当前输入不变，只替换权重。先预览差异，再执行更新。</p><div className={s.comparison}>{before.prob.map((p,i)=><div key={i}><span>{actions[i]*100}% 油门概率</span><b>{(p*100).toFixed(2)}% → {(after.prob[i]*100).toFixed(2)}%</b></div>)}</div><button className={s.primary} onClick={()=>setUpdated(true)} disabled={updated}>{updated?'本批更新已应用':'应用本批权重更新'}</button><button disabled={!updated} onClick={nextBatch}>用新网络收集下一批 →</button></>}
-   <section className={s.calculation}><small>所选连接</small><h3>{selected.label}</h3><div className={s.formula}>{stage<2?<>输入 × 权重 = 本项贡献<br/>{f(input)} × ({f(old)}) = {f(input*old)}</>:<>新权重 = 旧权重 − 学习率 × 梯度<br/>{f(old)} − 0.03 × ({f(gradient)})<br/>= <b>{f(next)}</b></>}</div><p>{stage<2?'还会加上其他输入的贡献与偏置，再算出神经元输出。':'梯度来自整批经历的平均，不是单条经历的奖励。偏置也会更新。'}</p></section>
-   <details><summary>梯度到底是什么意思？</summary><p>把一个系数稍微增大，训练目标会怎样变化？梯度描述这种变化趋势。“旧系数 − 学习率 × 梯度”让我们迈一小步；反向传播负责算梯度，更新才真正改系数。</p></details>
-   <details><summary>专业公式与实现边界</summary><p>策略损失 = −优势 × ln(本次动作概率)；价值损失 = ½ × (预期回报 − 折扣回报)²。两者相加，对本批经历求平均，使用 SGD 更新。折扣率 0.99，学习率 0.03。</p><p>这是 Monte Carlo Actor–Critic 教学实现，不是 PPO：没有 PPO 概率比裁剪，也没有把物理环境当作可微网络反传。油门为 0%、50%、100%，随机初始化，不保证学会降落。图中 28 条连接，另有 8 个可训练偏置。</p><p>奖励：软着陆 +1，其他终止 −1，每 kg 燃料 −0.1，每秒 −0.02；最多飞行 20 秒。与原项目奖励不同。动画展示本机真实采样与计算的快照，不是原 PPO 训练历史。</p></details>
+   <small>第 {roundIndex+1} 轮 / {['前向计算','反向求梯度','真实权重更新'][phase]}</small>
+   <h2>连接的强弱，怎样形成？</h2>
+   <p>每个格子是一条连接权重。飞行反馈形成损失，梯度从输出端反向传回；各层结合前向输入计算怎样调整权重。暖色表示比初始值增加，冷色表示减少。</p>
+   <section className={s.calculation}><small>你选中的神经元</small><h3>{label}</h3>{calc?<>
+    <label className={s.weightChoice}>查看哪条连线 <select aria-label="选择权重连线" value={edgeChoice===null?'auto':strongest} onChange={e=>setEdgeChoice(e.target.value==='auto'?null:Number(e.target.value))}><option value="auto">自动 · 本节点变化最大</option>{row.map((_,i)=><option key={i} value={i}>上一层 {i+1} 号 · Δ {fmt(newRow[i]-row[i])}</option>)}</select></label>
+    <div className={s.weightEquation}><div><small>旧权重</small><strong>{fmt(row[strongest])}</strong></div><span>＋</span><div data-sign={newRow[strongest]>=row[strongest]?'positive':'negative'}><small>实际改变量</small><strong>{newRow[strongest]>=row[strongest]?'+':''}{fmt(newRow[strongest]-row[strongest])}</strong></div><span>＝</span><div><small>新权重</small><strong>{fmt(newRow[strongest])}</strong></div></div>
+    <p>上一层 {strongest+1} 号 → 当前神经元 · 这里查看单条连线，节点仍使用全部 {row.length} 项输入计算。</p>
+    <details><summary>展开全部 {row.length} 条输入权重</summary><div className={s.weightsTable}><table><thead><tr><th>来自</th><th>旧权重</th><th>变化</th><th>新权重</th></tr></thead><tbody>{row.map((w,i)=><tr key={i} data-selected={i===strongest}><td><button onClick={()=>setEdgeChoice(i)}>{i+1} 号</button></td><td>{fmt(w)}</td><td style={{color:newRow[i]-w>=0?'#7656a6':'#26867d'}}>{fmt(newRow[i]-w)}</td><td>{fmt(newRow[i])}</td></tr>)}</tbody></table></div></details>
+    <details><summary>这个改变量怎样算出来？</summary><p>本轮初始梯度：{fmt(gradient)}。Adam 使用多个小批次的梯度更新，上方展示最终实际改变量，不能直接用这一个梯度乘学习率代替。</p></details>
+    <p>偏置：{fmt(oldModel.layers[layer-1].bias[node])} → {fmt(newModel.layers[layer-1].bias[node])}</p>
+   </>:<p>送入网络的标准化输入：<b>{fmt(sample.inputs[node])}</b>。输入表示环境状态，本身不是可训练权重。</p>}</section>
+   <details><summary>PPO 为什么不会一下改太多？</summary><p>比较同一个动作在新旧策略下的概率。优势为正时鼓励提高它的概率，优势为负时倾向降低；概率比超出裁剪范围后，限制继续沿这个方向推动的收益。裁剪范围为 ±20%，不意味着每个权重只能改 20%。</p></details>
+   <details><summary>这一轮的记录来自哪里？</summary><p>按原项目的网络结构和初始化方式，从随机初始化开始训练，共 {data.rounds.length} 轮。每轮采集 2048 步，使用原项目环境、128×128 策略网络、PPO 裁剪和 Adam 更新；独立价值网络也参与训练，本图完整展示策略网络。</p><p>显示的梯度是每轮开始时整批策略损失的梯度。实际更新经历 10 个 epoch、多个小批次，不等于把这一个梯度乘学习率。网页回放保存的计算结果，倍速加速回放，不会改写训练结果，这是一段新录制的从零训练早期过程，不是原成熟模型的训练历史。</p><p>种子 {data.source.seed} · SB3 {data.source.sb3}。训练后的策略不替换挑战页模型；这段记录不代表性能有所提升。</p></details>
   </aside></div>
-  <footer>参考 <a href="https://playground.tensorflow.org/">TensorFlow Playground</a> 的网络交互、<a href="https://d2l.ai/chapter_multilayer-perceptrons/backprop.html">《动手学深度学习》</a>的计算图，以及 <a href="https://spinningup.openai.com/en/latest/spinningup/rl_intro3.html">Spinning Up</a> 的策略梯度讲解。自动讲解只切换阶段；点击应用更新与下一批才推进训练。刷新重置。</footer>
+  <footer>完整策略网络 · 17,408 个连接权重全部绘制，偏置在选中神经元后单独查看。播放完成后循环回放已有记录。方法参考 <a href="https://spinningup.openai.com/en/latest/algorithms/ppo.html">OpenAI Spinning Up：PPO</a>。</footer>
  </main>;
 }

@@ -117,3 +117,72 @@
 .nav a,.nav button{display:inline-flex;align-items:center;min-height:44px}.nav a{padding:4px 6px}.modeBar button,.settings select{min-height:44px}.nav{flex-wrap:wrap}.mission>div{min-width:0}.controlLabel{flex-wrap:wrap}.page{padding-bottom:max(24px,env(safe-area-inset-bottom))}
 @media(max-width:700px){.nav{gap:4px;font-size:11px}.nav>span{display:none}.modeBar{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.modeBar button{padding:6px 3px;font-size:11px}.mission{align-items:flex-start}.settings summary{padding:10px 4px}.settings select{font-size:16px}.cockpit{height:auto;min-height:0;gap:8px}.scene{flex:none}.flightViewport{min-height:200px}.pilotControls{padding-bottom:8px}.mission p{font-size:11px}}
 @media(max-height:500px) and (orientation:landscape){.cockpit{height:auto;min-height:0;gap:6px}.nav{min-height:40px}.mission h1{font-size:22px}.flightViewport{min-height:210px}.scene{flex:none}.pilotControls{position:relative}.settings>div{max-height:220px;overflow:auto}}
+.page{min-height:calc(100svh - 113px);padding:16px 28px 24px}.cockpit{max-width:1264px;margin-inline:auto;min-height:0}.sessionTools{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--snn-text-muted);margin-bottom:12px}.sessionTools button{min-height:44px;padding:6px 12px;border:1px solid var(--snn-border);border-radius:var(--snn-radius-sm);color:var(--snn-text-secondary)}@media(max-width:700px){.page{padding:12px 16px 24px}}
+
+/* Recovery cockpit shares the inference workbench's fine-line visual language. */
+.page { --flight-ink: #355f7e; --flight-line: #d8e2eb; --flight-wash: #f2f6f9; --flight-muted: #6b7d8e; }
+.sessionTools { color: var(--flight-muted); margin-bottom: 4px; }
+.sessionTools > span { font-weight: 550; color: var(--flight-ink); }
+.sessionTools button, .nextButton, .settings select { border: 1px solid var(--flight-line); border-radius: 4px; color: var(--flight-ink); background: var(--snn-bg); }
+.modeBar { gap: 0; border-color: var(--flight-line); }
+.modeBar button { flex: 1; color: var(--flight-muted); }
+.modeBar button[aria-pressed=true] { color: var(--flight-ink); background: var(--flight-wash); border-bottom-color: var(--flight-ink); font-weight: 550; }
+.mission h1 { color: #2c4458; font-weight: 550; letter-spacing: -.025em; }
+.mission p, .settings summary { color: var(--flight-muted); }
+.settings > div { border-color: var(--flight-line); border-radius: 4px; background: var(--snn-bg); }
+.page button { transition: background-color 140ms, border-color 140ms, color 140ms; }
+.page button:hover:not(:disabled) { background: var(--flight-wash); border-color: #92aabe; color: var(--flight-ink); }
+.page button:focus-visible, .page select:focus-visible, .page input:focus-visible { outline: 2px solid #7096b2; outline-offset: 3px; }
+.metric[data-tone=normal] { color: var(--flight-ink); }
+.metric { border-radius: 0; }
+.sceneCaption { color: var(--flight-muted); }
+.pilotControls { border-top: 1px solid var(--flight-line); padding-top: 12px; }
+.controlLabel { color: var(--flight-muted); }
+.controlLabel label { color: var(--flight-ink); }
+.controlLabel output { font-weight: 550; color: var(--flight-ink); font-variant-numeric: tabular-nums; }
+.balanceReadout { color: var(--flight-ink); background: var(--flight-wash); border-bottom: 2px solid #8ca7bc; padding: 4px 8px; font-weight: 550; }
+.aiReadout { color: var(--flight-ink); }
+.track { height: 4px; background: #dbe5ed; }
+.track > i { background: #8ca7bc; }
+.track b { background: var(--flight-ink); border: 3px solid var(--snn-bg); border-radius: 4px; box-shadow: 0 0 0 1px #8da8bc; width: 16px; height: 24px; }
+.track:before { background: repeating-linear-gradient(90deg,var(--flight-line) 0 1px,transparent 1px 10%); }
+.track > .hoverMarker > i { background: var(--flight-ink); }
+.hoverMarker em { background: var(--flight-ink); border-radius: 3px; font-weight: 550; }
+.aiMarker em { color: var(--flight-ink); }
+.actionRow { padding-top: 6px; }
+.startButton { border-radius: 4px; background: var(--flight-ink); border-color: var(--flight-ink); color: white; }
+.page .startButton:hover:not(:disabled) { background: #274b66; border-color: #274b66; color: white; }
+.debrief { border-top: 1px solid var(--flight-line); border-left: 2px solid #8ca7bc; padding: 12px 16px; background: var(--flight-wash); color: var(--flight-ink); border-radius: 0; }
+.debrief strong { font-weight: 550; }
+.debrief p { color: #536779; line-height: 1.8; }
+.footer { border-color: var(--flight-line); color: var(--flight-muted); line-height: 1.8; }
+@media (prefers-reduced-motion: reduce) { .page button { transition: none; } }
+
+/* Desktop: a flight board and adjacent control column, rather than a stretched phone. */
+@media (min-width: 1101px) {
+  .cockpit { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px 24px; height: auto; align-items: start; }
+  .modeBar { grid-column: 1; grid-row: 1; }
+  .sessionTools { grid-column: 2; grid-row: 1; margin: 0; min-height: 44px; }
+  .mission { grid-column: 1 / -1; grid-row: 2; padding: 8px 0 12px; border-bottom: 1px solid var(--flight-line); }
+  .mission h1 { font-size: 28px; }
+  .scene { grid-column: 1; grid-row: 3; width: 100%; min-width: 0; }
+  .hud { gap: 0; padding: 4px 0 12px; }
+  .hud > div, .hud > div:nth-child(2) { max-width: none; width: auto; padding: 0 24px; justify-self: stretch; }
+  .hud > div + div { border-left: 1px solid var(--flight-line) !important; }
+  .telemetry { grid-template-columns: 1fr 1fr; gap: 12px; margin: 5px 0 2px; }
+  .hud .metric > span { font-size: 30px; letter-spacing: -.04em; }
+  .metric { padding: 4px 0; }
+  .flightViewport { flex: none; height: clamp(225px, 32vh, 330px); min-height: 225px; }
+  .sceneCaption { padding: 8px 24px; }
+  .pilotControls { grid-column: 2; grid-row: 3; align-self: stretch; display: flex; flex-direction: column; border-top: 0; border-left: 1px solid var(--flight-line); padding: 12px 0 12px 24px; min-width: 0; }
+  .controlLabel { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 8px; align-items: center; }
+  .controlLabel label { grid-column: 1 / -1; display: flex; align-items: baseline; justify-content: space-between; font-weight: 500; }
+  .controlLabel output { font-size: 42px; font-weight: 500; }
+  .controlLabel > span:last-child { grid-column: 1 / -1; line-height: 1.7; padding-top: 4px; }
+  .balanceReadout { padding: 6px 8px; text-align: center; }
+  .aiReadout { text-align: right; }
+  .touchThrottle { flex: none; margin-top: 30px; height: 88px; }
+  .actionRow { margin-top: auto; display: grid; grid-template-columns: 1fr; gap: 8px; }
+  .startButton, .nextButton { min-height: 44px; width: 100%; }
+  .debrief { grid-column: 1 / -1; grid-row: 4; margin-top: 0; }
+}
