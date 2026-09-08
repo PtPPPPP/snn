@@ -20,9 +20,9 @@ for (const [name, viewport] of viewports) {
     await page.goto("/", { waitUntil: "networkidle" });
     await expect(page.locator("[data-site-shell]")).toBeVisible();
     await expect(page.locator("[data-site-shell] img")).toBeVisible();
-    await expect(page.getByRole("link", { name: "进入 SNN AI", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "试试 SNN AI", exact: true })).toBeVisible();
     await expect(page.locator(".hero h1")).toBeVisible();
-    await expect(page.locator('a.button[href="#projects"]')).toBeVisible();
+    await expect(page.locator('a.button[href="#join"]')).toBeVisible();
     await expect(page.locator('a[href="/ai/"]').first()).toBeVisible();
     for (const section of ["about", "projects", "activities", "join"]) {
       await expect(page.locator(`#${section}`)).toBeVisible();

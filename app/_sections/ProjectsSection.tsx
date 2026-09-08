@@ -5,7 +5,7 @@ export function ProjectsSection() {
   return (
     <section className="section section-projects" id="projects">
       <div className="section-kicker"><span>02 /</span><span>BUILT AT SNN</span></div>
-      <div className="projects-heading"><h2>想法，进入真实世界。</h2><p>从软件到物理系统。保留过程，开放成果，让每次实验都有下一步。</p></div>
+      <div className="projects-heading"><h2>我们的共创项目。</h2><p>从软件到物理系统，和同学一起把想法变成 Demo、作品和可以继续改进的成果。</p></div>
       <div className="project-list">
         {projects.map(project => (
           <a className="project-row" href={project.href} key={project.index} target="_blank" rel="noreferrer" aria-label={`在 GitHub 查看 ${project.title}`}>

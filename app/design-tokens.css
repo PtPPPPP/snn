@@ -40,8 +40,14 @@
   --shadow-button: inset 0 1px 0 rgb(255 255 255 / 12%), 0 1px 3px rgb(26 42 62 / 8%);
   --shadow-surface: inset 0 1px 0 rgb(255 255 255 / 80%), 0 2px 4px rgb(26 42 62 / 3%), 0 24px 64px rgb(26 42 62 / 6%);
   --shadow-panel: inset 0 1px 0 rgb(255 255 255 / 80%), 0 4px 12px rgb(26 42 62 / 6%), 0 24px 64px rgb(26 42 62 / 12%);
-  --font-geist-sans: "Geist";
-  --font-geist-mono: "Geist Mono";
+  /*
+   * Chinese copy needs a typeface with fuller punctuation and more natural
+   * stroke contrast than the browser's default fallback. MiSans is used when
+   * available; Noto Sans SC and Microsoft YaHei keep the page readable on
+   * systems where it is not installed. Geist remains the Latin fallback.
+   */
+  --font-geist-sans: "MiSans", "Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Geist";
+  --font-geist-mono: "Geist Mono", "Cascadia Mono", Consolas;
 
   /* Compatibility names keep every existing consumer on the same system. */
   --snn-bg: var(--bg);

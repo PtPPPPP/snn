@@ -11,7 +11,7 @@ export function LearningLabSection() {
     <aside className="hero-lab" id="learning-lab" aria-labelledby="learning-lab-title">
       <div className="lab-header">
         <h2 id="learning-lab-title">学习实验室</h2>
-        <span>从体验，到理解</span>
+        <span>一起动手，把原理看懂</span>
       </div>
       <div className="lab-visual">
           <svg viewBox="0 0 540 310" role="img" aria-label="火箭降落与神经网络控制示意">

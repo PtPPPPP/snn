@@ -30,7 +30,7 @@ export const EMPTY_STATE = {
 export const SIDEBAR = {
   sectionCode: "PERSONAL WORKSPACE",
   title: "SNN AI",
-  description: "思考、探索、构建。",
+  description: "和同学一起思考、探索、构建。",
 } as const;
 
 export const THINKING_MODE = {

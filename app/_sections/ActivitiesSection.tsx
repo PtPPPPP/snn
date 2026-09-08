@@ -5,12 +5,12 @@ export function ActivitiesSection() {
     <section className="section section-activities" id="activities">
       <div className="section-kicker section-kicker-light">
         <span>03 /</span>
-        <span>LEARN. BUILD. SHARE.</span>
+        <span>LEARN. BUILD. SHARE. / 社团日常</span>
       </div>
       <div className="activities-heading">
-        <h2>一起，把问题做深。</h2>
+        <h2>一起学，一起做，一起分享。</h2>
         <p>
-          从短分享获得方法，在项目冲刺里完成实践，再通过开放交流连接更大的真实场景。
+          从一场短分享开始，在项目冲刺里动手实践，再把经验分享给下一位同学。
         </p>
       </div>
       <div className="activity-grid">
