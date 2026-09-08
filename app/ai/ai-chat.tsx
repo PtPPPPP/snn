@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 import { AiClientError, getAiStatus, streamChatMessage } from "../../lib/ai-client";
 import type { AiChatMessage } from "../../lib/ai-client";
 import {
@@ -619,11 +620,12 @@ export default function AiChat() {
             <>
               <div className={styles.messages} ref={messagesRef} onScroll={handleMessagesScroll} aria-live="off">
                 <div className={styles.conversationRail}>
-                  {!agent.loaded ? null : agent.messages.length === 0 ? (
+                  {!agent.loaded ? <div className={styles.loadingState} role="status" aria-label="正在加载工作区"><span /><span /><span /></div> : agent.messages.length === 0 ? (
                     <div className={styles.emptyState} data-testid="agent-empty">
                       <span className={styles.emptyMark}>AGENT / WORKSPACE</span>
-                      <h2>Agent 可以读取 Workspace 中的文件</h2>
-                      <p>上传文本、PDF、DOCX 或 XLSX，使用安全工具完成任务。文本文件只有在工作区显示“编辑文件”并且下载结果变化后才算修改完成；PDF、DOCX 和 XLSX 只读取和提取。Agent 可以抓取公开网页内容，不具备 Shell 能力。</p>
+                      <h2>让文件，成为思考的起点。</h2>
+                      <p>上传文本、PDF、DOCX 或 XLSX，让 Agent 帮你阅读资料、整理内容。文本文件支持编辑；PDF、DOCX 和 XLSX 支持读取与提取。</p>
+                      <p>修改后的文本可在工作区预览、编辑和下载。Agent 也可以读取公开网页。</p>
                     </div>
                   ) : (
                     agent.messages.map((m) => <AgentMessage key={m.id} message={m} toolActivity={m.role === "assistant" && agent.toolActivity.length > 0 && m.id === agent.messages[agent.messages.length - 1].id ? agent.toolActivity : undefined} />)
@@ -666,11 +668,15 @@ export default function AiChat() {
             <>
               <div className={styles.messages} ref={messagesRef} onScroll={handleMessagesScroll} aria-live="polite">
                 <div className={styles.conversationRail}>
-                  {!loaded ? null : messages.length === 0 ? (
+                  {!loaded ? <div className={styles.loadingState} role="status" aria-label="正在加载对话"><span /><span /><span /></div> : messages.length === 0 ? (
                     <div className={styles.emptyState}>
                       <span className={styles.emptyMark}>{EMPTY_STATE.mark}</span>
                       <h2>{EMPTY_STATE.title}</h2>
                       <p>{EMPTY_STATE.description}</p>
+                      <nav className={styles.emptyLinks} aria-label="探索 SNN">
+                        <Link href="/#projects">探索开源项目 <span aria-hidden="true">↗</span></Link>
+                        <Link href="/play/rocket/explain">理解神经网络 <span aria-hidden="true">↗</span></Link>
+                      </nav>
                     </div>
                   ) : (
                     messages.map((message) => <ChatMessage key={message.id} message={message} />)

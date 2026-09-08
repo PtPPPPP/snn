@@ -8,7 +8,7 @@ const launchOptions = localExecutable ? { executablePath: localExecutable } : {}
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: ["**/browser-smoke.spec.mjs", "**/mobile-browser-smoke.spec.mjs", "**/browser-agent-smoke.spec.mjs", "**/workspace-edit-e2e.spec.mjs"],
+  testMatch: ["**/browser-smoke.spec.mjs", "**/mobile-browser-smoke.spec.mjs", "**/browser-agent-smoke.spec.mjs", "**/workspace-edit-e2e.spec.mjs", "**/visual-redesign.spec.mjs"],
   timeout: 30_000,
   expect: { timeout: 5_000 },
   outputDir: ".preview/frontend-smoke/test-results",

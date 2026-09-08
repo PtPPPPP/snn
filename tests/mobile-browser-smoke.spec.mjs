@@ -254,7 +254,7 @@ test("mobile reduced motion keeps the Hero static", async ({ browser }) => {
   const page = await context.newPage();
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto(BASE_URL + "/", { waitUntil: "networkidle" });
-  expect(await page.locator(".hero-art").evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
+  expect(await page.locator(".product-preview").evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
   await noDocumentOverflow(page);
   await context.close();
 });
@@ -281,7 +281,8 @@ test("workspace drawer opens and closes on mobile without overflow", async ({ br
   const panel = page.getByTestId("workspace-panel");
   const toggle = page.locator('button[aria-controls="agent-workspace-panel"]');
   await expect(panel).toHaveAttribute("aria-hidden", "true");
-  const closedBox = await panel.boundingBox();
+  await expect(panel).toBeHidden();
+  const closedBox = await panel.evaluate(element => ({ x: element.getBoundingClientRect().x }));
   expect(closedBox.x).toBeGreaterThanOrEqual(390);
   await noDocumentOverflow(page);
 
@@ -296,10 +297,11 @@ test("workspace drawer opens and closes on mobile without overflow", async ({ br
 
   // Closing via the backdrop (which covers the toggle on mobile) returns the
   // drawer off-screen after the slide-out transition.
-  await page.locator('[class*="workspaceBackdrop"]').click();
+  await page.locator('[class*="workspaceBackdrop"]').click({ position: { x: 8, y: 8 } });
   await expect(panel).toHaveAttribute("aria-hidden", "true");
   await page.waitForTimeout(300);
-  const closedAgainBox = await panel.boundingBox();
+  await expect(panel).toBeHidden();
+  const closedAgainBox = await panel.evaluate(element => ({ x: element.getBoundingClientRect().x }));
   expect(closedAgainBox.x).toBeGreaterThanOrEqual(390);
   await noDocumentOverflow(page);
   await context.close();

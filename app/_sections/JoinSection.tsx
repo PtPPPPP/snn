@@ -5,7 +5,7 @@ export function JoinSection() {
     <section className="section section-join" id="join">
       <div className="join-main">
         <p className="eyebrow">JOIN THE NETWORK / 04</p>
-        <h2>不必等准备好，从一个角色开始。</h2>
+        <h2>下一个作品，<br />从你的好奇开始。</h2>
         <p className="join-intro">
           无论你刚写出第一个程序，还是已经在做机器人、算法或产品项目，SNN
           都欢迎愿意学习、愿意协作、愿意交付的你。

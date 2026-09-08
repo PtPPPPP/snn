@@ -8,9 +8,9 @@ export const STATUS_LABELS = {
 } as const;
 
 export const STATUS_DETAILS = {
-  checking: "正在检查本地 AI 节点",
-  ready: "AI 节点已就绪",
-  offline: "本地模型尚未连接",
+  checking: "正在连接服务",
+  ready: "可以开始对话",
+  offline: "服务暂未连接，历史对话仍可查看",
 } as const;
 
 export const NODE_STATES = {
@@ -24,13 +24,13 @@ export const EMPTY_STATE = {
   mark: "SNN / AI",
   title: "从一个问题开始。",
   description:
-    "这里将连接 SNN 本地 AI 节点。节点离线时，页面会保留消息并提示服务暂不可用。",
+    "理清一个想法，理解一段代码，或探索下一次实验。把问题带进来，一起找到下一步。",
 } as const;
 
 export const SIDEBAR = {
-  sectionCode: "NODE / 01",
+  sectionCode: "PERSONAL WORKSPACE",
   title: "SNN AI",
-  description: "由 SNN 本地 AI 节点提供推理服务。",
+  description: "思考、探索、构建。",
 } as const;
 
 export const THINKING_MODE = {

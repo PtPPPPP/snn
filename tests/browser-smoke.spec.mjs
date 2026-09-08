@@ -18,9 +18,9 @@ for (const [name, viewport] of viewports) {
     page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
     await page.setViewportSize(viewport);
     await page.goto("/", { waitUntil: "networkidle" });
-    await expect(page.locator(".site-header")).toBeVisible();
-    await expect(page.locator(".site-header .brand-logo")).toBeVisible();
-    await expect(page.locator(".nav-open-pill")).toBeVisible();
+    await expect(page.locator("[data-site-shell]")).toBeVisible();
+    await expect(page.locator("[data-site-shell] img")).toBeVisible();
+    await expect(page.getByRole("link", { name: "进入 SNN AI", exact: true })).toBeVisible();
     await expect(page.locator(".hero h1")).toBeVisible();
     await expect(page.locator('a.button[href="#projects"]')).toBeVisible();
     await expect(page.locator('a[href="/ai/"]').first()).toBeVisible();
@@ -30,9 +30,9 @@ for (const [name, viewport] of viewports) {
     }
     await expect(page.locator(".wechat-qr-wrap img")).toHaveAttribute("alt", /二维码/);
     await expect(page.locator("footer")).toBeVisible();
-    if (viewport.width > 760) {
-      await expect(page.locator(".main-nav")).toBeVisible();
-      await expect(page.locator('.main-nav a[href="#about"]')).toBeVisible();
+    if (viewport.width > 800) {
+      await expect(page.getByRole("navigation", { name: "主导航" })).toBeVisible();
+      await expect(page.getByRole("navigation", { name: "主导航" }).getByRole("link", { name: "项目", exact: true })).toBeVisible();
     }
     const project = page.locator(".project-row").first();
     const beforeHover = await project.evaluate((element) => {
@@ -55,7 +55,7 @@ test("homepage reduced-motion smoke", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/", { waitUntil: "networkidle" });
   await expect(page.locator(".hero h1")).toBeVisible();
-  expect(await page.locator(".hero-art").evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
+  expect(await page.locator(".product-preview").evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
   await assertNoOverflow(page);
 });
 

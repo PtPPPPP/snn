@@ -2,15 +2,15 @@ export function AboutSection() {
   return (
     <section className="section section-about" id="about">
       <div className="section-kicker">
-        <span>01</span>
-        <span>ABOUT / 定位</span>
+        <span>01 /</span>
+        <span>THE OPEN LAB</span>
       </div>
       <div className="about-grid">
-        <h2>学得会，做得出，讲得清。</h2>
+        <h2>好奇心是起点。<br />作品是回答。</h2>
         <div className="about-copy">
           <p className="about-lead">
-            SNN 不是只听分享的兴趣群，也不是只服务少数高手的比赛队。
-            我们用真实项目，把分散的知识变成可以运行、展示和继续迭代的作品。
+            SNN 是由学生共建的 AI 实验室与技术社区。
+            我们把学习放进真实项目：一起理解原理、编写代码，让智能走出屏幕，成为可运行的系统。
           </p>
           <div className="principles">
             <article>

@@ -30,7 +30,7 @@ test("Agent mode switch is visible and preserves chat", async ({ page }) => {
   await expect(page.getByRole("tab", { name: /Agent/ })).toHaveAttribute("aria-selected", "true");
   // Agent empty state should be visible
   await expect(page.getByTestId("agent-empty")).toBeVisible();
-  await expect(page.getByTestId("agent-empty")).toContainText("Agent 可以读取");
+  await expect(page.getByTestId("agent-empty")).toContainText("让文件，成为思考的起点。");
   // Chat input should be hidden, Agent composer visible
   await expect(page.getByTestId("agent-composer")).toBeVisible();
   await expect(page.locator("#ai-message")).toHaveCount(0);
@@ -81,6 +81,8 @@ test("Agent upload and attachment flow", async ({ page }) => {
 });
 
 test("Agent XSS-safe filename and model output", async ({ page }) => {
+  const dialogs = [];
+  page.on("dialog", async dialog => { dialogs.push(dialog.message()); await dialog.dismiss(); });
   const sessionId = "snn-agent-33333333-3333-4333-8333-333333333333";
   const evilName = '<img src=x onerror=alert(1)>.pdf';
   const fileId = "snn-file-44444444-4444-4444-8444-444444444444";
@@ -94,7 +96,8 @@ test("Agent XSS-safe filename and model output", async ({ page }) => {
     return route.continue();
   });
   await page.route(`**/api/agent/sessions/${sessionId}/runs`, async (route) => {
-    const body = `event: message.delta\ndata: {"type":"message.delta","runId":"snn-run-1","sessionId":"${sessionId}","payload":{"text":"<script>alert(1)</script> safe"}}\n\nevent: run.completed\ndata: {"type":"run.completed","runId":"snn-run-1","sessionId":"${sessionId}","timestamp":"2026-01-01T00:00:00.000Z"}\n\n`;
+    const unsafeOutput = "<script>alert(1)</script>\n\nsafe";
+    const body = `event: message.delta\ndata: {"type":"message.delta","runId":"snn-run-1","sessionId":"${sessionId}","payload":{"text":${JSON.stringify(unsafeOutput)}}}\n\nevent: run.completed\ndata: {"type":"run.completed","runId":"snn-run-1","sessionId":"${sessionId}","timestamp":"2026-01-01T00:00:00.000Z"}\n\n`;
     return route.fulfill({ status: 200, headers: { "content-type": "text/event-stream" }, body });
   });
   await page.goto("/ai/", { waitUntil: "networkidle" });
@@ -109,11 +112,15 @@ test("Agent XSS-safe filename and model output", async ({ page }) => {
   expect(chipHtml).toContain("&lt;img");
   await page.getByTestId("agent-input").fill("test xss");
   await page.getByTestId("agent-send-button").click();
-  // Model output should be escaped, not executed
+  // Markdown skips raw HTML; filenames remain escaped plain text.
   const assistantMsg = page.getByTestId("agent-assistant-message").last();
-  await expect(assistantMsg).toContainText("<script>");
+  await expect(assistantMsg).toBeVisible();
+  await expect(assistantMsg.locator(".snn-markdown")).toHaveCount(1);
+  await expect(assistantMsg).toContainText("safe");
   const msgHtml = await assistantMsg.innerHTML();
   expect(msgHtml).not.toContain("<script>alert");
+  await expect(assistantMsg.locator("script, img")).toHaveCount(0);
+  expect(dialogs).toEqual([]);
 });
 
 test("Agent cancel and reload resume", async ({ page }) => {
