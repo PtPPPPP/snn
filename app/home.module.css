@@ -1,17 +1,27 @@
 .home { max-width: 1248px; margin: 0 auto; padding: 0 24px; }
-.home :global(.hero) { padding: 92px 0 0; }
-.home :global(.hero-copy) { max-width: 840px; margin: 0 auto 64px; text-align: center; }
+.home :global(.hero) { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 56px; align-items: center; padding: 72px 0 0; }
+.home :global(.hero-copy) { min-width: 0; max-width: 600px; margin: 0; text-align: left; }
 .home :global(.home-eyebrow), .home :global(.section-kicker), .home :global(.eyebrow) {
   display: flex; align-items: center; gap: 12px; margin: 0 0 28px;
   color: var(--text-muted); font: 400 12px/1.6 var(--font-geist-mono), monospace; letter-spacing: .065em;
 }
-.home :global(.home-eyebrow) { justify-content: center; }
+.home :global(.home-eyebrow) { justify-content: start; }
 .home :global(.home-eyebrow > span) { width: 5px; height: 5px; background: var(--accent); border-radius: 50%; }
-.home :global(.hero h1) { font-size: var(--type-display); line-height: 1.08; letter-spacing: -.06em; margin: 0; font-weight: 500; }
+.home :global(.hero h1) { font-size: clamp(36px,4.1vw,60px); line-height: 1.12; letter-spacing: -.055em; margin: 0; font-weight: 500; }
 .home :global(.hero h1 > span) { color: var(--text-secondary); }
 .home :global(.home-intro) { font-size: var(--type-large); color: var(--text-secondary); line-height: 1.9; margin: 28px 0 32px; }
-.home :global(.hero-actions) { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
-.home :global(.hero-caption) { display: flex; justify-content: space-between; gap: 16px; padding: 24px 0 40px; font: 11px/1.7 var(--font-geist-mono), monospace; color: var(--text-muted); letter-spacing: .04em; }
+.home :global(.hero-actions) { display: flex; justify-content: start; gap: 12px; flex-wrap: wrap; }
+.home :global(.hero-caption) { grid-column: 1/-1; display: flex; justify-content: space-between; gap: 16px; padding: 0 0 40px; font: 11px/1.7 var(--font-geist-mono), monospace; color: var(--text-muted); letter-spacing: .04em; }
+.home :global(.hero-lab) { min-width: 0; padding: 0 24px; border: 1px solid var(--border-default); border-radius: var(--radius-3); background: var(--surface-1); box-shadow: var(--shadow-surface); scroll-margin-top: 88px; }
+.home :global(.lab-header) { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 0; border-bottom: 1px solid var(--border-subtle); }
+.home :global(.lab-header h2) { margin: 0; font-size: 20px; font-weight: 500; }
+.home :global(.lab-header > span) { font-size: 12px; color: var(--text-muted); }
+.home :global(.lab-visual svg) { display: block; width: 100%; height: 190px; margin: 12px 0; }
+.home :global(.lab-links a) { display: grid; grid-template-columns: 24px minmax(0,1fr) 16px; gap: 14px; align-items: center; min-height: 86px; padding: 18px 0; border-top: 1px solid var(--border-subtle); transition: color var(--motion-fast) var(--ease); }
+.home :global(.lab-links a:hover) { color: var(--accent); }
+.home :global(.lab-links small) { color: var(--text-muted); font: 11px var(--font-geist-mono),monospace; }
+.home :global(.lab-links h3) { font-size: 17px; margin: 0 0 4px; font-weight: 500; }
+.home :global(.lab-links p) { margin: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.7; }
 .home :global(.product-preview) { margin: 0; border: 1px solid var(--border-default); border-radius: var(--radius-3); background: var(--surface-1); box-shadow: var(--shadow-surface); }
 .home :global(.preview-top) { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 52px; padding: 0 22px; border-bottom: 1px solid var(--border-default); color: var(--text-secondary); font-size: 12px; }
 .home :global(.preview-top i) { margin: 0 12px; font-style: normal; color: var(--text-muted); }
@@ -43,7 +53,7 @@
 .home :global(.principles p) { grid-column: 2; font-size: 14px; color: var(--text-secondary); margin: 6px 0 0; }
 .home :global(.projects-heading), .home :global(.activities-heading) { display: grid; grid-template-columns: 1.4fr 1fr; align-items: end; gap: 64px; margin-bottom: 48px; }
 .home :global(.projects-heading > p), .home :global(.activities-heading > p) { margin: 0; color: var(--text-secondary); font-size: 16px; line-height: 1.9; }
-.home :global(.featured-project) { display: grid; grid-template-columns: 1fr 1.3fr; border: 1px solid var(--border-default); border-radius: var(--radius-3); background: var(--surface-1); margin-bottom: 48px; }
+.home :global(.featured-project) { display: grid; grid-template-columns: 1fr 1.3fr; border: 1px solid var(--border-default); border-radius: var(--radius-3); background: var(--surface-1); margin: 0; }
 .home :global(.featured-copy) { padding: 44px; }
 .home :global(.featured-copy h3) { font-size: clamp(32px,3vw,44px); letter-spacing: -.03em; line-height: 1.4; margin: 0; }
 .home :global(.featured-copy > p) { font-size: 16px; color: var(--text-secondary); line-height: 1.9; max-width: 26em; margin: 24px 0; }
@@ -111,6 +121,8 @@
   .home :global(.activity-grid article) { grid-template-columns: 100px 1fr 1.25fr; gap: 24px; }
 }
 @media (max-width: 800px) {
+  .home :global(.hero) { grid-template-columns: 1fr; gap: 32px; }
+  .home :global(.hero-copy) { max-width: none; }
   .home :global(.preview-body) { grid-template-columns: 1fr; }
   .home :global(.preview-sidebar) { display: none; }
   .home :global(.about-grid), .home :global(.projects-heading), .home :global(.activities-heading) { grid-template-columns: 1fr; gap: 28px; }
@@ -126,7 +138,10 @@
 @media (max-width: 600px) {
   .home { padding: 0 20px; }
   .home :global(.hero) { padding-top: 56px; }
-  .home :global(.hero-copy) { text-align: left; margin-bottom: 40px; }
+  .home :global(.hero-copy) { text-align: left; margin-bottom: 0; }
+  .home :global(.hero-lab) { padding: 0 18px; }
+  .home :global(.lab-visual svg) { height: 140px; }
+  .home :global(.lab-header > span) { font-size: 11px; }
   .home :global(.home-eyebrow) { justify-content: start; font-size: 10px; margin-bottom: 24px; }
   .home :global(.hero h1) { font-size: clamp(36px, 10vw, 48px); letter-spacing: -.05em; line-height: 1.12; }
   .home :global(.home-intro) { font-size: 15px; margin: 24px 0; }

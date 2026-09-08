@@ -254,7 +254,7 @@ test("mobile reduced motion keeps the Hero static", async ({ browser }) => {
   const page = await context.newPage();
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto(BASE_URL + "/", { waitUntil: "networkidle" });
-  expect(await page.locator(".product-preview").evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
+  expect(await page.locator(".hero-lab").evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
   await noDocumentOverflow(page);
   await context.close();
 });

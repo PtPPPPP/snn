@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ProductPreview } from "./ProductPreview";
+import { LearningLabSection } from "./LearningLabSection";
 
 export function Hero() {
   return (
@@ -13,7 +13,7 @@ export function Hero() {
           <a className="button button-ghost" href="#projects">探索项目 <span aria-hidden="true">↓</span></a>
         </div>
       </div>
-      <ProductPreview />
+      <LearningLabSection />
       <div className="hero-caption"><span>STUDENT-BUILT. OPEN TO BUILDERS.</span><span>AI / AGENTS / ROBOTICS</span></div>
     </section>
   );

@@ -55,7 +55,7 @@ test("homepage reduced-motion smoke", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/", { waitUntil: "networkidle" });
   await expect(page.locator(".hero h1")).toBeVisible();
-  expect(await page.locator(".product-preview").evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
+  expect(await page.locator(".hero-lab").evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
   await assertNoOverflow(page);
 });
 

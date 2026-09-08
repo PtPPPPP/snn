@@ -21,7 +21,7 @@ for (const [width, height] of sizes) {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       expect(await page.locator("body").evaluate(el => getComputedStyle(el).backgroundColor)).toBe("rgb(247, 248, 250)");
       if (name === "home") {
-        await expect(page.getByText("界面示例", { exact: true })).toBeVisible();
+        await expect(page.locator(".hero").getByRole("heading", { name: "学习实验室", exact: true })).toBeVisible();
         await expect(page.getByRole("navigation", { name: "首页实验入口" }).getByRole("link")).toHaveCount(3);
         await expect(page.locator(".project-row")).toHaveCount(3);
       }
