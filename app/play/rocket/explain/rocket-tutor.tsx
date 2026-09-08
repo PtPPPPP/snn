@@ -1,6 +1,7 @@
 "use client";
 import {useEffect,useRef,useState} from 'react';
 import {streamChatMessage,type AiChatMessage} from '../../../../lib/ai-client';
+import MarkdownContent from '../../../_components/markdown-content.mjs';
 import styles from './lesson.module.css';
 export type TutorSnapshot={time:number;selection:string;context:string;timeLabel?:string};
 type Turn={question:string;answer:string;label:string;context:string;complete:boolean};
@@ -23,7 +24,7 @@ export default function RocketTutor({snapshot,locked=false,onFollow,onLock,mode=
  return <section className={styles.tutor} aria-label="实验 AI 答疑"><h2>问问 SNN AI</h2><div className={styles.questionContext}><b>{locked?'已记录':mode==='training'?'跟随当前训练':'跟随当前飞行'} · {snapshot.timeLabel??`${snapshot.time.toFixed(2)} 秒`} · {snapshot.selection}</b>{locked?<button onClick={onFollow}>跟随当前</button>:<button onClick={onLock}>锁定这一刻</button>}</div>
  <form onSubmit={e=>{e.preventDefault();void ask(question);}}><label htmlFor="rocket-question">你的问题</label><textarea id="rocket-question" rows={2} maxLength={1000} value={question} onChange={e=>setQuestion(e.target.value)} placeholder={mode==='training'?'例如：这条反馈为什么会让权重变小？':'例如：为什么速度是负数，油门却在变大？'}/><div><small>将附上 {snapshot.timeLabel??`${snapshot.time.toFixed(2)} 秒`} · {snapshot.selection}</small>{busy?<button type="button" onClick={()=>controller.current?.abort()}>停止回答</button>:<button disabled={!question.trim()} type="submit">发送问题</button>}</div></form>
  <div className={styles.tutorQuestions}>{(mode==='training'?['解释这次权重更新','这些反馈线是什么意思？']:['解释当前结果','这个正负数是什么意思？']).map(q=><button key={q} disabled={busy} onClick={()=>void ask(q)}>{q}</button>)}</div>
- <div className={styles.tutorMessages}>{turns.map((t,i)=><article key={i}><small>{t.label}</small><h3>{t.question}</h3><div>{t.answer||(busy&&i===turns.length-1?'正在连接 AI…':'未收到回答')}</div>{!t.complete&&t.answer&&!busy&&<small>回答未完成</small>}</article>)}</div>
+ <div className={styles.tutorMessages}>{turns.map((t,i)=><article key={i}><small>{t.label}</small><h3>{t.question}</h3><div>{t.answer?<MarkdownContent text={t.answer}/>:busy&&i===turns.length-1?'正在连接 AI…':'未收到回答'}</div>{!t.complete&&t.answer&&!busy&&<small>回答未完成</small>}</article>)}</div>
  {error&&<p role="alert">{error}</p>}
 
  </section>;

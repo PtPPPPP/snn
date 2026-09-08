@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./fonts.css";
 import "./globals.css";
+import "katex/dist/katex.min.css";
+import "./_components/markdown-content.css";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE } from "../lib/site";
 
 // 部署时通过 NEXT_PUBLIC_SITE_URL 注入正式域名，用于解析 OG 图的绝对地址。

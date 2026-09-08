@@ -1,4 +1,5 @@
 "use client";
+import MarkdownContent from "../_components/markdown-content.mjs";
 
 import type { AgentMessage } from "./use-agent";
 import { AgentAttachmentChip } from "./agent-attachment-chip";
@@ -27,7 +28,7 @@ export default function AgentMessage({
         </div>
       ) : null}
       {!isUser && toolActivity && toolActivity.length > 0 ? <AgentToolActivity items={toolActivity} /> : null}
-      <p className={`${styles.messageBubble} ${isUser ? styles.userBubble : ""}`}>{message.content}</p>
+      <div className={`${styles.messageBubble} ${isUser ? styles.userBubble : ""}`}>{isUser ? message.content : <MarkdownContent text={message.content}/>}</div>
       {!isUser && message.isThinking ? <span className={styles.thinkingLine}>思考中…</span> : null}
       {!isUser && message.thinkingSeconds !== undefined ? <span className={styles.thinkingLine}>已思考 {message.thinkingSeconds.toFixed(1)} 秒</span> : null}
     </article>

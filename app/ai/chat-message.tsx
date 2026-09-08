@@ -1,3 +1,4 @@
+import MarkdownContent from "../_components/markdown-content.mjs";
 import styles from "./ai-chat.module.css";
 
 export type ChatRole = "assistant" | "user";
@@ -32,9 +33,9 @@ export default function ChatMessage({ message }: ChatMessageProps) {
           已思考 {message.thinkingSeconds.toFixed(1)} 秒
         </span>
       ) : null}
-      <p className={`${styles.messageBubble} ${isUser ? styles.userBubble : ""}`}>
-        {message.content}
-      </p>
+      <div className={`${styles.messageBubble} ${isUser ? styles.userBubble : ""}`}>
+        {isUser ? message.content : <MarkdownContent text={message.content}/>}
+      </div>
     </article>
   );
 }
