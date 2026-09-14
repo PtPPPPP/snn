@@ -46,6 +46,9 @@ function textPayloads(text) {
 function toolPayloads(callId, name, args) {
   return [JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, id: callId, type: "function", function: { name, arguments: "" } }] } }] }), JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: JSON.stringify(args) } }] } }] }), JSON.stringify({ choices: [{ delta: {}, finish_reason: "tool_calls" }] })];
 }
+function maxTokensPayloads(text) {
+  return [JSON.stringify({ choices: [{ delta: { role: "assistant", content: null } }] }), JSON.stringify({ choices: [{ delta: { content: text } }] }), JSON.stringify({ choices: [{ delta: {}, finish_reason: "length" }] })];
+}
 function mockLlm() {
   let scripts = [];
   const requests = [];
@@ -188,13 +191,15 @@ async function bootPublicReal(label, shared = {}) {
 
 async function sse(res) {
   const body = await res.text();
-  const events = [...body.matchAll(/event: ([^\n]+)\ndata: ([^\n]+)\n\n/g)].map((m) => ({ type: m[1], data: JSON.parse(m[2]) }));
+  const NL = String.fromCharCode(10);
+  const frame = new RegExp(`event: ([^${NL}]+)${NL}data: ([^${NL}]+)${NL}${NL}`, "g");
+  const events = [...body.matchAll(frame)].map((m) => ({ type: m[1], data: JSON.parse(m[2]) }));
   return { body, events };
 }
 function deltaText(events) { return events.filter((e) => e.type === "message.delta").map((e) => e.data?.payload?.text ?? "").join(""); }
 function toolNames(events) { return events.filter((e) => e.type === "tool.started").map((e) => e.data?.payload?.name); }
 function assertTerminal(events, exp = "run.completed") {
-  const terms = events.filter((e) => ["run.completed", "run.failed", "run.cancelled"].includes(e.type));
+  const terms = events.filter((e) => ["run.completed", "run.incomplete", "run.failed", "run.cancelled"].includes(e.type));
   assert.equal(terms.length, 1); assert.equal(terms[0].type, exp);
 }
 
@@ -323,6 +328,32 @@ test("public mixed attachments (txt+pdf+xlsx) via BFF", options, async (t) => {
   const { events } = await sse(run);
   assert.equal(toolNames(events).length, 3);
   assertTerminal(events);
+});
+
+test("public max-tokens run ends as run.incomplete over SSE, never run.completed", options, async (t) => {
+  const env = await bootPublicReal("max-tokens");
+  t.after(() => env.close());
+  const origin = "https://snnai.cn";
+  const created = await fetch(`${env.baseUrl}/api/agent/sessions`, { method: "POST", headers: { origin, "content-type": "application/json" }, body: "{}" });
+  assert.equal(created.status, 201);
+  const sessionId = (await created.json()).sessionId;
+  const cookie = created.headers.get("set-cookie").split(";", 1)[0];
+  // The mock model streams a partial answer and then hits the generation
+  // ceiling (finish_reason "length"). Under the production cordis config
+  // (maxTokensAsSuccess: true) the real DSH runtime surfaces this as a distinct
+  // max-tokens turn end, which the public BFF must forward as run.incomplete so
+  // a truncated run is never rendered as a green success on the public path.
+  env.llm.set([{ match: "write a long report", payloads: maxTokensPayloads("PARTIAL_BEFORE_CEILING") }]);
+  const run = await fetch(`${env.baseUrl}/api/agent/sessions/${sessionId}/runs`, { method: "POST", headers: { origin, cookie, "content-type": "application/json" }, body: JSON.stringify({ message: "write a long report" }) });
+  assert.equal(run.status, 200);
+  const { events } = await sse(run);
+  assert.ok(deltaText(events).includes("PARTIAL_BEFORE_CEILING"), "partial text before the ceiling is streamed");
+  // Exactly one terminal, and it is run.incomplete carrying reason=max_tokens.
+  assertTerminal(events, "run.incomplete");
+  const incomplete = events.find((e) => e.type === "run.incomplete");
+  assert.deepEqual(incomplete.data?.payload, { reason: "max_tokens" });
+  // A truncated run must never be reported as completed on the public path.
+  assert.ok(!events.some((e) => e.type === "run.completed"), "run.completed must not be emitted for a max-tokens run");
 });
 
 test("public SSE cancel and disconnect", options, async (t) => {

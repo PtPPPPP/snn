@@ -21,7 +21,7 @@ plus the green test runs in Section 58.
 | 2 | `FILE_CAPABILITY_REGISTRY` / `TEXT_EXTENSIONS` (`.css` regression) | **CONFIRMED** | single 31-ext registry, 5 consumers (§55); frontend mirror identical (`lib/agent-client.ts`) |
 | 3 | four-layer limit split (upload/preview/edit/extract) | **CONFIRMED** | `FILE_LIMITS` (§55); green `public upload cap and workspace quota ... without drift` |
 | 4 | 16 MiB attachment contradiction fix | **CONFIRMED** | `ATTACHMENT_LIMITS` = 8×50 MiB = 400 MiB metadata-only (§55) |
-| 5 | max-tokens terminal semantics (`run.incomplete` ≠ `run.completed`) | **CONFIRMED** | backend→client→hook→UI end-to-end (§56); green `adapts a max-tokens turn end to run.incomplete, never run.completed` |
+| 5 | max-tokens terminal semantics (`run.incomplete` ≠ `run.completed`) | **CONFIRMED** | backend→client→hook→UI end-to-end (§56); adapter+runtime unit tests **plus** `public max-tokens run ends as run.incomplete over SSE, never run.completed` proven through the **real DSH runtime + public BFF SSE** (finish_reason `length` → `run.incomplete`, no `run.completed`) |
 | 6 | DOCX cross-run replacement | **CONFIRMED** | `wordprocessing-service.mjs`; green cross-run + table-cell + fail-closed tests |
 | 7 | normal-chat output limit configurable | **CONFIRMED** | `config.mjs` default 4096, clamp 8192 (§58) |
 | 8 | runtime readiness real (not stubbed) | **CONFIRMED** | `runtime-readiness.mjs` live capability resolution (§57); frontend type mirrors it |
@@ -158,6 +158,14 @@ success and never a failure:
 - `internal-server.mjs` **and** `public/bff.mjs` — `run.incomplete` is in the
   allow-listed SSE event set, sets `terminalSeen`, and `publicSseEvent()` maps it
   with its `reason`. The public path therefore surfaces truncation honestly.
+- **Proven end-to-end, not merely wired:** `public max-tokens run ends as
+  run.incomplete over SSE, never run.completed` drives a mock model ending with
+  `finish_reason: "length"` through the **real pinned DSH runtime** (production
+  `maxTokensAsSuccess: true`) and the **real public BFF HTTP/SSE path**, asserting
+  exactly one terminal — `run.incomplete` with `reason: max_tokens` — and **no**
+  `run.completed`. This closes the gap left by the adapter/runtime unit tests,
+  which hand-inject the `max-tokens` turn-end notification rather than triggering
+  it through the real runtime.
 
 ---
 
@@ -197,15 +205,15 @@ never starts a runtime or calls a model from a status request:
 
 | Check | Command | Result |
 | --- | --- | --- |
-| ai-node unit + E2E (offline) | `npm --prefix ai-node test` | **269 tests / 217 pass / 0 fail / 52 skipped** |
-| ai-node unit + E2E (pinned DSH) | `SNN_DSH_ROOT=.tmp-dsh-node22-852ae532 npm --prefix ai-node test` | **269 / 269 pass / 0 fail / 0 skipped** (76 s) |
+| ai-node unit + E2E (offline) | `npm --prefix ai-node test` | **270 tests / 217 pass / 0 fail / 53 skipped** |
+| ai-node unit + E2E (pinned DSH) | `SNN_DSH_ROOT=.tmp-dsh-node22-852ae532 npm --prefix ai-node test` | **270 / 270 pass / 0 fail / 0 skipped** (76 s) |
 | AI conversation state | `npm run test:ai-state` | **33 / 33 pass** |
 | Production readiness | `npm run test:production-readiness` | **6 / 6 pass** |
 | Lint | `npm run lint` | **0 errors** (1 pre-existing warning in `playwright.prodcheck.config.mjs`) |
 | Type check | `npx tsc --noEmit -p tsconfig.json` | **exit 0** |
 | Real-model NL acceptance | `npm run test:real-model-acceptance` | **8 / 8 clean skip** (gated, exit 0) |
 
-The 52 offline-skipped tests are the real out-of-process E2E chain
+The 53 offline-skipped tests are the real out-of-process E2E chain
 (SNN runtime adapter → DshClient → official `@deepseek-ai/dsh-sdk-client` →
 child `dsh-jsonrpc-agent` → real cordis composition → tools + JSONL persistence →
 SDK notifications → `SnnAgentEvent`). Pointing `SNN_DSH_ROOT` at the **already
@@ -218,8 +226,10 @@ side remains gated). Named green cases include:
 
 - `public agent capability surface exposes no shell-style execution tool`
   (the NO-SHELL boundary is enforced by a test, not just by instruction text);
-- `adapts a max-tokens turn end to run.incomplete, never run.completed` and
-  `runtime adapter reports run.incomplete exactly once for a max-tokens turn end`;
+- `adapts a max-tokens turn end to run.incomplete, never run.completed`,
+  `runtime adapter reports run.incomplete exactly once for a max-tokens turn end`,
+  and — through the **real DSH runtime + public BFF SSE** — `public max-tokens run
+  ends as run.incomplete over SSE, never run.completed`;
 - `public upload/list/delete and attachment run via BFF reaches real DSH`,
   `public multipart XLSX run patches one row and downloads a verified workbook`,
   `public mixed attachments (txt+pdf+xlsx) via BFF`;
