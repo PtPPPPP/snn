@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { TEXT_EXTENSIONS } from "../documents/file-access.mjs";
 import { isEditableTextFile } from "../workspace/file-ingestion-service.mjs";
+import { startSseHeartbeat } from "../sse-heartbeat.mjs";
 import { hashOwnerToken } from "./ownership-store.mjs";
 import { generateOwnerToken, getOwnerTokenFromRequest, buildOwnerCookie, DEFAULT_COOKIE_NAME } from "./cookie.mjs";
 import { PublicResourceGuard } from "./resource-guard.mjs";
@@ -707,6 +708,10 @@ export function createPublicAgentBff({
       ...corsHeaders(originInfo.origin, originInfo.allowed),
     });
     response.flushHeaders?.();
+    // One run can queue for minutes behind llama-server's single slot while its
+    // own connection stays completely silent. Without a beat an idle-closing
+    // edge cuts the stream before any terminal event can reach the client.
+    const heartbeat = startSseHeartbeat(response, { intervalMs: config.agent?.sseHeartbeatMs });
     try {
       for await (const event of run.events) {
         if (!PUBLIC_SSE_EVENTS.has(event.type)) continue;
@@ -721,6 +726,7 @@ export function createPublicAgentBff({
         response.write(`event: run.failed\ndata: ${JSON.stringify({ type: "run.failed", runId: run.runId, sessionId, timestamp: new Date().toISOString(), error: { code: "AGENT_RUN_FAILED", message: "Agent run failed" } })}\n\n`);
       }
     } finally {
+      heartbeat.stop();
       request.removeListener("aborted", onClose);
       response.removeListener("close", onClose);
       controller.finish(sessionId, run.runId);

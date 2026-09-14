@@ -118,6 +118,10 @@ test("runtime adapter delegates abort for an active run", async () => {
   await runtime.abort({ sessionId: "session-1", runId: run.runId });
   assert.deepEqual(aborts, [{ sessionId: "session-1", runId: run.runId }]);
   pending.resolve();
+  // The cancel landed while the run was still queued, so DSH drove the session to
+  // idle without ever emitting a turn/end. The stream must still carry exactly one
+  // terminal event instead of ending silently and leaving the consumer waiting.
+  assert.equal((await run.events.next()).value.type, "run.cancelled");
   assert.equal((await run.events.next()).done, true);
 });
 
@@ -219,6 +223,79 @@ test("runtime adapter emits exactly one terminal event", async () => {
 
   assert.deepEqual(events.map((event) => event.type), ["run.started", "run.completed"]);
   assert.equal(diagnostics.some((diagnostic) => diagnostic.code === "SNN_RUN_DUPLICATE_TERMINAL"), true);
+});
+
+test("runtime adapter reports run.cancelled exactly once when a queued run is cancelled", async () => {
+  const diagnostics = [];
+  const pending = deferred();
+  const client = {
+    // A run cancelled while still queued is dropped from the DSH inbox: the
+    // session goes idle and the promise resolves with no turn/end fact at all.
+    sendMessage() { return pending.promise; },
+    async abort() {},
+    async dispose() {},
+  };
+  const runtime = new DshRuntimeAdapter({
+    client,
+    now: () => "2026-08-23T00:00:00.000Z",
+    onDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
+  });
+  const run = runtime.sendMessage({ sessionId: "session-1", content: "hello" });
+  await runtime.abort({ sessionId: "session-1", runId: run.runId });
+  pending.resolve();
+  const events = await collect(run.events);
+
+  const terminals = events.filter((event) => ["run.completed", "run.failed", "run.cancelled"].includes(event.type));
+  assert.deepEqual(terminals.map((event) => event.type), ["run.cancelled"]);
+  assert.equal(terminals[0].runId, run.runId);
+  assert.equal(terminals[0].sessionId, "session-1");
+  assert.equal(terminals[0].timestamp, "2026-08-23T00:00:00.000Z");
+  assert.equal(diagnostics.filter((diagnostic) => diagnostic.code === "SNN_RUN_TERMINAL_FALLBACK").length, 1);
+  assert.equal(diagnostics.some((diagnostic) => diagnostic.code === "SNN_RUN_DUPLICATE_TERMINAL"), false);
+});
+
+test("runtime adapter adds no terminal event once DSH reported one", async () => {
+  const diagnostics = [];
+  const client = {
+    async sendMessage({ onNotification }) {
+      onNotification({
+        method: "session.event",
+        params: { sessionId: "session-1", event: { type: "turn/end", data: { reason: { kind: "completed" } } } },
+      });
+    },
+    async dispose() {},
+  };
+  const runtime = new DshRuntimeAdapter({ client, onDiagnostic: (diagnostic) => diagnostics.push(diagnostic) });
+  const run = runtime.sendMessage({ sessionId: "session-1", content: "hello" });
+  const events = await collect(run.events);
+
+  // The real turn/end owns the terminal fact. The resolve-path fallback must stay
+  // silent rather than add a second terminal or claim a duplicate.
+  assert.deepEqual(events.map((event) => event.type), ["run.started", "run.completed"]);
+  assert.equal(events[1].payload.outcome, "completed");
+  assert.equal(diagnostics.some((diagnostic) => diagnostic.code === "SNN_RUN_TERMINAL_FALLBACK"), false);
+});
+
+test("runtime adapter falls back to run.completed when the activity ends without a terminal fact", async () => {
+  const diagnostics = [];
+  const client = {
+    async sendMessage() {},
+    async dispose() {},
+  };
+  const runtime = new DshRuntimeAdapter({ client, onDiagnostic: (diagnostic) => diagnostics.push(diagnostic) });
+  const run = runtime.sendMessage({ sessionId: "session-1", content: "hello" });
+  const events = await collect(run.events);
+
+  // No cancel was requested, so an activity that ends without a turn/end is
+  // reported as a completion and diagnosed instead of being silently dropped.
+  assert.deepEqual(events.map((event) => event.type), ["run.started", "run.completed"]);
+  // A real run.completed always carries payload.outcome; the synthetic one does
+  // not, which keeps the two distinguishable without adding a new outcome value.
+  assert.equal(events[1].payload, undefined);
+  assert.deepEqual(
+    diagnostics.filter((diagnostic) => diagnostic.code === "SNN_RUN_TERMINAL_FALLBACK").map((diagnostic) => diagnostic.terminal),
+    ["run.completed"],
+  );
 });
 
 test("runtime adapter disposes its client once", async () => {

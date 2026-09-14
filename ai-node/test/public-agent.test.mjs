@@ -26,6 +26,11 @@ function deferred() {
 function event(type, runId, sessionId) {
   return { type, runId, sessionId, timestamp: "2026-08-24T00:00:00.000Z" };
 }
+/** Every `event:` name in a raw SSE body, in wire order. Comment beats carry no
+ * `event:` line, so they can never appear here. */
+function eventNames(body) {
+  return [...body.matchAll(/^event: (.+)$/gm)].map((match) => match[1]);
+}
 function createFakeRuntime() {
   const calls = [];
   let n = 0;
@@ -122,6 +127,9 @@ async function withPublic(options, run) {
       port: 0,
       maxBodyBytes: 16384,
       messageMaxLength: 16384,
+      // Left unset by default so every existing case keeps the production 15s
+      // beat, which no test here lives long enough to observe.
+      ...(options?.sseHeartbeatMs === undefined ? {} : { sseHeartbeatMs: options.sseHeartbeatMs }),
     },
     publicAgent: publicConfig,
     webSearch: null,
@@ -524,5 +532,36 @@ test("existing chat unchanged when public disabled flag not set", async () => {
     const chat = await fetch(`${baseUrl}/api/ai/chat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ messages: [{ role: "user", content: "hello" }] }) });
     // Without upstream mock, it will try to fetch upstream and fail -> 503 or 502, but not 404. The point is route still exists.
     assert.equal([200, 502, 503, 504].includes(chat.status), true);
+  });
+});
+
+test("public run keeps a queued SSE stream alive with comment beats", async () => {
+  await withPublic({ sseHeartbeatMs: 10 }, async ({ baseUrl, fakeRuntime }) => {
+    const origin = "https://snnai.cn";
+    const created = await fetch(`${baseUrl}/api/agent/sessions`, { method: "POST", headers: { origin, "content-type": "application/json" }, body: "{}" });
+    const sid = (await created.json()).sessionId;
+    const cookie = created.headers.get("set-cookie").split(";")[0];
+
+    // The fake runtime parks on "wait", which is the exact production shape of a
+    // run queued behind llama-server's single slot: headers are out, run.started
+    // has been emitted, and nothing further arrives for a long time.
+    const stream = await fetch(`${baseUrl}/api/agent/sessions/${sid}/runs`, { method: "POST", headers: { origin, cookie, "content-type": "application/json" }, body: JSON.stringify({ message: "wait" }) });
+    assert.equal(stream.status, 200);
+    assert.equal(stream.headers.get("content-type"), "text/event-stream; charset=utf-8");
+
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    const runId = fakeRuntime.calls.find(([kind]) => kind === "run")[3];
+    const cancel = await fetch(`${baseUrl}/api/agent/sessions/${sid}/runs/${runId}/cancel`, { method: "POST", headers: { origin, cookie } });
+    assert.equal(cancel.status, 202);
+
+    // Reaching the end of the body proves the finally block stopped the beat and
+    // ended the response; a leaked interval would leave this read hanging.
+    const body = await stream.text();
+    const beats = (body.match(/: ping\n\n/g) ?? []).length;
+    assert.ok(beats >= 3, `expected at least three beats while the run was queued, got ${beats}`);
+    // A beat is a comment frame: it carries no data line and never surfaces as a
+    // business event, so the wire sequence is exactly the run's own events.
+    assert.deepEqual(eventNames(body), ["run.started", "message.delta", "run.completed"]);
+    assert.equal([...body.matchAll(/^data: /gm)].length, 3);
   });
 });

@@ -13,7 +13,12 @@ const testDir = dirname(fileURLToPath(import.meta.url));
 // SNN runtime adapter -> DshClient -> official @deepseek-ai/dsh-sdk-client ->
 // child dsh-jsonrpc-agent (real cordis composition) -> SDK server -> agent ->
 // tools + JSONL persistence -> SDK notifications -> SnnAgentEvent.
-const DSH_ROOT = resolve(testDir, "../../../deepseek-harness");
+// SNN_DSH_ROOT lets the suite target a pinned DSH build elsewhere, for example
+// the `snn/runtime-extensions` checkout that still ships `examples/jsonrpc-agent`;
+// leaving it unset keeps the sibling-checkout default.
+const DSH_ROOT = process.env.SNN_DSH_ROOT
+  ? resolve(process.env.SNN_DSH_ROOT)
+  : resolve(testDir, "../../../deepseek-harness");
 const CLIENT_LIB = join(DSH_ROOT, "packages/sdk/client/lib/index.js");
 const BIN_JS = join(DSH_ROOT, "packages/examples/jsonrpc-demo/lib/bin.js");
 const FIXTURE_BASE = join(DSH_ROOT, "examples/jsonrpc-agent");

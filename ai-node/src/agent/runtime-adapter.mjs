@@ -50,7 +50,7 @@ export class DshRuntimeAdapter extends SnnAgentRuntime {
     if (existingRunId) throw new Error(`Agent session already has an active run: ${existingRunId}`);
     const runId = `snn-run-${randomUUID()}`;
     const stream = new AsyncEventStream();
-    this.#activeRuns.set(runId, { sessionId, stream, terminal: undefined });
+    this.#activeRuns.set(runId, { sessionId, stream, terminal: undefined, cancelRequested: false });
     this.#activeSessionRuns.set(sessionId, runId);
     this.#toolBridge.beginRun({ runId, sessionId });
     stream.push(createSnnAgentEvent({
@@ -72,7 +72,10 @@ export class DshRuntimeAdapter extends SnnAgentRuntime {
         if (event) this.#publishRunEvent(runId, sessionId, stream, event);
       },
     })).then(
-      () => stream.close(),
+      () => {
+        this.#publishTerminalFallback(runId, sessionId, stream);
+        stream.close();
+      },
       (error) => {
         if (isRuntimeTransportFailure(error)) this.#notifyFailure(error);
         this.#publishRunEvent(runId, sessionId, stream, createSnnAgentEvent({
@@ -98,6 +101,11 @@ export class DshRuntimeAdapter extends SnnAgentRuntime {
     this.#assertActive();
     const active = this.#activeRuns.get(runId);
     if (!active || active.sessionId !== sessionId) throw new Error(`Agent run is not active: ${runId}`);
+    // Recorded before the client call and independently of whether it succeeds.
+    // A run cancelled while still queued is dropped from the DSH inbox without
+    // ever producing a `turn/end`, so this flag is the only evidence that the
+    // idle resolution which follows means "cancelled" rather than "completed".
+    active.cancelRequested = true;
     return this.#client.abort({ sessionId, runId });
   }
 
@@ -144,6 +152,41 @@ export class DshRuntimeAdapter extends SnnAgentRuntime {
     active.terminal = event.type;
     stream.push(event);
     this.#toolBridge.endRun({ runId, sessionId, outcome: event.type });
+  }
+
+  /**
+   * Close the resolve path with a terminal event when DSH ended the activity
+   * without emitting one.
+   *
+   * Cancelling a run that is still queued removes its message from the DSH inbox
+   * and drives the session straight to idle. No turn ever started, so no
+   * `turn/end` arrives, the client promise resolves, and the event stream simply
+   * finishes. Consumers iterating that stream then see a normal end carrying no
+   * terminal event and wait forever.
+   *
+   * Routing the fallback through #publishRunEvent keeps the terminal event
+   * exactly-once: when a real `run.completed`, `run.cancelled` or `run.failed`
+   * already arrived, the existing guard suppresses this one. The reject path is
+   * untouched, so a transport failure still reports `run.failed` and is never
+   * relabelled as a cancellation.
+   *
+   * @param {string} runId @param {string} sessionId @param {AsyncEventStream} stream
+   */
+  #publishTerminalFallback(runId, sessionId, stream) {
+    const active = this.#activeRuns.get(runId);
+    if (!active || active.terminal !== undefined) return;
+    const type = active.cancelRequested ? "run.cancelled" : "run.completed";
+    try {
+      this.#onDiagnostic(Object.freeze({ code: "SNN_RUN_TERMINAL_FALLBACK", runId, sessionId, terminal: type }));
+    } catch {
+      // Diagnostics are observational and must not alter the run outcome.
+    }
+    this.#publishRunEvent(runId, sessionId, stream, createSnnAgentEvent({
+      type,
+      runId,
+      sessionId,
+      timestamp: this.#now(),
+    }));
   }
 }
 

@@ -28,7 +28,12 @@ import { AttachmentContextResolver } from "../src/agent/attachments/attachment-c
 import { buildTestPdf, buildTestDocx, docxDocumentXml, buildTestXlsx } from "./helpers/document-fixtures.mjs";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
-const dshRoot = resolve(testDir, "../../../deepseek-harness");
+// SNN_DSH_ROOT lets the suite target a pinned DSH build elsewhere, for example
+// the `snn/runtime-extensions` checkout that still ships `examples/jsonrpc-agent`;
+// leaving it unset keeps the sibling-checkout default.
+const dshRoot = process.env.SNN_DSH_ROOT
+  ? resolve(process.env.SNN_DSH_ROOT)
+  : resolve(testDir, "../../../deepseek-harness");
 const sdkPath = join(dshRoot, "packages/sdk/client/lib/index.js");
 const runnerPath = join(dshRoot, "packages/examples/jsonrpc-demo/lib/bin.js");
 const toolHostPath = join(dshRoot, "packages/fs/tool-fs/lib/index.js");
@@ -188,7 +193,12 @@ async function bootRealInternal(label, shared = {}) {
 async function post(url, body) { return fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }); }
 async function sse(response) {
   const body = await response.text();
-  const events = [...body.matchAll(/event: ([^\n]+)\ndata: ([^\n]+)\n\n/g)].map((match) => ({ type: match[1], data: JSON.parse(match[2]) }));
+  // One SSE frame is an `event:` line, a `data:` line, and a blank line. The
+  // separators are assembled from a newline constant so the frame boundary stays
+  // a literal character rather than an escape sequence.
+  const nl = String.fromCharCode(10);
+  const frame = new RegExp(`event: ([^${nl}]+)${nl}data: ([^${nl}]+)${nl}${nl}`, "g");
+  const events = [...body.matchAll(frame)].map((match) => ({ type: match[1], data: JSON.parse(match[2]) }));
   return { body, events };
 }
 async function openSse(response) {

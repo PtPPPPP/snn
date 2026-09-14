@@ -16,6 +16,12 @@ function event(type, runId, sessionId) {
   return { type, runId, sessionId, timestamp: "2026-08-24T00:00:00.000Z" };
 }
 
+/** Every `event:` name in a raw SSE body, in wire order. Comment beats carry no
+ * `event:` line, so they can never appear here. */
+function eventNames(body) {
+  return [...body.matchAll(/^event: (.+)$/gm)].map((match) => match[1]);
+}
+
 function createRuntime() {
   const calls = [];
   const releases = new Map();
@@ -44,12 +50,12 @@ function createRuntime() {
   };
 }
 
-async function withInternal(run) {
+async function withInternal(run, configOverrides = {}) {
   const runtime = createRuntime();
   const manager = new AgentRuntimeManager({ createRuntime: async () => runtime });
   const controller = new AgentSessionController({ manager, toolMetadata: BUILT_IN_TOOL_METADATA, maxMessageLength: 32 });
   const server = createAgentInternalServer({
-    config: { enabled: true, host: "127.0.0.1", port: 0, maxBodyBytes: 64 },
+    config: { enabled: true, host: "127.0.0.1", port: 0, maxBodyBytes: 64, ...configOverrides },
     controller,
     manager,
     logger: { error() {} },
@@ -169,4 +175,30 @@ test("internal API validates content type, JSON, body size, IDs, and methods", a
       assert.equal(typeof body.error.message, "string");
     }
   });
+});
+
+test("internal run keeps a queued SSE stream alive with comment beats", async () => {
+  await withInternal(async ({ baseUrl, runtime }) => {
+    const sessionId = (await (await json(`${baseUrl}/internal/agent/sessions`, { method: "POST", body: "{}" })).json()).sessionId;
+    // The runtime parks on "wait", which is the exact production shape of a run
+    // queued behind llama-server's single slot: headers are out, run.started has
+    // been emitted, and nothing further arrives for a long time.
+    const stream = await json(`${baseUrl}/internal/agent/sessions/${sessionId}/runs`, { method: "POST", body: JSON.stringify({ message: "wait" }) });
+    assert.equal(stream.status, 200);
+
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    const runId = runtime.calls.find(([kind]) => kind === "run")[3];
+    const cancelled = await json(`${baseUrl}/internal/agent/sessions/${sessionId}/runs/${runId}/cancel`, { method: "POST", body: "{}" });
+    assert.equal(cancelled.status, 202);
+
+    // Reaching the end of the body proves the finally block stopped the beat and
+    // ended the response; a leaked interval would leave this read hanging.
+    const body = await stream.text();
+    const beats = (body.match(/: ping\n\n/g) ?? []).length;
+    assert.ok(beats >= 3, `expected at least three beats while the run was queued, got ${beats}`);
+    // A beat is a comment frame: it carries no data line and never surfaces as a
+    // business event, so the wire sequence is exactly the run's own events.
+    assert.deepEqual(eventNames(body), ["run.started", "message.delta", "run.completed"]);
+    assert.equal([...body.matchAll(/^data: /gm)].length, 3);
+  }, { sseHeartbeatMs: 10 });
 });

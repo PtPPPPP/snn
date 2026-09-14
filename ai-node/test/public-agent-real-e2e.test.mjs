@@ -27,7 +27,12 @@ import { createPublicAgentBff } from "../src/agent/public/bff.mjs";
 import { buildTestPdf, buildTestXlsx } from "./helpers/document-fixtures.mjs";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
-const dshRoot = resolve(testDir, "../../../deepseek-harness");
+// SNN_DSH_ROOT lets the suite target a pinned DSH build elsewhere, for example
+// the `snn/runtime-extensions` checkout that still ships `examples/jsonrpc-agent`;
+// leaving it unset keeps the sibling-checkout default.
+const dshRoot = process.env.SNN_DSH_ROOT
+  ? resolve(process.env.SNN_DSH_ROOT)
+  : resolve(testDir, "../../../deepseek-harness");
 const sdkPath = join(dshRoot, "packages/sdk/client/lib/index.js");
 const runnerPath = join(dshRoot, "packages/examples/jsonrpc-demo/lib/bin.js");
 const toolHostPath = join(dshRoot, "packages/fs/tool-fs/lib/index.js");

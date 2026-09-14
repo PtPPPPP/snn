@@ -1,4 +1,5 @@
 import { dirname, join } from "node:path";
+import { DEFAULT_SSE_HEARTBEAT_MS } from "./agent/sse-heartbeat.mjs";
 
 const DEFAULT_ALLOWED_ORIGINS = ["http://127.0.0.1:8765", "http://localhost:8765"];
 
@@ -61,6 +62,9 @@ function loadAgentConfig(environment) {
     port: readPositiveInteger(environment.SNN_AGENT_INTERNAL_PORT, 8788, "SNN_AGENT_INTERNAL_PORT"),
     maxBodyBytes: readPositiveInteger(environment.SNN_AGENT_INTERNAL_MAX_BODY_BYTES, 16_384, "SNN_AGENT_INTERNAL_MAX_BODY_BYTES"),
     messageMaxLength: readPositiveInteger(environment.SNN_AGENT_INTERNAL_MESSAGE_MAX_LENGTH, 16_384, "SNN_AGENT_INTERNAL_MESSAGE_MAX_LENGTH"),
+    // One knob feeds both Agent SSE surfaces: the internal stream and the public
+    // BFF proxy each carry a whole run over a single long-lived response.
+    sseHeartbeatMs: readPositiveInteger(environment.SNN_AGENT_SSE_HEARTBEAT_MS, DEFAULT_SSE_HEARTBEAT_MS, "SNN_AGENT_SSE_HEARTBEAT_MS"),
   };
   if (!enabled) return base;
 

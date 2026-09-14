@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { httpError } from "./session-controller.mjs";
+import { startSseHeartbeat } from "./sse-heartbeat.mjs";
 
 const SSE_EVENT_TYPES = new Set([
   "run.started", "reasoning.started", "reasoning.delta", "reasoning.completed",
@@ -74,13 +75,13 @@ async function handleRequest(request, response, { config, controller, manager, i
     const body = await readJsonBody(request, config.maxBodyBytes);
     if (!isExactMessageBody(body)) throw httpError(400, "INVALID_REQUEST", "request body must contain only message and an optional attachments array of file ids");
     const run = await controller.startRun(sessionId, { message: body.message, attachments: body.attachments });
-    streamRun(request, response, controller, sessionId, run);
+    streamRun(request, response, controller, sessionId, run, config.sseHeartbeatMs);
   } catch (error) {
     sendError(response, error, logger, path);
   }
 }
 
-function streamRun(request, response, controller, sessionId, run) {
+function streamRun(request, response, controller, sessionId, run, heartbeatMs) {
   let disconnected = false;
   let terminalSeen = false;
   const cancelOnDisconnect = () => {
@@ -98,6 +99,9 @@ function streamRun(request, response, controller, sessionId, run) {
     "x-accel-buffering": "no",
   });
   response.flushHeaders?.();
+  // The internal surface carries one run over the same kind of single long-lived
+  // response as the public BFF, so it needs the same idle keep-alive.
+  const heartbeat = startSseHeartbeat(response, { intervalMs: heartbeatMs });
   void (async () => {
     try {
       for await (const event of run.events) {
@@ -108,7 +112,12 @@ function streamRun(request, response, controller, sessionId, run) {
     } catch {
       if (!terminalSeen && !disconnected && !response.writableEnded) writeSse(response, "run.failed", publicRunFailure(sessionId, run));
     } finally {
+      heartbeat.stop();
       request.removeListener("aborted", cancelOnDisconnect);
+      // Symmetric with the public BFF. Leaving this registered lets a close that
+      // arrives after the run already finished request a cancel against a run the
+      // controller no longer tracks, which it rejects as stale.
+      response.removeListener("close", cancelOnDisconnect);
       controller.finish(sessionId, run.runId);
       if (!response.writableEnded) response.end();
     }

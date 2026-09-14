@@ -1,3 +1,4 @@
+import { createPublicModelApi } from './public-model-api.mjs';
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { normalizeThinking, normalizeWebSearch, validateMessages } from "../../shared/ai-validation.mjs";
@@ -491,7 +492,9 @@ function statusBody(config, online, agentCaps) {
 }
 
 export function createAiNodeServer(config, { fetchImpl = fetch, logger = console, publicBff = null, agentReadiness = null } = {}) {
+  const publicModelApi = createPublicModelApi(config, { fetchImpl });
   return createServer(async (request, response) => {
+    if (await publicModelApi(request, response)) return;
     const startedAt = Date.now();
     const requestId = randomUUID();
     const { allowed, origin } = requestOrigin(request, config);
