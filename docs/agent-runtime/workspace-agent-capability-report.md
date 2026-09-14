@@ -9,6 +9,35 @@ capability**, and the **pinned DSH `852ae532` is used read-only** (as an
 
 ---
 
+## Section 0/1 — CURRENT_CAPABILITY_MATRIX
+
+Read-only audit of the current worktree, classified per the objective's five
+statuses. Evidence for every CONFIRMED row is the code cite in Sections 54–57
+plus the green test runs in Section 58.
+
+| # | Capability (objective) | Status | Evidence / note |
+| --- | --- | --- | --- |
+| 1 | `workspace.list` discovery | **CONFIRMED** | 4-layer wiring (§54); green E2E `public upload/list/delete ... reaches real DSH` |
+| 2 | `FILE_CAPABILITY_REGISTRY` / `TEXT_EXTENSIONS` (`.css` regression) | **CONFIRMED** | single 31-ext registry, 5 consumers (§55); frontend mirror identical (`lib/agent-client.ts`) |
+| 3 | four-layer limit split (upload/preview/edit/extract) | **CONFIRMED** | `FILE_LIMITS` (§55); green `public upload cap and workspace quota ... without drift` |
+| 4 | 16 MiB attachment contradiction fix | **CONFIRMED** | `ATTACHMENT_LIMITS` = 8×50 MiB = 400 MiB metadata-only (§55) |
+| 5 | max-tokens terminal semantics (`run.incomplete` ≠ `run.completed`) | **CONFIRMED** | backend→client→hook→UI end-to-end (§56); green `adapts a max-tokens turn end to run.incomplete, never run.completed` |
+| 6 | DOCX cross-run replacement | **CONFIRMED** | `wordprocessing-service.mjs`; green cross-run + table-cell + fail-closed tests |
+| 7 | normal-chat output limit configurable | **CONFIRMED** | `config.mjs` default 4096, clamp 8192 (§58) |
+| 8 | runtime readiness real (not stubbed) | **CONFIRMED** | `runtime-readiness.mjs` live capability resolution (§57); frontend type mirrors it |
+| 9 | NO-SHELL production boundary | **CONFIRMED** | `workspace.execute` granted to no skill; green `public agent capability surface exposes no shell-style execution tool` |
+| 10 | pinned DSH `852ae532` unmodified | **CONFIRMED** | HEAD `852ae5321a`, `git status` CLEAN after the E2E run |
+| 11 | public BFF path (upload/preview/edit/extract/SSE/CORS/ownership) | **CONFIRMED (offline)** | full public E2E green against pinned DSH with a mock LLM (§58) |
+| 12 | real-model NL acceptance (AI11 Qwen) — harness | **CONFIRMED** | `tests/workspace-agent-nl-real-model.test.mjs`, 6 NL cases, skips clean (exit 0) |
+| 13 | real-model NL acceptance — **live execution** | **UNKNOWN** | gated: needs a live deployment + server-side Qwen credential; cannot be proven offline |
+| 14 | AI11 capacity retest (concurrency/throughput) | **UNKNOWN** | gated: needs the live AI11 public endpoint |
+
+No row is **STALE** (no previously-claimed fix was found inaccurate) and none is
+**PARTIALLY_FIXED** at the code layer — the only open rows (13, 14) are UNKNOWN
+strictly because they require external live state, not because code is missing.
+
+---
+
 ## Section 54 — Capability matrix (what the agent can and cannot do)
 
 ### Registered built-in tools (`ai-node/src/agent/built-in-tools.mjs`)
