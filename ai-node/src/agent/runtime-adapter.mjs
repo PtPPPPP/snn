@@ -79,21 +79,32 @@ export class DshRuntimeAdapter extends SnnAgentRuntime {
       sessionId,
       contentBlocks,
       onNotification: (notification) => {
-        const active = this.#activeRuns.get(runId);
-        if (active && !active.activeEmitted) {
-          active.activeEmitted = true;
-          this.#publishRunEvent(runId, sessionId, stream, createSnnAgentEvent({
-            type: "run.active",
-            runId,
-            sessionId,
-            timestamp: this.#now(),
-          }));
-        }
+        // DSH emits bookkeeping traffic (session.status, turn/start, step/*)
+        // the moment a message is submitted, long before the model slot
+        // engages. run.active must stay truthful: it fires only when a
+        // notification actually maps to a run-visible event (model output or
+        // tool lifecycle), never on bookkeeping.
+        const emitActive = () => {
+          const active = this.#activeRuns.get(runId);
+          if (active && !active.activeEmitted) {
+            active.activeEmitted = true;
+            this.#publishRunEvent(runId, sessionId, stream, createSnnAgentEvent({
+              type: "run.active",
+              runId,
+              sessionId,
+              timestamp: this.#now(),
+            }));
+          }
+        };
         for (const toolEvent of this.#toolBridge.observeDshNotification(notification, { runId, sessionId })) {
+          emitActive();
           stream.push(toolEvent);
         }
         const event = adaptDshNotification(notification, { runId, sessionId, now: this.#now }, { onDiagnostic: this.#onDiagnostic });
-        if (event) this.#publishRunEvent(runId, sessionId, stream, event);
+        if (event) {
+          emitActive();
+          this.#publishRunEvent(runId, sessionId, stream, event);
+        }
       },
     })).then(
       () => {
