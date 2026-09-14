@@ -3,7 +3,7 @@ import { httpError } from "./session-controller.mjs";
 import { startSseHeartbeat } from "./sse-heartbeat.mjs";
 
 const SSE_EVENT_TYPES = new Set([
-  "run.started", "reasoning.started", "reasoning.delta", "reasoning.completed",
+  "run.started", "run.waiting", "run.active", "reasoning.started", "reasoning.delta", "reasoning.completed",
   "message.started", "message.delta", "message.completed", "tool.started",
   "tool.completed", "tool.failed", "approval.required", "run.completed", "run.incomplete", "run.failed", "run.cancelled",
 ]);

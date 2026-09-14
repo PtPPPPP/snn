@@ -465,6 +465,8 @@ test("resource limits fail closed without spawning extra workspace", async () =>
     // same owner second session should be blocked per-owner 1
     assert.equal(r2.status, 429);
     assert.match((await r2.json()).error.code, /AGENT_PUBLIC_SESSION_LIMIT_PER_OWNER/);
+    // Session limits are static caps, not contention: no retry hint.
+    assert.equal(r2.headers.get("retry-after"), null);
     // different owner can still create up to global 2
     const r3 = await fetch(`${baseUrl}/api/agent/sessions`, { method: "POST", headers: { origin, "content-type": "application/json" }, body: "{}" });
     assert.equal(r3.status, 201);
@@ -482,6 +484,10 @@ test("resource limits fail closed without spawning extra workspace", async () =>
     // second run same owner should be blocked
     const run2 = await fetch(`${baseUrl}/api/agent/sessions/${sid1}/runs`, { method: "POST", headers: { origin, cookie: cookie1, "content-type": "application/json" }, body: JSON.stringify({ message: "second" }) });
     assert.equal(run2.status, 429);
+    // Run-limit 429s mean live contention for the model slot: a short bounded
+    // retry hint is part of the contract (Phase 5C2).
+    assert.match((await run2.json()).error.code, /AGENT_PUBLIC_RUN_LIMIT/);
+    assert.equal(run2.headers.get("retry-after"), "2");
   });
 });
 

@@ -631,7 +631,7 @@ export default function AiChat() {
                     agent.messages.map((m) => <AgentMessage key={m.id} message={m} toolActivity={m.role === "assistant" && agent.toolActivity.length > 0 && m.id === agent.messages[agent.messages.length - 1].id ? agent.toolActivity : undefined} />)
                   )}
                   {(agent.runState === "streaming" || agent.runState === "starting") ? (
-                    <div className={styles.typing}><span>Agent 正在处理</span><i /><i /><i /></div>
+                    <div className={styles.typing} data-testid={agent.waiting ? "agent-waiting" : undefined}><span>{agent.waiting ? "模型繁忙，Agent 排队等待中…" : "Agent 正在处理"}</span><i /><i /><i /></div>
                   ) : null}
                   {agent.toolActivity.length > 0 && agent.runState !== "idle" && agent.messages.length > 0 && agent.messages[agent.messages.length - 1].role === "assistant" ? null : agent.toolActivity.length > 0 ? <AgentToolActivity items={agent.toolActivity} /> : null}
                   {agent.error ? <p className={styles.streamNotice} role="alert">{agent.error}</p> : null}

@@ -1,6 +1,8 @@
 /** Stable event names owned by SNN AI. */
 export const SNN_AGENT_EVENT_TYPES = Object.freeze([
   "run.started",
+  "run.waiting",
+  "run.active",
   "reasoning.started",
   "reasoning.delta",
   "reasoning.completed",

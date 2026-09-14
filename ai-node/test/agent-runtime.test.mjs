@@ -63,7 +63,7 @@ test("runtime adapter forwards DSH notifications as SNN events", async () => {
   const run = runtime.sendMessage({ sessionId: "session-1", content: "hello" });
   const events = await collect(run.events);
 
-  assert.deepEqual(events.map((event) => event.type), ["run.started", "message.delta", "run.completed"]);
+  assert.deepEqual(events.map((event) => event.type), ["run.started", "run.waiting", "run.active", "message.delta", "run.completed"]);
   assert.ok(events.every((event) => event.runId === run.runId));
 });
 
@@ -99,7 +99,7 @@ test("runtime adapter does not mislabel a DSH tool request as execution start", 
   const run = runtime.sendMessage({ sessionId: "session-1", content: "hello" });
   const events = await collect(run.events);
 
-  assert.deepEqual(events.map((event) => event.type), ["run.started", "run.completed"]);
+  assert.deepEqual(events.map((event) => event.type), ["run.started", "run.waiting", "run.active", "run.completed"]);
   assert.equal(diagnostics.some((diagnostic) => diagnostic.code === "TOOL_RESULT_WITHOUT_EXECUTION_START"), true);
 });
 
@@ -114,6 +114,7 @@ test("runtime adapter delegates abort for an active run", async () => {
   const runtime = new DshRuntimeAdapter({ client });
   const run = runtime.sendMessage({ sessionId: "session-1", content: "hello" });
   assert.equal((await run.events.next()).value.type, "run.started");
+  assert.equal((await run.events.next()).value.type, "run.waiting");
 
   await runtime.abort({ sessionId: "session-1", runId: run.runId });
   assert.deepEqual(aborts, [{ sessionId: "session-1", runId: run.runId }]);
@@ -164,9 +165,10 @@ test("runtime adapter reports run.failed when the child runtime crashes after a 
     },
     /runtime exited/,
   );
-  // run.started was consumed above; the terminal fact is run.failed exactly once.
-  assert.deepEqual(events.map((event) => event.type), ["run.failed"]);
-  assert.equal(events[0].error.code, "TRANSPORT_CLOSED");
+  // run.started was consumed above (run.waiting followed it), then the terminal
+  // fact arrives as run.failed exactly once.
+  assert.deepEqual(events.map((event) => event.type), ["run.waiting", "run.failed"]);
+  assert.equal(events[1].error.code, "TRANSPORT_CLOSED");
   assert.equal(diagnostics.some((diagnostic) => diagnostic.code === "SNN_RUN_DUPLICATE_TERMINAL"), false);
 });
 
@@ -200,8 +202,8 @@ test("runtime adapter emits run.failed and preserves the runtime rejection", asy
   await assert.rejects(async () => {
     for await (const event of run.events) events.push(event);
   }, failure);
-  assert.deepEqual(events.map((event) => event.type), ["run.started", "run.failed"]);
-  assert.deepEqual(events[1].error, { code: "RUNTIME_CRASHED", message: "runtime crashed" });
+  assert.deepEqual(events.map((event) => event.type), ["run.started", "run.waiting", "run.failed"]);
+  assert.deepEqual(events[2].error, { code: "RUNTIME_CRASHED", message: "runtime crashed" });
 });
 
 test("runtime adapter emits exactly one terminal event", async () => {
@@ -221,7 +223,7 @@ test("runtime adapter emits exactly one terminal event", async () => {
   const run = runtime.sendMessage({ sessionId: "session-1", content: "hello" });
   const events = await collect(run.events);
 
-  assert.deepEqual(events.map((event) => event.type), ["run.started", "run.completed"]);
+  assert.deepEqual(events.map((event) => event.type), ["run.started", "run.waiting", "run.active", "run.completed"]);
   assert.equal(diagnostics.some((diagnostic) => diagnostic.code === "SNN_RUN_DUPLICATE_TERMINAL"), true);
 });
 
@@ -271,8 +273,8 @@ test("runtime adapter adds no terminal event once DSH reported one", async () =>
 
   // The real turn/end owns the terminal fact. The resolve-path fallback must stay
   // silent rather than add a second terminal or claim a duplicate.
-  assert.deepEqual(events.map((event) => event.type), ["run.started", "run.completed"]);
-  assert.equal(events[1].payload.outcome, "completed");
+  assert.deepEqual(events.map((event) => event.type), ["run.started", "run.waiting", "run.active", "run.completed"]);
+  assert.equal(events[3].payload.outcome, "completed");
   assert.equal(diagnostics.some((diagnostic) => diagnostic.code === "SNN_RUN_TERMINAL_FALLBACK"), false);
 });
 
@@ -312,10 +314,10 @@ test("runtime adapter falls back to run.completed when the activity ends without
 
   // No cancel was requested, so an activity that ends without a turn/end is
   // reported as a completion and diagnosed instead of being silently dropped.
-  assert.deepEqual(events.map((event) => event.type), ["run.started", "run.completed"]);
+  assert.deepEqual(events.map((event) => event.type), ["run.started", "run.waiting", "run.completed"]);
   // A real run.completed always carries payload.outcome; the synthetic one does
   // not, which keeps the two distinguishable without adding a new outcome value.
-  assert.equal(events[1].payload, undefined);
+  assert.equal(events[2].payload, undefined);
   assert.deepEqual(
     diagnostics.filter((diagnostic) => diagnostic.code === "SNN_RUN_TERMINAL_FALLBACK").map((diagnostic) => diagnostic.terminal),
     ["run.completed"],

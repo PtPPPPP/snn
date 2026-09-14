@@ -31,7 +31,7 @@ const MAX_DIRECT_EDIT_BYTES = FILE_LIMITS.directTextEditMaxBytes;
 export const PUBLIC_UPLOAD_MAX_BYTES = FILE_LIMITS.uploadMaxBytes;
 
 const PUBLIC_SSE_EVENTS = new Set([
-  "run.started", "reasoning.started", "reasoning.delta", "reasoning.completed",
+  "run.started", "run.waiting", "run.active", "reasoning.started", "reasoning.delta", "reasoning.completed",
   "message.started", "message.delta", "message.completed", "tool.started",
   "tool.completed", "tool.failed", "approval.required", "run.completed", "run.incomplete", "run.failed", "run.cancelled",
 ]);
@@ -91,11 +91,12 @@ export function createPublicAgentBff({
     return { allowed, origin, missing: false };
   }
 
-  function sendJson(response, status, body, originInfo) {
+  function sendJson(response, status, body, originInfo, extraHeaders = {}) {
     const headers = {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
       ...(originInfo ? corsHeaders(originInfo.origin, originInfo.allowed) : {}),
+      ...extraHeaders,
     };
     response.writeHead(status, headers);
     response.end(JSON.stringify(body));
@@ -107,7 +108,13 @@ export function createPublicAgentBff({
     const message = status >= 500 ? "Agent service is unavailable" : status === 429 ? error.message : error?.message || "Request failed";
     logger.error?.(JSON.stringify({ component: "public-agent-bff", path: pathForLog, status, code }));
     if (!response.headersSent) {
-      sendJson(response, status, { error: { code, message } }, originInfo);
+      // A run-limit rejection means real contention for the single model slot;
+      // a short bounded retry hint keeps clients from hot-looping without
+      // pretending to know the true queue depth.
+      const retryAfter = status === 429 && typeof code === "string" && code.startsWith("AGENT_PUBLIC_RUN_LIMIT")
+        ? { "retry-after": "2" }
+        : {};
+      sendJson(response, status, { error: { code, message } }, originInfo, retryAfter);
     } else if (!response.writableEnded) {
       response.end();
     }
@@ -749,6 +756,7 @@ export function createPublicAgentBff({
       ...(typeof event.toolCallId === "string" ? { toolCallId: event.toolCallId } : {}),
     };
     if (event.type === "run.incomplete") return { ...out, payload: { reason: typeof event.payload?.reason === "string" ? event.payload.reason : "max_tokens" } };
+    if (event.type === "run.waiting") return { ...out, payload: { reason: typeof event.payload?.reason === "string" ? event.payload.reason : "model_pending" } };
     if (event.type === "run.failed") return { ...out, error: { code: "AGENT_RUN_FAILED", message: "Agent run failed" } };
     if (event.type === "tool.failed") return { ...out, error: { code: "TOOL_EXECUTION_FAILED", message: "Tool execution failed" } };
     if (event.type === "message.delta" || event.type === "reasoning.delta") {

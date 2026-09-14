@@ -404,6 +404,10 @@ export type AgentStreamHandlers = {
   onTool: (ev: { type: string; name?: string; status: string; toolCallId?: string }) => void;
   onDone: (terminal: string) => void;
   onError: (msg: string) => void;
+  /** Admitted but not yet generating: the model slot is busy. */
+  onWaiting?: () => void;
+  /** First DSH activity observed: the run is genuinely being processed. */
+  onActive?: () => void;
 };
 
 export async function streamAgentRun(
@@ -449,6 +453,10 @@ export async function streamAgentRun(
       const name = (p.payload as { name?: string })?.name;
       const toolCallId = typeof p.toolCallId === "string" ? p.toolCallId : undefined;
       handlers.onTool({ type: parsed.event, name, status: parsed.event === "tool.failed" ? "failed" : parsed.event === "tool.completed" ? "completed" : "started", toolCallId });
+    } else if (parsed.event === "run.waiting") {
+      handlers.onWaiting?.();
+    } else if (parsed.event === "run.active") {
+      handlers.onActive?.();
     } else if (parsed.event === "run.completed" || parsed.event === "run.incomplete" || parsed.event === "run.failed" || parsed.event === "run.cancelled") {
       terminal = parsed.event;
       handlers.onDone(terminal);

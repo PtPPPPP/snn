@@ -94,6 +94,9 @@ export function useAgent() {
   const [pendingAttachments, setPendingAttachments] = useState<AgentFile[]>([]);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [runState, setRunState] = useState<AgentRunState>("idle");
+  // True between run.waiting and run.active: admitted but queued behind the
+  // single model slot, so the UI can say "waiting" instead of "processing".
+  const [waiting, setWaiting] = useState(false);
   const [toolActivity, setToolActivity] = useState<ToolActivity[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [uploadState, setUploadState] = useState<Record<string, "uploading" | "ready" | "error">>({});
@@ -462,6 +465,7 @@ export function useAgent() {
     replacePendingAttachments([]);
     setToolActivity([]);
     setError(null);
+    setWaiting(false);
     setRunState("starting");
     const controller = new AbortController();
     runAbortRef.current = controller;
@@ -496,6 +500,7 @@ export function useAgent() {
         },
         onDone: (terminal) => {
           if (generationRef.current !== gen) return;
+          setWaiting(false);
           if (terminal === "run.completed") setRunState("completed");
           else if (terminal === "run.incomplete") setRunState("incomplete");
           else if (terminal === "run.cancelled") setRunState("cancelled");
@@ -505,6 +510,14 @@ export function useAgent() {
           if (generationRef.current !== gen) return;
           setError(msg);
         },
+        onWaiting: () => {
+          if (generationRef.current !== gen) return;
+          setWaiting(true);
+        },
+        onActive: () => {
+          if (generationRef.current !== gen) return;
+          setWaiting(false);
+        },
       }).then((res) => { currentRunIdRef.current = res.runId; });
       // Wait for stream to complete, runState already set via onDone
       if (generationRef.current === gen && activeSessionIdRef.current === sid) {
@@ -512,6 +525,7 @@ export function useAgent() {
       }
     } catch (e) {
       if (generationRef.current !== gen || activeSessionIdRef.current !== sid) return;
+      setWaiting(false);
       const err = e as AgentClientError;
       if (err.code === "aborted") {
         setRunState("cancelled");
@@ -568,6 +582,7 @@ export function useAgent() {
     pendingAttachments,
     messages,
     runState,
+    waiting,
     toolActivity,
     error,
     uploadState,

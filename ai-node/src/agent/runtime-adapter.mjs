@@ -50,7 +50,10 @@ export class DshRuntimeAdapter extends SnnAgentRuntime {
     if (existingRunId) throw new Error(`Agent session already has an active run: ${existingRunId}`);
     const runId = `snn-run-${randomUUID()}`;
     const stream = new AsyncEventStream();
-    this.#activeRuns.set(runId, { sessionId, stream, terminal: undefined, cancelRequested: false });
+    // activeEmitted marks the first DSH notification for this run: that is the
+    // earliest truthful signal that the run left the queue below (DSH inbox ->
+    // llama-server) and is actually being processed by the model.
+    this.#activeRuns.set(runId, { sessionId, stream, terminal: undefined, cancelRequested: false, activeEmitted: false });
     this.#activeSessionRuns.set(sessionId, runId);
     this.#toolBridge.beginRun({ runId, sessionId });
     stream.push(createSnnAgentEvent({
@@ -59,12 +62,33 @@ export class DshRuntimeAdapter extends SnnAgentRuntime {
       sessionId,
       timestamp: this.#now(),
     }));
+    // Admitted does not mean generating: the model slot (--parallel 1) may be
+    // busy, so a just-admitted run is truthfully waiting until the first DSH
+    // notification arrives (then run.active fires). run.started stays first so
+    // consumers keep receiving the runId they need to cancel a queued run.
+    stream.push(createSnnAgentEvent({
+      type: "run.waiting",
+      runId,
+      sessionId,
+      timestamp: this.#now(),
+      payload: { reason: "model_pending" },
+    }));
 
     const contentBlocks = typeof content === "string" ? [{ type: "text", text: content }] : content;
     void Promise.resolve().then(() => this.#client.sendMessage({
       sessionId,
       contentBlocks,
       onNotification: (notification) => {
+        const active = this.#activeRuns.get(runId);
+        if (active && !active.activeEmitted) {
+          active.activeEmitted = true;
+          this.#publishRunEvent(runId, sessionId, stream, createSnnAgentEvent({
+            type: "run.active",
+            runId,
+            sessionId,
+            timestamp: this.#now(),
+          }));
+        }
         for (const toolEvent of this.#toolBridge.observeDshNotification(notification, { runId, sessionId })) {
           stream.push(toolEvent);
         }
