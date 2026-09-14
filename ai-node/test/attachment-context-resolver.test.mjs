@@ -4,8 +4,9 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WorkspaceManager } from "../src/agent/workspace/workspace-manager.mjs";
-import { FileIngestionService } from "../src/agent/workspace/file-ingestion-service.mjs";
+import { FileIngestionService, isEditableTextFile } from "../src/agent/workspace/file-ingestion-service.mjs";
 import { AttachmentContextResolver, buildAttachmentContext, normalizeAttachmentRequest, ATTACHMENT_LIMITS } from "../src/agent/attachments/attachment-context-resolver.mjs";
+import { classifyFileAccess, ACCESS_MODES } from "../src/agent/documents/file-access.mjs";
 
 function body(bytes) { return (async function* () { yield Buffer.from(bytes); })(); }
 
@@ -42,6 +43,22 @@ test("attachment resolver builds ordered safe descriptors for text and documents
     assert.deepEqual(descriptors[0], { fileId: pdf.fileId, originalName: "report.pdf", virtualPath: "report.pdf", kind: "pdf", size: pdf.size, accessMode: "document-extract" });
     assert.deepEqual(descriptors[1], { fileId: text.fileId, originalName: "notes.md", virtualPath: "notes.md", kind: "text", size: text.size, accessMode: "text-read" });
     for (const descriptor of Object.values(descriptors)) assert.equal(Object.isFrozen(descriptor), true);
+  } finally { await rm(env.root, { recursive: true, force: true }); }
+});
+
+test("file-capability registry classifies .css consistently across every layer", async () => {
+  const env = await makeWorkspace("css");
+  try {
+    // Regression for the `.css` contradiction: a stylesheet previews and
+    // direct-edits in the browser, so attachment classification and agent native
+    // edit must agree instead of rejecting it as unsupported. Every layer now
+    // consults the single authoritative TEXT_EXTENSIONS registry.
+    const css = await env.ingestion.ingest({ workspaceId: env.workspace.id, originalName: "theme.css", contentType: "text/css", body: body(".card { border-radius: 8px; }\n") });
+    assert.equal(css.kind, "text");
+    assert.equal(classifyFileAccess(css), ACCESS_MODES.textRead);
+    assert.equal(isEditableTextFile(css), true);
+    const descriptors = await env.resolver.resolve({ workspaceId: env.workspace.id, fileIds: [css.fileId] });
+    assert.deepEqual(descriptors[0], { fileId: css.fileId, originalName: "theme.css", virtualPath: "theme.css", kind: "text", size: css.size, accessMode: "text-read" });
   } finally { await rm(env.root, { recursive: true, force: true }); }
 });
 
@@ -106,6 +123,22 @@ test("attachment resolver enforces the server-owned declared byte budget", async
       (error) => error.code === "AGENT_ATTACHMENT_LIMIT_EXCEEDED",
     );
   } finally { await rm(env.root, { recursive: true, force: true }); }
+});
+
+test("attachment resolver accepts an uploadable >16MiB document because context is metadata-only", async () => {
+  // Section 9 regression: a 17 MiB PDF uploads under the 50 MiB cap and must
+  // also ATTACH. resolve() only sums declared sizes and injects bounded metadata
+  // (maxSerializedContextChars); it never loads raw bytes into the model, so the
+  // old 16 MiB aggregate falsely rejected uploadable files. On-demand reads stay
+  // bounded separately by workspace.open/extract.
+  const seventeenMiB = 17 * 1024 * 1024;
+  const fileId = "snn-file-eeeeeeee-0000-4000-8000-00000000000e";
+  const resolver = new AttachmentContextResolver({ fileInventory: { list: async () => [{ fileId, originalName: "big.pdf", virtualPath: "big.pdf", kind: "pdf", size: seventeenMiB }] } });
+  const descriptors = await resolver.resolve({ workspaceId: "w", fileIds: [fileId] });
+  assert.equal(descriptors.length, 1);
+  assert.equal(descriptors[0].size, seventeenMiB);
+  assert.equal(descriptors[0].accessMode, "document-extract");
+  assert.equal(buildAttachmentContext(descriptors).length < ATTACHMENT_LIMITS.maxSerializedContextChars, true);
 });
 
 test("buildAttachmentContext is deterministic JSON with untrusted names kept as labels", async () => {

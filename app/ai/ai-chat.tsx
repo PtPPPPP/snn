@@ -637,6 +637,12 @@ export default function AiChat() {
                   {agent.error ? <p className={styles.streamNotice} role="alert">{agent.error}</p> : null}
                   {agent.runState === "failed" && !agent.error ? <p className={styles.streamNotice}>Agent 运行失败，请重试。</p> : null}
                   {agent.runState === "cancelled" ? <p className={styles.streamNotice}>已停止生成。</p> : null}
+                  {agent.runState === "incomplete" ? (
+                    <p className={styles.streamNotice} role="status">
+                      本次输出达到长度上限，任务可能尚未完成。
+                      <button type="button" onClick={() => void agent.sendMessage("请从中断处继续完成上面的任务。")}>继续完成任务</button>
+                    </p>
+                  ) : null}
                 </div>
               </div>
               <div className={styles.composerDock}>

@@ -85,6 +85,19 @@ test("adapts completed and cancelled runs", () => {
   assert.equal(cancelled.type, "run.cancelled");
 });
 
+test("adapts a max-tokens turn end to run.incomplete, never run.completed", () => {
+  const truncated = adaptDshNotification(sessionEvent("turn/end", {
+    turn: 3,
+    reason: { kind: "max-tokens" },
+  }), context);
+
+  // Reaching the generation ceiling is a distinct terminal: the model was cut
+  // off mid-task, so it must not be reported as a completed run, and it is not
+  // an infrastructure failure either. This is the max-tokens regression guard.
+  assert.equal(truncated.type, "run.incomplete");
+  assert.deepEqual(truncated.payload, { reason: "max_tokens" });
+});
+
 test("ignores unknown DSH events", () => {
   assert.equal(adaptDshNotification(sessionEvent("future/native-event", {}), context), null);
   assert.equal(adaptDshNotification({ method: "future.notification", params: {} }, context), null);

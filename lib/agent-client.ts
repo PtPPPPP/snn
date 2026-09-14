@@ -38,15 +38,17 @@ export type AgentRuntimeReadiness = {
   configured: boolean;
   state: "disabled" | "pending" | "starting" | "ready" | "failed";
   runtimeReady: boolean;
-  toolsReady: "unknown";
-  modelToolCallingVerified: "unknown";
+  toolsReady: boolean | "unknown";
+  toolsReadyReason: string;
+  modelToolCallingVerified: "verified" | "unknown";
+  modelToolCalling: { lastVerifiedAt: string; model: string; tool: string } | null;
 };
 
 // Client-side mirror of the server preview whitelist (bff.mjs); the server
 // remains authoritative and rejects anything outside it.
 const PREVIEW_TEXT_EXTENSIONS = new Set([
   "txt", "md", "markdown", "csv", "json", "log", "xml", "yml", "yaml", "html", "htm",
-  "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "java", "c", "h", "cpp", "go", "rs",
+  "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "java", "c", "h", "cpp", "hpp", "go", "rs",
   "rb", "sh", "sql", "ini", "toml", "css",
 ]);
 
@@ -56,7 +58,7 @@ export function isPreviewableAgentFile(file: AgentFile): boolean {
   return extension === undefined || PREVIEW_TEXT_EXTENSIONS.has(extension);
 }
 
-export type AgentRunState = "idle" | "starting" | "streaming" | "cancelling" | "completed" | "failed" | "cancelled";
+export type AgentRunState = "idle" | "starting" | "streaming" | "cancelling" | "completed" | "incomplete" | "failed" | "cancelled";
 
 export class AgentClientError extends Error {
   constructor(
@@ -447,11 +449,9 @@ export async function streamAgentRun(
       const name = (p.payload as { name?: string })?.name;
       const toolCallId = typeof p.toolCallId === "string" ? p.toolCallId : undefined;
       handlers.onTool({ type: parsed.event, name, status: parsed.event === "tool.failed" ? "failed" : parsed.event === "tool.completed" ? "completed" : "started", toolCallId });
-    } else if (parsed.event === "run.completed" || parsed.event === "run.failed" || parsed.event === "run.cancelled") {
+    } else if (parsed.event === "run.completed" || parsed.event === "run.incomplete" || parsed.event === "run.failed" || parsed.event === "run.cancelled") {
       terminal = parsed.event;
       handlers.onDone(terminal);
-    } else if (parsed.event === "run.failed") {
-      handlers.onError("Agent run failed");
     }
   };
 

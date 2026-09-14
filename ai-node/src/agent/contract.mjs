@@ -12,6 +12,7 @@ export const SNN_AGENT_EVENT_TYPES = Object.freeze([
   "tool.failed",
   "approval.required",
   "run.completed",
+  "run.incomplete",
   "run.failed",
   "run.cancelled",
 ]);

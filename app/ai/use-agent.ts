@@ -29,7 +29,7 @@ export type AgentMessage = {
   thinkingSeconds?: number;
 };
 
-export type AgentRunState = "idle" | "starting" | "streaming" | "cancelling" | "completed" | "failed" | "cancelled";
+export type AgentRunState = "idle" | "starting" | "streaming" | "cancelling" | "completed" | "incomplete" | "failed" | "cancelled";
 
 export type ToolActivity = {
   id: string;
@@ -497,6 +497,7 @@ export function useAgent() {
         onDone: (terminal) => {
           if (generationRef.current !== gen) return;
           if (terminal === "run.completed") setRunState("completed");
+          else if (terminal === "run.incomplete") setRunState("incomplete");
           else if (terminal === "run.cancelled") setRunState("cancelled");
           else setRunState("failed");
         },

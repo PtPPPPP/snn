@@ -6,6 +6,7 @@ import { DshClient } from "./dsh-client.mjs";
 import { DshRuntimeAdapter } from "./runtime-adapter.mjs";
 import { builtInToolMetadataFor } from "./built-in-tools.mjs";
 import { DEFAULT_DOCUMENT_LIMITS } from "./documents/limits.mjs";
+import { FILE_LIMITS } from "./documents/file-limits.mjs";
 
 /** Build the server-owned bridge from configured values to the official SDK. */
 export async function createConfiguredAgentRuntime(agentConfig) {
@@ -40,6 +41,7 @@ async function createWorkspaceBridgeConfig(agentConfig) {
   const pluginPath = fileURLToPath(new URL("./workspace/dsh-workspace-read-plugin.mjs", import.meta.url));
   const filesystemPluginPath = fileURLToPath(new URL("./workspace/dsh-workspace-fs-plugin.mjs", import.meta.url));
   const spreadsheetPluginPath = fileURLToPath(new URL("./workspace/dsh-workspace-spreadsheet-plugin.mjs", import.meta.url));
+  const wordPluginPath = fileURLToPath(new URL("./workspace/dsh-workspace-word-plugin.mjs", import.meta.url));
   const configPath = join(directory, "cordis.yml");
   const quoted = (value) => JSON.stringify(value);
   // Document limits are server-owned constants serialized into the overlay;
@@ -67,7 +69,7 @@ async function createWorkspaceBridgeConfig(agentConfig) {
     `            name: ${quoted(pathToFileURL(filesystemPluginPath).href)}`,
     "            config:",
     `              workspaceRoot: ${quoted(agentConfig.runtimeCwd)}`,
-    "              maxEditableBytes: 1048576",
+    `              maxEditableBytes: ${FILE_LIMITS.agentTextEditableBytes}`,
     "          - id: snn-workspace-read",
     `            name: ${quoted(pathToFileURL(pluginPath).href)}`,
     "            config:",
@@ -76,6 +78,10 @@ async function createWorkspaceBridgeConfig(agentConfig) {
     `              fetchAllowPrivate: ${agentConfig.fetchAllowPrivateNetworks === true}`,
     "          - id: snn-workspace-spreadsheet",
     `            name: ${quoted(pathToFileURL(spreadsheetPluginPath).href)}`,
+    "            config:",
+    `              workspaceRoot: ${quoted(agentConfig.runtimeCwd)}`,
+    "          - id: snn-workspace-word",
+    `            name: ${quoted(pathToFileURL(wordPluginPath).href)}`,
     "            config:",
     `              workspaceRoot: ${quoted(agentConfig.runtimeCwd)}`,
     "",

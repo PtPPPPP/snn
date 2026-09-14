@@ -3,6 +3,14 @@ import { DEFAULT_SSE_HEARTBEAT_MS } from "./agent/sse-heartbeat.mjs";
 
 const DEFAULT_ALLOWED_ORIGINS = ["http://127.0.0.1:8765", "http://localhost:8765"];
 
+// Normal-chat completion ceiling. Mirrors the Qwen maxTokens capability declared
+// in agent-runtime/cordis.yml (the single model-capability truth) and clamps a
+// misconfigured AI_MAX_OUTPUT_TOKENS so it cannot drive runaway latency. The
+// default is a reasonable 4096: large enough for real answers, well under the
+// 8192 agent budget so ordinary chat stays responsive.
+const MODEL_MAX_OUTPUT_TOKENS = 8192;
+const DEFAULT_CHAT_MAX_OUTPUT_TOKENS = 4096;
+
 function readPositiveInteger(value, fallback, name) {
   if (!value) {
     return fallback;
@@ -201,10 +209,13 @@ export function loadConfig(environment = process.env) {
       60_000,
       "AI_STREAM_IDLE_TIMEOUT_MS",
     ),
-    maxOutputTokens: readPositiveInteger(
-      environment.AI_MAX_OUTPUT_TOKENS,
-      512,
-      "AI_MAX_OUTPUT_TOKENS",
+    maxOutputTokens: Math.min(
+      readPositiveInteger(
+        environment.AI_MAX_OUTPUT_TOKENS,
+        DEFAULT_CHAT_MAX_OUTPUT_TOKENS,
+        "AI_MAX_OUTPUT_TOKENS",
+      ),
+      MODEL_MAX_OUTPUT_TOKENS,
     ),
     maxBodyBytes: readPositiveInteger(
       environment.AI_MAX_BODY_BYTES,

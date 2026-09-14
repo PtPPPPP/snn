@@ -17,3 +17,18 @@ export function decodeEntities(text) {
     return String.fromCodePoint(codePoint);
   });
 }
+
+/**
+ * Escape the minimal text-node entity set so decoded text can be written back
+ * into OOXML character data (e.g. a DOCX `<w:t>` element). `&` is replaced
+ * first by the single-pass scanner, so the output never double-escapes. This
+ * is the exact inverse of {@link decodeEntities} for `&`, `<`, and `>`; quotes
+ * and apostrophes stay literal because they are valid inside element text.
+ */
+export function encodeEntities(text) {
+  return text.replace(/[&<>]/g, (char) => {
+    if (char === "&") return "&amp;";
+    if (char === "<") return "&lt;";
+    return "&gt;";
+  });
+}

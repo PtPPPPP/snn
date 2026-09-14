@@ -5,7 +5,7 @@ import { startSseHeartbeat } from "./sse-heartbeat.mjs";
 const SSE_EVENT_TYPES = new Set([
   "run.started", "reasoning.started", "reasoning.delta", "reasoning.completed",
   "message.started", "message.delta", "message.completed", "tool.started",
-  "tool.completed", "tool.failed", "approval.required", "run.completed", "run.failed", "run.cancelled",
+  "tool.completed", "tool.failed", "approval.required", "run.completed", "run.incomplete", "run.failed", "run.cancelled",
 ]);
 
 export function createAgentInternalServer({ config, controller, manager, ingestionService, logger = console }) {
@@ -106,7 +106,7 @@ function streamRun(request, response, controller, sessionId, run, heartbeatMs) {
     try {
       for await (const event of run.events) {
         if (!SSE_EVENT_TYPES.has(event.type)) continue;
-        if (event.type === "run.completed" || event.type === "run.failed" || event.type === "run.cancelled") terminalSeen = true;
+        if (event.type === "run.completed" || event.type === "run.incomplete" || event.type === "run.failed" || event.type === "run.cancelled") terminalSeen = true;
         if (!disconnected && !response.writableEnded) response.write(`event: ${event.type}\ndata: ${JSON.stringify(publicSseEvent(event))}\n\n`);
       }
     } catch {
@@ -180,6 +180,7 @@ function publicSseEvent(event) {
     timestamp: event.timestamp,
     ...(typeof event.toolCallId === "string" ? { toolCallId: event.toolCallId } : {}),
   };
+  if (event.type === "run.incomplete") return { ...output, payload: { reason: typeof event.payload?.reason === "string" ? event.payload.reason : "max_tokens" } };
   if (event.type === "run.failed") return { ...output, error: { code: "AGENT_RUN_FAILED", message: "Agent run failed" } };
   if (event.type === "tool.failed") return { ...output, error: { code: "TOOL_EXECUTION_FAILED", message: "Tool execution failed" } };
   if (event.type === "message.delta" || event.type === "reasoning.delta") {

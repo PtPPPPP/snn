@@ -22,8 +22,11 @@ test("ownership store hashes and verifies with timing-safe compare", async (t) =
   await store.verify(sessionId, token);
   // wrong token fails closed as 404
   await assert.rejects(() => store.verify(sessionId, generateOwnerToken()), (e) => e.code === "AGENT_SESSION_NOT_FOUND");
-  // tampered token
-  await assert.rejects(() => store.verify(sessionId, token.slice(0, -1) + "0"), (e) => e.code === "AGENT_SESSION_NOT_FOUND");
+  // tampered token: flip the last hex digit to a guaranteed-different value so the
+  // tampered token can never coincidentally equal the original when it already ends
+  // in "0" (a ~1/16 flake that made verify legitimately succeed and this rejects fail)
+  const tamperedTail = token.endsWith("0") ? "1" : "0";
+  await assert.rejects(() => store.verify(sessionId, token.slice(0, -1) + tamperedTail), (e) => e.code === "AGENT_SESSION_NOT_FOUND");
   // no token
   await assert.rejects(() => store.verify(sessionId, ""), (e) => e.code === "AGENT_SESSION_NOT_FOUND");
   // unknown session

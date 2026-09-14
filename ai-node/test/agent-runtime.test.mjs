@@ -276,6 +276,30 @@ test("runtime adapter adds no terminal event once DSH reported one", async () =>
   assert.equal(diagnostics.some((diagnostic) => diagnostic.code === "SNN_RUN_TERMINAL_FALLBACK"), false);
 });
 
+test("runtime adapter reports run.incomplete exactly once for a max-tokens turn end", async () => {
+  const diagnostics = [];
+  const client = {
+    async sendMessage({ onNotification }) {
+      onNotification({
+        method: "session.event",
+        params: { sessionId: "session-1", event: { type: "turn/end", data: { reason: { kind: "max-tokens" } } } },
+      });
+    },
+    async dispose() {},
+  };
+  const runtime = new DshRuntimeAdapter({ client, onDiagnostic: (diagnostic) => diagnostics.push(diagnostic) });
+  const run = runtime.sendMessage({ sessionId: "session-1", content: "hello" });
+  const events = await collect(run.events);
+
+  // A truncated run carries exactly one terminal, it is run.incomplete (never
+  // run.completed), and the resolve-path fallback stays silent.
+  const terminals = events.filter((event) => ["run.completed", "run.incomplete", "run.failed", "run.cancelled"].includes(event.type));
+  assert.deepEqual(terminals.map((event) => event.type), ["run.incomplete"]);
+  assert.deepEqual(terminals[0].payload, { reason: "max_tokens" });
+  assert.equal(terminals.some((event) => event.type === "run.completed"), false);
+  assert.equal(diagnostics.some((diagnostic) => diagnostic.code === "SNN_RUN_TERMINAL_FALLBACK"), false);
+});
+
 test("runtime adapter falls back to run.completed when the activity ends without a terminal fact", async () => {
   const diagnostics = [];
   const client = {

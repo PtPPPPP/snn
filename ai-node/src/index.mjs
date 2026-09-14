@@ -11,6 +11,7 @@ import { WorkspaceManager } from "./agent/workspace/workspace-manager.mjs";
 import { createDefaultCapabilityResolver } from "./agent/capabilities/built-ins.mjs";
 import { SessionMetadataStore } from "./agent/session-metadata-store.mjs";
 import { FileIngestionService } from "./agent/workspace/file-ingestion-service.mjs";
+import { FILE_LIMITS } from "./agent/documents/file-limits.mjs";
 import { ChunkedUploadService } from "./agent/workspace/chunked-upload-service.mjs";
 import { AttachmentContextResolver } from "./agent/attachments/attachment-context-resolver.mjs";
 import { WorkspaceRuntimeRegistry } from "./agent/workspace-runtime-registry.mjs";
@@ -63,18 +64,20 @@ if (config.agent.enabled) {
   const defaultWorkspaceManager = {
     ensureReady: async () => (await runtimeRegistry.getOrCreate(workspace)).ensureReady(),
   };
+  const capabilityResolver = createDefaultCapabilityResolver();
   agentReadiness = new AgentRuntimeReadiness({
     configured: Boolean(config.publicAgent?.enabled),
     ensureRuntime: defaultWorkspaceManager.ensureReady,
     runtimeState: () => runtimeRegistry?.get(workspace.id)?.state ?? "STOPPED",
+    resolveTools: () => capabilityResolver.resolve({ workspace, skillId: "workspace-editor" }).allowedToolIds,
   });
-  ingestionService = new FileIngestionService({ workspaceManager, maxUploadBytes: 52_428_800, maxTotalBytes: 524_288_000 });
+  ingestionService = new FileIngestionService({ workspaceManager, maxUploadBytes: FILE_LIMITS.uploadMaxBytes, maxTotalBytes: FILE_LIMITS.workspaceQuotaBytes });
   metadataStore = new SessionMetadataStore(config.agent.sessionMetadataRoot);
   controller = new AgentSessionController({
     manager: defaultWorkspaceManager,
     toolMetadata: BUILT_IN_TOOL_METADATA,
     maxMessageLength: config.agent.messageMaxLength,
-    capabilityResolver: createDefaultCapabilityResolver(),
+    capabilityResolver,
     workspace,
     workspaceManager,
     metadataStore,

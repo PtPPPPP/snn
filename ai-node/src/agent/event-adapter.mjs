@@ -109,8 +109,15 @@ function adaptTurnEnd(reason, base) {
   if (!isRecord(reason) || typeof reason.kind !== "string") {
     return createSnnAgentEvent({ ...base, type: "run.failed", error: { code: "DSH_INVALID_TURN_END", message: "DSH turn ended without a valid reason" } });
   }
-  if (reason.kind === "completed" || reason.kind === "max-tokens") {
+  if (reason.kind === "completed") {
     return createSnnAgentEvent({ ...base, type: "run.completed", payload: { outcome: reason.kind } });
+  }
+  if (reason.kind === "max-tokens") {
+    // Hitting the generation ceiling is NOT task completion: the model was cut
+    // off mid-work, so a file task may be only partially done. It is also not an
+    // infrastructure failure, so `run.failed` would be wrong. Emit a distinct
+    // terminal so no client ever renders a truncated run as a green success.
+    return createSnnAgentEvent({ ...base, type: "run.incomplete", payload: { reason: "max_tokens" } });
   }
   if (reason.kind === "aborted") {
     return createSnnAgentEvent({ ...base, type: "run.cancelled" });

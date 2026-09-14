@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { basename, isAbsolute, join, win32 } from "node:path";
 import { documentError } from "./limits.mjs";
-import { createDefaultDocumentParserRegistry, TEXT_EXTENSIONS } from "./file-access.mjs";
+import { createDefaultDocumentParserRegistry, classifyFileAccess, TEXT_EXTENSIONS } from "./file-access.mjs";
 
 export { createDefaultDocumentParserRegistry, TEXT_EXTENSIONS };
 
@@ -113,6 +113,52 @@ export async function readWorkspaceFileEntry(root, fileId) {
     size: entry.size,
     kind: entry.kind,
     sha256: entry.sha256,
+  });
+}
+
+/**
+ * Read-only manifest projection behind the workspace.list discovery tool. It
+ * lists ONLY this workspace's uploaded files and deliberately omits every
+ * server-internal field: no storedName, no physical path, no sha256. Each entry
+ * carries a derived access mode so the model can tell a readable text file from
+ * an extractable document or an unsupported binary without a separate stat tool.
+ * The manifest is authoritative, so this never scans the server directory. A
+ * workspace with no uploads yet has no manifest and yields an empty list.
+ */
+export async function listWorkspaceFiles(root) {
+  let manifest;
+  try {
+    manifest = await readManifest(root);
+  } catch (error) {
+    if (error?.code === "AGENT_DOCUMENT_NOT_FOUND") return Object.freeze([]);
+    throw error;
+  }
+  const files = [];
+  for (const entry of manifest.files) {
+    const projected = projectListEntry(entry);
+    if (projected) files.push(projected);
+  }
+  return Object.freeze(files);
+}
+
+function projectListEntry(entry) {
+  if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return null;
+  if (typeof entry.fileId !== "string" || !FILE_ID_PATTERN.test(entry.fileId)) return null;
+  const originalName = typeof entry.originalName === "string" ? basename(entry.originalName).slice(0, 200) : "";
+  if (originalName === "") return null;
+  const virtualPath = typeof entry.virtualPath === "string" && entry.virtualPath.length > 0 ? entry.virtualPath : originalName;
+  const size = Number.isSafeInteger(entry.size) && entry.size >= 0 ? entry.size : 0;
+  const updatedAt = Number.isSafeInteger(entry.updatedAt) && entry.updatedAt >= 0 ? entry.updatedAt : 0;
+  const contentType = typeof entry.contentType === "string" && entry.contentType.length > 0 ? entry.contentType : "application/octet-stream";
+  return Object.freeze({
+    fileId: entry.fileId,
+    name: originalName,
+    path: virtualPath,
+    size,
+    kind: entry.kind === "text" ? "text" : "binary",
+    contentType,
+    updatedAt,
+    access: classifyFileAccess({ originalName, kind: entry.kind }),
   });
 }
 

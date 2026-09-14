@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FileIngestionService } from "../src/agent/workspace/file-ingestion-service.mjs";
 import { WorkspaceManager } from "../src/agent/workspace/workspace-manager.mjs";
-import { DocumentExtractionService, readWorkspaceFileEntry } from "../src/agent/documents/document-extraction-service.mjs";
+import { DocumentExtractionService, listWorkspaceFiles, readWorkspaceFileEntry } from "../src/agent/documents/document-extraction-service.mjs";
 import { DEFAULT_DOCUMENT_LIMITS, clampDocumentLimits } from "../src/agent/documents/limits.mjs";
 import { buildTestPdf, buildTestDocx, docxDocumentXml, buildTestXlsx, buildZip } from "./helpers/document-fixtures.mjs";
 
@@ -153,5 +153,55 @@ test("document extraction service reports scanned documents without inventing co
   try {
     const scannedId = await upload(ingestion, workspace.id, "scan.pdf", buildTestPdf({ pages: [[], []] }));
     await assert.rejects(() => service.extract(scannedId), (error) => error.code === "AGENT_DOCUMENT_NO_TEXT");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("workspace.list projects manifest entries and never leaks server internals", async () => {
+  const { workspace, ingestion, root } = await makeWorkspace();
+  try {
+    await upload(ingestion, workspace.id, "notes.md", Buffer.from("# markdown"));
+    await upload(ingestion, workspace.id, "report.docx", buildTestDocx(docxDocumentXml([{ text: "hello" }])));
+    await upload(ingestion, workspace.id, "program.exe", Buffer.from([0x4d, 0x5a, 0, 1]));
+    const files = await listWorkspaceFiles(root);
+    assert.equal(files.length, 3);
+    const byName = Object.fromEntries(files.map((file) => [file.name, file]));
+    assert.equal(byName["notes.md"].access, "text-read");
+    assert.equal(byName["notes.md"].kind, "text");
+    assert.equal(byName["report.docx"].access, "document-extract");
+    assert.equal(byName["program.exe"].access, "unsupported");
+    assert.equal(byName["program.exe"].kind, "binary");
+    for (const file of files) {
+      assert.match(file.fileId, /^snn-file-/);
+      assert.equal(typeof file.path, "string");
+      assert.equal(typeof file.size, "number");
+      assert.equal(typeof file.updatedAt, "number");
+      const serialized = JSON.stringify(file);
+      // No server-internal field or physical location may cross the boundary.
+      assert.equal(file.storedName, undefined);
+      assert.equal(file.sha256, undefined);
+      assert.ok(!serialized.includes(".snn-upload-"));
+      assert.ok(!serialized.includes(root));
+    }
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("workspace.list is isolated to a single workspace manifest", async () => {
+  const first = await makeWorkspace();
+  const second = await makeWorkspace();
+  try {
+    await upload(first.ingestion, first.workspace.id, "alpha.txt", Buffer.from("a"));
+    await upload(second.ingestion, second.workspace.id, "beta.txt", Buffer.from("b"));
+    assert.deepEqual((await listWorkspaceFiles(first.root)).map((file) => file.name), ["alpha.txt"]);
+    assert.deepEqual((await listWorkspaceFiles(second.root)).map((file) => file.name), ["beta.txt"]);
+  } finally {
+    await rm(first.root, { recursive: true, force: true });
+    await rm(second.root, { recursive: true, force: true });
+  }
+});
+
+test("workspace.list returns an empty list for a workspace with no uploads", async () => {
+  const { root } = await makeWorkspace();
+  try {
+    assert.deepEqual(await listWorkspaceFiles(root), []);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

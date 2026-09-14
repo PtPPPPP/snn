@@ -2,6 +2,7 @@ import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { TEXT_EXTENSIONS } from "../documents/file-access.mjs";
+import { FILE_LIMITS } from "../documents/file-limits.mjs";
 import { isEditableTextFile } from "../workspace/file-ingestion-service.mjs";
 import { startSseHeartbeat } from "../sse-heartbeat.mjs";
 import { hashOwnerToken } from "./ownership-store.mjs";
@@ -11,23 +12,28 @@ import { PublicResourceGuard } from "./resource-guard.mjs";
 const SESSION_ID_RE = /^snn-agent-[a-z0-9-]{8,80}$/;
 const RUN_ID_RE = /^snn-run-[a-z0-9-]{8,80}$/;
 
-// Read-only text preview: small whitelist, bounded payload, no attachment
-// semantics. The download endpoint keeps its `attachment` contract.
-const PREVIEW_EXTENSIONS = new Set([...TEXT_EXTENSIONS, "jsx", "css"]);
-const MAX_PREVIEW_BYTES = 256 * 1024;
+// Read-only text preview reuses the single authoritative TEXT_EXTENSIONS
+// registry (file-access.mjs) so preview, direct edit, agent read, and
+// attachment classification can never disagree about a text extension such as
+// `.css`. The download endpoint keeps its `attachment` contract.
+const PREVIEW_EXTENSIONS = TEXT_EXTENSIONS;
+// All size bounds come from the one authoritative FILE_LIMITS registry so the
+// public HTTP layer and production ingestion can never drift apart.
+const MAX_PREVIEW_BYTES = FILE_LIMITS.previewMaxBytes;
 // Direct user editing reuses the preview envelope: a file is editable exactly
 // when it loads as preview (UTF-8 text within this bound). Keeping both limits
 // identical makes the boundary easy to reason about.
-const MAX_DIRECT_EDIT_BYTES = MAX_PREVIEW_BYTES;
+const MAX_DIRECT_EDIT_BYTES = FILE_LIMITS.directTextEditMaxBytes;
 
-// Hard ceiling for a single public upload request body. Must stay aligned
-// with the production FileIngestionService maxUploadBytes in src/index.mjs.
-export const PUBLIC_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
+// Hard ceiling for a single public upload request body. Sourced from the same
+// registry as the production FileIngestionService maxUploadBytes in
+// src/index.mjs, so the two are guaranteed aligned.
+export const PUBLIC_UPLOAD_MAX_BYTES = FILE_LIMITS.uploadMaxBytes;
 
 const PUBLIC_SSE_EVENTS = new Set([
   "run.started", "reasoning.started", "reasoning.delta", "reasoning.completed",
   "message.started", "message.delta", "message.completed", "tool.started",
-  "tool.completed", "tool.failed", "approval.required", "run.completed", "run.failed", "run.cancelled",
+  "tool.completed", "tool.failed", "approval.required", "run.completed", "run.incomplete", "run.failed", "run.cancelled",
 ]);
 
 export function createPublicAgentBff({
@@ -715,7 +721,7 @@ export function createPublicAgentBff({
     try {
       for await (const event of run.events) {
         if (!PUBLIC_SSE_EVENTS.has(event.type)) continue;
-        if (event.type === "run.completed" || event.type === "run.failed" || event.type === "run.cancelled") terminalSeen = true;
+        if (event.type === "run.completed" || event.type === "run.incomplete" || event.type === "run.failed" || event.type === "run.cancelled") terminalSeen = true;
         if (!disconnected && !response.writableEnded) {
           response.write(`event: ${event.type}\ndata: ${JSON.stringify(publicSseEvent(event))}\n\n`);
         }
@@ -742,6 +748,7 @@ export function createPublicAgentBff({
       timestamp: event.timestamp,
       ...(typeof event.toolCallId === "string" ? { toolCallId: event.toolCallId } : {}),
     };
+    if (event.type === "run.incomplete") return { ...out, payload: { reason: typeof event.payload?.reason === "string" ? event.payload.reason : "max_tokens" } };
     if (event.type === "run.failed") return { ...out, error: { code: "AGENT_RUN_FAILED", message: "Agent run failed" } };
     if (event.type === "tool.failed") return { ...out, error: { code: "TOOL_EXECUTION_FAILED", message: "Tool execution failed" } };
     if (event.type === "message.delta" || event.type === "reasoning.delta") {

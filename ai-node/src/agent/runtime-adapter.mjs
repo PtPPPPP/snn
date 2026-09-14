@@ -165,10 +165,10 @@ export class DshRuntimeAdapter extends SnnAgentRuntime {
    * terminal event and wait forever.
    *
    * Routing the fallback through #publishRunEvent keeps the terminal event
-   * exactly-once: when a real `run.completed`, `run.cancelled` or `run.failed`
-   * already arrived, the existing guard suppresses this one. The reject path is
-   * untouched, so a transport failure still reports `run.failed` and is never
-   * relabelled as a cancellation.
+   * exactly-once: when a real `run.completed`, `run.incomplete`, `run.cancelled`
+   * or `run.failed` already arrived, the existing guard suppresses this one. The
+   * reject path is untouched, so a transport failure still reports `run.failed`
+   * and is never relabelled as a cancellation.
    *
    * @param {string} runId @param {string} sessionId @param {AsyncEventStream} stream
    */
@@ -192,7 +192,7 @@ export class DshRuntimeAdapter extends SnnAgentRuntime {
 
 /** @param {unknown} type */
 function isRunTerminal(type) {
-  return type === "run.completed" || type === "run.failed" || type === "run.cancelled";
+  return type === "run.completed" || type === "run.incomplete" || type === "run.failed" || type === "run.cancelled";
 }
 
 class AsyncEventStream {

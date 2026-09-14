@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { WorkspaceManager } from "./workspace-manager.mjs";
 import { WorkspaceFileOpener } from "./workspace-file-opener.mjs";
-import { DocumentExtractionService } from "../documents/document-extraction-service.mjs";
+import { DocumentExtractionService, listWorkspaceFiles } from "../documents/document-extraction-service.mjs";
 import { clampDocumentLimits } from "../documents/limits.mjs";
 import { fetchPublicText } from "./workspace-url-fetch.mjs";
 
@@ -24,6 +24,21 @@ export function apply(ctx, config = {}) {
     limits: clampDocumentLimits(config.documentLimits),
   });
   const opener = new WorkspaceFileOpener({ root, documents });
+
+  ctx.tools.register(defineTool({
+    name: "workspace.list",
+    description: "List the files currently uploaded to the assigned SNN workspace. Returns each file's id, name, virtual path, size, kind, content type, updatedAt, and access mode (text-read, document-extract, or unsupported). Use it to discover which files exist before opening, reading, or editing. It takes no arguments, never accepts a path, and never lists other workspaces or server internals.",
+    parameters: {},
+    output: { schema: { type: "string" }, render: (_args, value) => [{ type: "text", text: value }] },
+    async execute() {
+      try {
+        const files = await listWorkspaceFiles(root);
+        return JSON.stringify({ count: files.length, files });
+      } catch (error) {
+        throw new Error(typeof error?.code === "string" && error.code.startsWith("AGENT_DOCUMENT_") ? error.code : "AGENT_DOCUMENT_INVALID");
+      }
+    },
+  }));
 
   ctx.tools.register(defineTool({
     name: "workspace.read",
