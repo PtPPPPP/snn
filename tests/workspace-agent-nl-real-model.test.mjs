@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { loadWorkbook } from "@office-kit/xlsx/io";
+import { loadWorkbook, workbookToBytes } from "@office-kit/xlsx/io";
 import { fromBuffer } from "@office-kit/xlsx/node";
 import { createWorkbook, addWorksheet } from "@office-kit/xlsx/workbook";
 import { setCell } from "@office-kit/xlsx/worksheet";
@@ -57,7 +57,7 @@ function parseSseBlock(block) {
   try { return { event, payload: JSON.parse(dataLines.join("\n")) }; } catch { return null; }
 }
 
-function buildSpreadsheetFixture() {
+async function buildSpreadsheetFixture() {
   const workbook = createWorkbook();
   const people = addWorksheet(workbook, "人员信息");
   for (const [row, values] of [[1, ["姓名", "性别", "民族", "生日"]], [2, ["测试用户甲", "男", "汉族", "2000-01-01"]], [3, ["目标用户827", "女", "满族", "2001-02-03"]], [4, ["测试用户乙", "男", "回族", "2002-04-05"]]]) {
@@ -65,7 +65,7 @@ function buildSpreadsheetFixture() {
   }
   const notes = addWorksheet(workbook, "说明");
   setCell(notes, 1, 1, "SNN_REAL_MODEL_XLSX_SECOND_SHEET");
-  return workbookToBytes(workbook);
+  return await workbookToBytes(workbook);
 }
 
 // "Project status: draft" with "draft" split across two runs (`dra` + `ft`), so
@@ -109,6 +109,52 @@ async function withSession(body) {
     const response = await request(`/sessions/${encodeURIComponent(sessionId)}/files`, { method: "POST", body: form });
     assert.equal(response.status, 201, `upload of ${name} must succeed`);
     return (await response.json()).file;
+  }
+
+  // Files above the production 4 MiB chunked-upload threshold ride the same
+  // declare -> PUT fixed-size chunks -> complete path as lib/agent-client.ts
+  // (uploadAgentFileChunked). A single-shot multipart POST of a >16 MiB body
+  // cannot cross the Cloudflare edge within its ~100s origin timeout (524),
+  // but each server-sized chunk does, so this mirrors how a real browser
+  // uploads a large file rather than a path production never takes for one.
+  const CHUNK_RETRYABLE_STATUS = new Set([502, 503, 504, 524]);
+  async function uploadChunked(name, bytes, type) {
+    const total = bytes.length;
+    const declared = await request(`/sessions/${encodeURIComponent(sessionId)}/uploads`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ originalName: name, contentType: type, totalSize: total }),
+    });
+    assert.equal(declared.status, 201, `chunked upload declaration for ${name} must succeed`);
+    const { upload: declaredUpload } = await declared.json();
+    const uploadId = declaredUpload?.uploadId;
+    const chunkSize = declaredUpload?.chunkSize;
+    assert.ok(typeof uploadId === "string" && Number.isInteger(chunkSize) && chunkSize > 0, `server must return uploadId + chunkSize; got ${JSON.stringify(declaredUpload)}`);
+    try {
+      for (let index = 0, offset = 0; offset < total; index += 1, offset += chunkSize) {
+        const slice = bytes.subarray(offset, Math.min(offset + chunkSize, total));
+        let uploaded = false;
+        let lastStatus = 0;
+        for (let attempt = 0; attempt < 3 && !uploaded; attempt += 1) {
+          if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
+          const put = await request(`/sessions/${encodeURIComponent(sessionId)}/uploads/${encodeURIComponent(uploadId)}/chunks/${index}`, {
+            method: "PUT",
+            headers: { "content-type": "application/octet-stream" },
+            body: slice,
+          });
+          lastStatus = put.status;
+          if (put.ok) { uploaded = true; break; }
+          if (!CHUNK_RETRYABLE_STATUS.has(put.status)) break;
+        }
+        assert.ok(uploaded, `chunk ${index} of ${name} must upload; last status ${lastStatus}`);
+      }
+      const completed = await request(`/sessions/${encodeURIComponent(sessionId)}/uploads/${encodeURIComponent(uploadId)}/complete`, { method: "POST" });
+      assert.equal(completed.status, 201, `chunked upload completion for ${name} must succeed`);
+      return (await completed.json()).file;
+    } catch (error) {
+      await request(`/sessions/${encodeURIComponent(sessionId)}/uploads/${encodeURIComponent(uploadId)}`, { method: "DELETE" }).catch(() => {});
+      throw error;
+    }
   }
 
   async function streamRun(message, attachments) {
@@ -165,7 +211,7 @@ async function withSession(body) {
     assert.equal(created.status, 201);
     sessionId = (await created.json()).sessionId;
     assert.match(sessionId, /^snn-agent-/);
-    await body({ upload, streamRun, downloadBytes, sessionId, t: request });
+    await body({ upload, uploadChunked, streamRun, downloadBytes, sessionId, t: request });
   } finally {
     if (sessionId) {
       const deleted = await request(`/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" }).catch(() => null);
@@ -235,12 +281,14 @@ test("NL Case D (xlsx): model deletes one exact row and preserves the other shee
   });
 });
 
-test("NL Case E (pdf >16MiB): upload+attach succeed and the model reads the first-page title", { skip: SKIP, timeout: 220_000 }, async (t) => {
-  await withSession(async ({ upload, streamRun }) => {
+test("NL Case E (pdf >16MiB): upload+attach succeed and the model reads the first-page title", { skip: SKIP, timeout: 300_000 }, async (t) => {
+  await withSession(async ({ uploadChunked, streamRun }) => {
     const pdf = buildLargePdf();
     assert.ok(pdf.length > 16 * 1024 * 1024, `fixture must exceed 16 MiB; got ${pdf.length}`);
     assert.ok(pdf.length < 50 * 1024 * 1024, `fixture must stay under the upload cap; got ${pdf.length}`);
-    const file = await upload("big-report.pdf", pdf, "application/pdf");
+    // >4 MiB rides the production chunked-upload path (lib/agent-client.ts);
+    // a single-shot 17 MiB POST cannot cross the Cloudflare edge in time (524).
+    const file = await uploadChunked("big-report.pdf", pdf, "application/pdf");
     assert.equal(file.size, pdf.length, "stored size must match the uploaded bytes");
     const run = await streamRun("阅读这个 PDF，告诉我第一页标题。", [file.fileId]);
     // Section 9/41 regression: a >16 MiB file must never be mysteriously
