@@ -27,6 +27,7 @@ export const interviewIdentities=sqliteTable("interview_identities",{
  year:text("year").notNull().default(""),
  createdAt:text("created_at").notNull(),
  invitationId:text("invitation_id").references(()=>interviewInvitations.id),
+ startedAt:text("started_at"),
 },table=>[
  uniqueIndex("uniq_interview_identity_user").on(table.formVersion,table.userId),
  uniqueIndex("uniq_interview_identity_device").on(table.formVersion,table.deviceHash),
@@ -54,6 +55,14 @@ export const interviewSubmissions=sqliteTable("interview_submissions",{
  identityId:text("identity_id").references(()=>interviewIdentities.id),
  reviewRevision:integer("review_revision").notNull().default(0),
  reviewedByUserId:text("reviewed_by_user_id"),
+ startedAt:text("started_at"),
+ elapsedSeconds:integer("elapsed_seconds"),
+ resultStatus:text("result_status").notNull().default("pending"),
+ resultMessage:text("result_message").notNull().default(""),
+ resultPublishedAt:text("result_published_at"),
+ resultRevision:integer("result_revision").notNull().default(0),
+ candidateReply:text("candidate_reply"),
+ candidateRepliedAt:text("candidate_replied_at"),
 },table=>[
  uniqueIndex("uniq_interview_version_student").on(table.formVersion,table.studentId),
  uniqueIndex("uniq_interview_submission_identity").on(table.identityId),

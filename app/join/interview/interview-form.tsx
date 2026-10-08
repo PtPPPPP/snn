@@ -4,6 +4,8 @@ import {CASES,COMMON_IDS,OBJECTIVE_IDS,OBJECTIVE_SECTIONS,PAPER_QUESTION_COUNT,Q
 import type {InterviewAnswer} from '../../../lib/interview/assessment';
 import type {InterviewProfile,InterviewReceipt,InterviewSession} from '../../../lib/interview/session';
 import QuestionBrief from './question-brief';
+import AnswerTimer from './answer-timer';
+import StudentResultPanel from './student-result';
 import s from './interview.module.css';
 
 async function api<T>(path:string,init?:RequestInit):Promise<T>{
@@ -15,6 +17,7 @@ export default function InterviewForm(){
  const [profile,setProfile]=useState<InterviewProfile>({name:'',studentId:'',department:'',year:''});
  const [session,setSession]=useState<InterviewSession|null>(null),[loading,setLoading]=useState(true),[blocked,setBlocked]=useState(false),[confirmed,setConfirmed]=useState(false);
  const [track,setTrack]=useState(''),[scenario,setScenario]=useState(''),[answers,setAnswers]=useState<Record<string,InterviewAnswer>>({}),[busy,setBusy]=useState(false),[error,setError]=useState(''),[receipt,setReceipt]=useState<InterviewReceipt|null>(null);
+ const [timing,setTiming]=useState<{startedAt:string;serverTime:string}|null>(null),[timingError,setTimingError]=useState(''),[timingAttempt,setTimingAttempt]=useState(0);
  const objective=OBJECTIVE_IDS.map(id=>QUESTIONS.find(q=>q.id===id)!),common=COMMON_IDS.map(id=>QUESTIONS.find(q=>q.id===id)!),direction=QUESTIONS.find(q=>q.id===track),caseQuestion=QUESTIONS.find(q=>q.id===scenario),chosen=[...objective,...common,...direction?[direction]:[],...caseQuestion?[caseQuestion]:[]];
  function hasAnswer(question:InterviewQuestion){
   const value=answers[question.id];
@@ -30,6 +33,13 @@ export default function InterviewForm(){
   }catch(error){setError(error instanceof Error?error.message:'无法读取身份状态。');setBlocked(true);}
   finally{setLoading(false);}
  },[]);
+ const identityId=session?.identity?.id,receiptId=receipt?.id;
+ useEffect(()=>{
+  if(!identityId||receiptId)return;
+  const controller=new AbortController();setTimingError('');
+  void api<{startedAt:string;serverTime:string}>('/api/interview/start',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}',signal:controller.signal}).then(data=>{if(!controller.signal.aborted)setTiming(data);}).catch(reason=>{if(!controller.signal.aborted)setTimingError(reason instanceof Error?reason.message:'无法开始计时，请重试。');});
+  return ()=>controller.abort();
+ },[identityId,receiptId,timingAttempt]);
  useEffect(()=>{
   const controller=new AbortController();
   void api<InterviewSession>('/api/interview/session',{signal:controller.signal}).then(data=>{
@@ -50,7 +60,7 @@ export default function InterviewForm(){
   finally{setBusy(false);}
  }
  async function submit(event:FormEvent<HTMLFormElement>){
-  event.preventDefault();if(busy||!session?.identity)return;
+  event.preventDefault();if(busy||!session?.identity||!timing)return;
   const incomplete=chosen.findIndex(question=>!hasAnswer(question));
   if(chosen.length!==PAPER_QUESTION_COUNT||incomplete!==-1){setError(incomplete!==-1?'请完成第 '+(incomplete+1)+' 题的所有必答内容。':'请选择方向题和情景题。');return;}
   setError('');setBusy(true);
@@ -86,14 +96,16 @@ export default function InterviewForm(){
  </article>;}
  if(loading)return <section className={s.accessGate} role="status"><h2>正在读取笔试状态…</h2><p>正在检查当前浏览器的笔试身份。</p></section>;
  if(blocked)return <section className={s.accessGate}><h2>暂时无法进入笔试</h2><p className={s.error} role="alert">{error}</p><button type="button" onClick={()=>{setLoading(true);setError('');void loadSession();}}>[ 重新验证 ]</button></section>;
- if(receipt)return <section className={s.receipt} role="status"><p className={s.eyebrow}>SUBMISSION RECEIVED</p><h2>[ 答卷已提交 ]</h2><p>{profile.name} · {profile.studentId}</p><p>{receipt.questionCount?receipt.questionCount+' 道题的答案':'答卷'}已保存，等待招新负责人完成阅卷。</p><dl><dt>提交时间</dt><dd>{new Date(receipt.submittedAt).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'})}</dd><dt>答卷编号</dt><dd>{receipt.id}</dd></dl><p className={s.muted}>本轮笔试已经完成，不能重复提交。需要更正信息时请联系招新负责人。</p></section>;
+ if(receipt)return <StudentResultPanel/>;
  if(!session?.identity)return <form onSubmit={bind} className={s.bindingForm}><fieldset className={s.formFields} disabled={busy}><div className={s.sectionHeading}><div><p className={s.eyebrow}>01 / YOUR INFORMATION</p><h2>填写个人信息</h2></div><p>无需注册账号</p></div><p className={s.bindingNotice}>填写本人信息后即可开始笔试。本轮笔试身份将与当前浏览器绑定，请在同一浏览器完成作答。</p><div className={s.profileGrid}>
  <label>姓名<input required maxLength={40} autoComplete="name" value={profile.name} onChange={e=>setProfile({...profile,name:e.target.value})}/></label>
  <label>学号<input required minLength={2} maxLength={32} autoComplete="off" value={profile.studentId} onChange={e=>setProfile({...profile,studentId:e.target.value})}/></label>
  <label>学院 / 专业（选填）<input maxLength={80} value={profile.department} onChange={e=>setProfile({...profile,department:e.target.value})}/></label>
  <label>年级（选填）<select value={profile.year} onChange={e=>setProfile({...profile,year:e.target.value})}><option value="">请选择年级</option>{['大一','大二','大三','大四'].map(year=><option key={year} value={year}>{year}</option>)}</select></label>
  </div><label className={s.confirmIdentity}><input type="checkbox" required checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/><span>以上是我本人的信息，我将在当前浏览器完成本轮笔试。</span></label></fieldset>{error&&<p className={s.error} role="alert">{error}</p>}<button type="submit" disabled={busy||!confirmed}>[ {busy?'正在登记身份…':'确认信息，开始作答'} ]</button><p className={s.muted}>每个学号限提交一份答卷。需要更正信息或更换浏览器时，请联系招新负责人。</p></form>;
+ if(!timing)return <section className={s.accessGate}><h2>{timingError?'暂时无法开始计时':'正在开始笔试…'}</h2>{timingError?<><p className={s.error} role="alert">{timingError}</p><button type="button" onClick={()=>setTimingAttempt(value=>value+1)}>[ 重试计时 ]</button><button type="button" onClick={()=>void loadSession()}>[ 刷新笔试状态 ]</button></>:<p>开始时间将由服务器记录。</p>}</section>;
  return <form onSubmit={submit}>
+ <AnswerTimer startedAt={timing.startedAt} serverTime={timing.serverTime}/>
  <section className={s.identitySummary}><div><p className={s.eyebrow}>IDENTITY BOUND</p><strong>{profile.name} · {profile.studentId}</strong><p>{[profile.department,profile.year].filter(Boolean).join(' / ')||'本轮笔试身份已绑定'}</p></div><span className={s.boundLabel}>身份已锁定</span></section>
  <p className={s.answerInstructions}>先完成 8 道基础客观题，再写 2 道简答，并各选 1 道方向题和情景题。案例均为虚构；主观题只按给定材料回答，无需运行代码或实际使用 AI 工具。</p>
  <fieldset className={s.formFields} disabled={busy}>
