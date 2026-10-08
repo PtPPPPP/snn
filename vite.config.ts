@@ -1,12 +1,17 @@
 import vinext from "vinext";
 import { defineConfig } from "vite";
 import hostingConfig from "./.openai/hosting.json";
+import productionConfig from "./wrangler.production.json";
 import { sites } from "./build/sites-vite-plugin";
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   "00000000-0000-4000-8000-000000000000";
 
 const { d1, r2 } = hostingConfig;
+// Workers Builds supplies WORKERS_CI=1. Native Sites previews keep their
+// platform-managed bindings; original Cloudflare deployments use the real DB.
+const isCloudflareProduction =
+  process.env.WORKERS_CI === "1" || process.env.SNN_DEPLOY_TARGET === "cloudflare";
 
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
@@ -57,7 +62,9 @@ export default defineConfig(async () => {
       cloudflare({
         viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
         inspectorPort: false,
-        config: localBindingConfig,
+        config: isCloudflareProduction
+          ? { ...localBindingConfig, ...productionConfig }
+          : localBindingConfig,
       }),
     ],
   };

@@ -31,6 +31,15 @@ interface ExecutionContext {
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    if (env.SNN_INTERVIEW_AUTH_PROVIDER === 'cloudflare') {
+      // These identity headers are trusted only behind the Sites dispatcher.
+      // The original Worker must not accept caller-supplied reviewer identities.
+      const headers = new Headers(request.headers);
+      for (const name of [...headers.keys()]) {
+        if (name.startsWith('oai-authenticated-user-')) headers.delete(name);
+      }
+      request = new Request(request, { headers });
+    }
     if(url.pathname.startsWith('/api/interview/'))return interviewAPI(request,env);
 
     if (url.pathname === "/_vinext/image") {

@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "snn",
+  "account_id": "0e65d4292fd02c54f35d1a7ffb88e371",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-10-08",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "snn-interview",
+      "database_id": "b66287e5-e89f-4c47-a37d-c5d56245542d",
+      "migrations_dir": "./drizzle"
+    }
+  ],
+  "vars": {
+    "SNN_INTERVIEW_SITE_ORIGIN": "https://snnai.cn",
+    "SNN_INTERVIEW_AUTH_PROVIDER": "cloudflare"
+  }
+}
