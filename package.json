@@ -38,6 +38,7 @@
     "@react-three/drei": "10.7.9",
     "@react-three/fiber": "9.8.1",
     "drizzle-orm": "^0.45.3",
+    "jose": "^6.2.12",
     "katex": "^0.18.7",
     "next": "16.2.6",
     "react": "19.2.6",

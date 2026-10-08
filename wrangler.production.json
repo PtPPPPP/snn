@@ -15,6 +15,7 @@
   ],
   "vars": {
     "SNN_INTERVIEW_SITE_ORIGIN": "https://snnai.cn",
-    "SNN_INTERVIEW_AUTH_PROVIDER": "cloudflare"
+    "SNN_INTERVIEW_AUTH_PROVIDER": "cloudflare",
+    "SNN_INTERVIEW_ACCESS_AUD": "0d8db2a0bb44636fa4c905203b838a97523c22c02d890f656878b8a7e147d516"
   }
 }
