@@ -2,7 +2,7 @@
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
 import {interviewAPI} from './interview-api';
-import type {InterviewEnv} from '../lib/interview/database';
+import {isInterviewReviewer,type InterviewEnv} from '../lib/interview/database';
 import {cloudflareReviewerRequest} from './reviewer-auth';
 
 interface Env extends InterviewEnv {
@@ -34,12 +34,30 @@ const worker = {
     const url = new URL(request.url);
     if (env.SNN_INTERVIEW_AUTH_PROVIDER === 'cloudflare') {
       if (url.pathname === '/signin-with-chatgpt') {
-        return Response.redirect(new URL('/join/interview/review',url),303);
+        // Old candidate bookmarks may still use the former login URL. Keep their destination public.
+        let destination=new URL('/join/interview',url);
+        try{
+          const requested=new URL(url.searchParams.get('return_to')??'/join/interview',url);
+          if(requested.origin===url.origin){
+            if(requested.pathname.replace(/\/$/,'')==='/join/interview/review')destination=new URL('/_staff/interview/login',url);
+            else if(['/','/join/interview','/join/interview/','/join/interview/result','/join/interview/result/'].includes(requested.pathname))destination=requested;
+          }
+        }catch{}
+        return Response.redirect(destination,303);
       }
       if (url.pathname === '/signout-with-chatgpt') {
         return Response.redirect(new URL('/cdn-cgi/access/logout',url),303);
       }
       request = await cloudflareReviewerRequest(request,env);
+      const allowed=isInterviewReviewer(env,request.headers.get('oai-authenticated-user-email'),request.headers.get('oai-authenticated-user-id'));
+      if(url.pathname==='/_staff/interview/login'){
+        // Access protects only this explicit staff login URL; verified JWT + owner allowlist still protect all review data.
+        if(allowed)return Response.redirect(new URL('/join/interview/review',url),303);
+        return new Response('负责人登录暂未完成。学生请返回 /join/interview 答题或查分。',{status:403,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'private, no-store'}});
+      }
+      if(url.pathname.replace(/\/$/,'')==='/join/interview/review'&&!allowed){
+        return Response.redirect(new URL('/join/interview',url),303);
+      }
     }
     if(url.pathname.startsWith('/api/interview/'))return interviewAPI(request,env);
 
