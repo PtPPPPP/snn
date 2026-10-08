@@ -27,6 +27,11 @@ export function playback(time: number, rounds: number) {
   const part = (local % 4) / 4;
   return { round, phase, part, layer: phase === 0 ? Math.min(2, Math.floor(part * 3)) : 2 - Math.min(2, Math.floor(part * 3)) };
 }
+export function phaseStep(time: number, direction: -1 | 1, rounds: number) {
+  const duration = rounds * 12;
+  const phase = Math.floor(Math.max(0, Math.min(duration, time)) / 4);
+  return Math.max(0, Math.min(duration, (phase + direction) * 4));
+}
 export function revealFor(layer: number, phase: number, part: number) {
   return phase === 2 ? Math.max(0, Math.min(1, part * 3 - (2 - layer))) : 0;
 }

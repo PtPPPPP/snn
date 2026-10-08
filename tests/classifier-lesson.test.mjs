@@ -1,0 +1,11 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {evaluateClassifier,collapseAffine,formatClassifierNumber} from '../lib/learning/classifier-lesson.ts';
+import {caseData,classify,boundarySegment,clippedRegion} from '../lib/learning/opening-demo.ts';
+const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-10,`${a} != ${b}`);
+test('selected numeric chain matches the classifier across all control values and both datasets',()=>{for(const id of ['separable','xor'])for(const point of caseData(id))for(const a of [-2,-.5,0,1,2])for(const b of [-2,0,.75,2])for(const c of [-2,0,.1,2]){const line={a,b,c},v=evaluateClassifier(point,line);close(v.first,a*point.x);close(v.second,b*point.y);close(v.score,v.first+v.second+c);assert.equal(v.predicted,classify(point,line));}});
+test('changing bias shifts all scores equally while weight change is input-scaled',()=>{for(const p of caseData('xor')){const old=evaluateClassifier(p,{a:1,b:1,c:.1});close(evaluateClassifier(p,{a:1,b:1,c:.6}).score-old.score,.5);close(evaluateClassifier(p,{a:1.5,b:1,c:.1}).score-old.score,.5*p.x);}});
+test('constant zero-weight classifier owns exactly one region and has no fake boundary',()=>{for(const c of [-1,0,1]){const line={a:0,b:0,c};assert.deepEqual(boundarySegment(line),[]);assert.equal(clippedRegion(line,c>=0).length,4);assert.equal(clippedRegion(line,c<0).length,0);}});
+test('two affine layers collapse to the same line, including the worked example',()=>{assert.deepEqual(collapseAffine([[1,1],[1,-1]],[0,0],[.5,.5],0),{a:1,b:0,c:0});const A=[[.3,-2],[1,.4]],d=[.7,-.2],v=[-.8,1.2],c=.9,flat=collapseAffine(A,d,v,c);for(const p of caseData('xor')){const hidden=A.map((row,i)=>row[0]*p.x+row[1]*p.y+d[i]);close(v[0]*hidden[0]+v[1]*hidden[1]+c,evaluateClassifier(p,flat).score);}});
+test('exact decimal cancellations at the threshold display zero and consistently predict class 1',()=>{const p={x:-.78,y:-.62},line={a:-1.5,b:1,c:-.55};assert.equal(evaluateClassifier(p,line).score,0);assert.equal(evaluateClassifier(p,line).predicted,1);assert.equal(classify(p,line),1);});
+
+test('display precision preserves the sign of reachable half-thousandth scores',()=>{const v=evaluateClassifier({x:.75,y:.66},{a:-1.95,b:.7,c:1});assert.equal(formatClassifierNumber(v.score),'-0.0005');assert.equal(v.predicted,0);});

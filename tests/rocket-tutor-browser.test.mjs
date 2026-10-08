@@ -20,7 +20,7 @@ test('rocket tutor captures context, renders SSE and cancels without live AI', a
  await page.getByText('模拟回答：全部贡献一起相加。',{exact:true}).waitFor();
  const snapshot=JSON.parse(payload.messages.at(-1).content.split('\n学生问题：')[0]);
  assert.equal(snapshot.selectedLayer,2);assert.equal(snapshot.selectedNeuron,48);assert.equal(snapshot.calculation.terms.length,128);
- assert.ok(payload.messages[0].content.includes('高中生'));assert.equal(await page.getByRole('button',{name:'暂停',exact:true}).count(),1);
+ assert.ok(payload.messages[0].content.includes('高中生'));assert.equal(await page.getByRole('button',{name:'播放',exact:true}).count(),1);
  const frozen=await page.locator('article small').first().textContent();
  await page.getByRole('button',{name:'输入神经元：燃料',exact:true}).click();
  assert.equal(await page.locator('article small').first().textContent(),frozen);

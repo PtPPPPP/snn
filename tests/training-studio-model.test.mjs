@@ -1,6 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {boards,cellBox,cellBlend,dependencies,hitCell,playback,revealFor} from '../app/play/rocket/train/studio-model.ts';
+import {boards,cellBox,cellBlend,dependencies,hitCell,phaseStep,playback,revealFor} from '../app/play/rocket/train/studio-model.ts';
+
+test('phase stepping traverses every stage and reaches the final updated weights',()=>{
+  assert.equal(phaseStep(0,-1,50),0);
+  assert.equal(phaseStep(0,1,50),4);
+  assert.equal(phaseStep(4,1,50),8);
+  assert.equal(phaseStep(8,1,50),12);
+  assert.equal(phaseStep(7.5,1,50),8);
+  assert.equal(phaseStep(7.5,-1,50),0);
+  assert.equal(phaseStep(596,1,50),600);
+  assert.equal(phaseStep(600,1,50),600);
+  assert.equal(phaseStep(600,-1,50),596);
+  let time=0;
+  for(let step=0;step<150;step++) time=phaseStep(time,1,50);
+  assert.equal(time,600);
+  const end=playback(time,50);
+  assert.equal(cellBlend({layer:0,row:127,col:6},revealFor(0,end.phase,end.part)),1);
+});
 
 test('all 17,408 cell centres round-trip through touch geometry',()=>{
   let count=0;

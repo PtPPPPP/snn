@@ -1,4 +1,5 @@
 import { ArrowDownRight } from "./icons";
+import Link from "next/link";
 
 export function JoinSection() {
   return (
@@ -17,6 +18,7 @@ export function JoinSection() {
         <p className="join-placeholder">
           扫描二维码关注公众号，获取活动预告、项目进展和招新信息。
         </p>
+        <p className="join-placeholder"><Link href="/join/interview">[ 参加入社笔试 → ]</Link></p>
       </div>
       <div className="wechat-card" id="join-steps">
         <div className="wechat-card-head">

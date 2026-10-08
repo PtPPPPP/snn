@@ -4,7 +4,7 @@ import { loadPPORecord, traceNormalized, type PPORecord } from '../../../../lib/
 import StudioNetwork from './studio-network';
 import UpdatePlayground from './update-playground';
 import RocketTutor, {type TutorSnapshot} from '../explain/rocket-tutor';
-import { cellBlend, dependencies, heat, playback, revealFor, type Cell } from './studio-model';
+import { cellBlend, dependencies, heat, playback, phaseStep, revealFor, type Cell } from './studio-model';
 import s from './studio.module.css';
 import lesson from '../explain/lesson.module.css';
 
@@ -17,11 +17,11 @@ export default function TrainingStudio() {
   return <Studio data={data}/>;
 }
 function Studio({data}:{data:PPORecord}) {
-  const [time,setTime]=useState(0),[speed,setSpeed]=useState(8),[playing,setPlaying]=useState(()=>typeof window==='undefined'||!matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const [time,setTime]=useState(0),[speed,setSpeed]=useState(1),[playing,setPlaying]=useState(false);
   const [selected,setSelected]=useState<Cell>({layer:1,row:63,col:63}),[sampleIndex,setSampleIndex]=useState(0);
   const [focused,setFocused]=useState(false),[lossSelected,setLossSelected]=useState(false);
   const [askSnapshot,setAskSnapshot]=useState<TutorSnapshot|null>(null);
-  const elapsed=useRef(0),initialHold=useRef(.8),duration=data.rounds.length*12;
+  const elapsed=useRef(0),initialHold=useRef(0),duration=data.rounds.length*12;
   useEffect(()=>{if(!playing)return;let id=0,last=0;const tick=(now:number)=>{const dt=last?Math.min(.06,(now-last)/1000):0;last=now;if(!document.hidden){if(initialHold.current>0)initialHold.current-=dt;else{const value=elapsed.current+dt*speed;elapsed.current=value>=duration?0:value;if(value>=duration)initialHold.current=.8;setTime(elapsed.current);}}id=requestAnimationFrame(tick);};id=requestAnimationFrame(tick);return()=>cancelAnimationFrame(id);},[playing,speed,duration]);
   const state=playback(time,data.rounds.length),round=data.rounds[state.round],before=data.models[state.round],after=data.models[state.round+1],sample=round.samples[Math.min(sampleIndex,round.samples.length-1)];
   const trace=useMemo(()=>traceNormalized(before,sample.inputs),[before,sample]);
@@ -43,21 +43,23 @@ function Studio({data}:{data:PPORecord}) {
   const lensRows=layer===2?1:3,lensCols=5,rowStart=layer===2?0:Math.max(0,Math.min(125,row-1)),colStart=Math.max(0,Math.min((layer===0?7:128)-5,col-2));
   const tutorSnapshot:TutorSnapshot={time,timeLabel:`第 ${state.round+1} 轮 · ${['前向计算','反向传播','权重更新'][state.phase]}`,selection:lossSelected?'飞行反馈 / 策略损失':`${names[layer]} · 权重 [${row+1}, ${col+1}]`,context:JSON.stringify({experiment:'PPO training replay',model:'7-128-128-1',round:state.round+1,totalRounds:data.rounds.length,phase:['forward','backward','update'][state.phase],playbackOnly:true,selection:lossSelected?{kind:'policyLoss'}:{kind:'weight',layer:layer+1,row:row+1,col:col+1},policyLoss:round.policyLoss,steps:round.steps,sample:{index:sample.index,inputs:sample.inputs,action:sample.action,advantage:sample.advantage,return:sample.return},weight:lossSelected?null:{before:old,after:next,change:delta,displayed:old+delta*blend,batchInitialGradient:round.gradient[layer].weight[row][col],sampleGradient,neuronGradient,activationFactor,forwardInput:input,downstreamTerms:terms},training:data.config,source:data.source,explanation:'连线显示反传贡献，非最终 Adam 改变量分摊。扫描仅为教学演示；没有完整飞行轨迹或成功率数据。'})};
   function seek(value:number){elapsed.current=Math.max(0,Math.min(duration,value));initialHold.current=0;setTime(elapsed.current);setPlaying(false);}
+  function stepPhase(direction:-1|1){seek(phaseStep(time,direction,data.rounds.length));}
   function select(cell:Cell){setSelected(cell);setFocused(true);setLossSelected(false);}
   return <main className={s.studio} data-training-studio>
     <header className={s.heading}><div><span className={s.eyebrow}>LEARNING / 03</span><h1>一次反馈，怎样改变网络。</h1></div><p>50 轮真实 PPO 记录<span>7 → 128 → 128 → 1</span></p></header>
+    <p className={s.learningGuide}><b>本页目标</b> 看训练反馈怎样经过前向计算、反向求梯度，逐层形成权重更新。<span>播放看完整记录；用“上一步 / 下一步”逐阶段观察，点热图读数值。主图是训练记录回放，不是现场训练。</span></p>
     <UpdatePlayground/>
     <div className={s.workspace}>
       <section className={s.visual} aria-label="训练网络与播放控制">
         <div className={s.stageBar}>{['前向 · 算出动作','反馈 · 传回梯度','更新 · 调整权重'].map((label,i)=><span key={label} data-active={state.phase===i}><i>{`0${i+1}`}</i>{label}</span>)}</div>
+        <div className={s.transport}>
+          <div className={s.timeHeading}><strong>第 {state.round+1}<small> / {data.rounds.length} 轮</small></strong><span>{['用当前权重做决定','沿选中权重追踪反馈','从左向右展开本轮更新'][state.phase]}</span></div>
+          <div className={`${lesson.playbackLine} ${s.playbackControls}`}><button onClick={()=>setPlaying(v=>!v)} aria-label={playing?'暂停播放':'播放'}>{playing?'暂停':'播放'}</button><button aria-label="上一个教学阶段" disabled={time===0} onClick={()=>stepPhase(-1)}>上一步</button><button aria-label="下一个教学阶段" disabled={time>=duration} onClick={()=>stepPhase(1)}>下一步</button><input aria-label="训练轮次" type="range" min="0" max={duration} step="any" value={time} onChange={e=>seek(Number(e.target.value))}/><select aria-label="播放速度" value={speed} onChange={e=>setSpeed(Number(e.target.value))}>{[.25,1,2,8,16,32,64].map(v=><option value={v} key={v}>{v}×</option>)}</select></div>
+          <div className={s.transportFoot}><div><button onClick={()=>{setSpeed(32);setPlaying(true);}}>快速总览</button><button onClick={()=>{setSpeed(1);setPlaying(true);}}>慢速细看</button></div><div><button aria-label="上一轮" onClick={()=>seek((state.round-1)*12)}>←</button><button aria-label="下一轮" onClick={()=>seek((state.round+1)*12)}>→</button><button onClick={()=>seek(0)}>重播</button></div></div>
+        </div>
         <div className={s.diagramHint}><span>{lossSelected?'全网反馈 · 从损失端逐层传回':focused?'聚焦所选权重 · 弱分支不绘制':'保留主要反传路径 · 低贡献连线已隐藏'}</span>{focused?<button onClick={()=>{setFocused(false);setLossSelected(false);}}>取消聚焦</button>:<button onClick={()=>setFocused(true)}>聚焦当前格</button>}</div>
         <StudioNetwork initial={data.models[0]} before={before} after={after} inputs={sample.inputs} selected={selected} focused={focused&&!lossSelected} lossSelected={lossSelected} onLossSelect={()=>{setLossSelected(true);setFocused(true);}} phase={state.phase} part={state.part} activeLayer={state.layer} limit={limit} terms={terms} signals={signals} activations={trace.activations} onSelect={select}/>
         <div className={s.legend}><span>热图：权重变化</span><span>减少</span><i/><span>增加</span><small>连线：蓝正 / 棕负 · 隐藏低于本组最大贡献 18% 的线</small></div>
-        <div className={s.transport}>
-          <div className={s.timeHeading}><strong>第 {state.round+1}<small> / {data.rounds.length} 轮</small></strong><span>{['用当前权重做决定','沿选中权重追踪反馈','从左向右展开本轮更新'][state.phase]}</span></div>
-          <div className={lesson.playbackLine}><button onClick={()=>setPlaying(v=>!v)} aria-label={playing?'暂停播放':'继续播放'}>{playing?'暂停':'继续'}</button><input aria-label="训练轮次" type="range" min="0" max={duration} step="any" value={time} onChange={e=>seek(Number(e.target.value))}/><select aria-label="播放速度" value={speed} onChange={e=>setSpeed(Number(e.target.value))}>{[.25,1,2,8,16,32,64].map(v=><option value={v} key={v}>{v}×</option>)}</select></div>
-          <div className={s.transportFoot}><div><button onClick={()=>{setSpeed(32);setPlaying(true);}}>快速总览</button><button onClick={()=>{setSpeed(1);setPlaying(true);}}>慢速细看</button></div><div><button aria-label="上一轮" onClick={()=>seek((state.round-1)*12)}>←</button><button aria-label="下一轮" onClick={()=>seek((state.round+1)*12)}>→</button><button onClick={()=>seek(0)}>重播</button></div></div>
-        </div>
         <div className={s.pickers}><label>查看层<select aria-label="选择网络层" value={layer} onChange={e=>select({layer:Number(e.target.value),row:Number(e.target.value)===2?0:63,col:Number(e.target.value)===0?3:63})}>{names.map((name,i)=><option key={name} value={i}>{name}</option>)}</select></label><label>神经元<select aria-label="选择神经元编号" value={row} onChange={e=>select({...selected,row:Number(e.target.value)})}>{Array.from({length:layer===2?1:128},(_,i)=><option key={i} value={i}>{i+1} 号</option>)}</select></label><label>输入连线<select aria-label="选择权重连线" value={col} onChange={e=>select({...selected,col:Number(e.target.value)})}>{Array.from({length:layer===0?7:128},(_,i)=><option key={i} value={i}>{i+1} 号</option>)}</select></label></div>
       </section>
       <aside className={s.inspector}>

@@ -2,7 +2,7 @@
 @import "./design-tokens.css";
 
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; background: var(--bg); color-scheme: light; }
+html { scroll-behavior: smooth; background: var(--bg); color-scheme: dark; }
 body {
   margin: 0;
   background: var(--bg);
@@ -53,3 +53,7 @@ body:has([data-site-shell][data-lab=true]) { --snn-shell-height: 113px; }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Numeric alignment is a shared material rule. */
+output, input[type=number], code, pre { font-variant-numeric: tabular-nums; }
+button:disabled { opacity: .45; }

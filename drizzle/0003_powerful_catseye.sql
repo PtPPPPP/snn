@@ -1,0 +1,2 @@
+ALTER TABLE `interview_submissions` ADD `question_bank_version` text DEFAULT 'snn-entry-2026-v1' NOT NULL;--> statement-breakpoint
+ALTER TABLE `interview_submissions` ADD `rubrics_json` text DEFAULT '{}' NOT NULL;

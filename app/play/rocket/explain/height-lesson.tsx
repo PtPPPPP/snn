@@ -14,7 +14,7 @@ export default function HeightLesson(){
  const [calcOpen,setCalcOpen]=useState(true);
  useEffect(()=>{const media=matchMedia('(min-width:651px)');const change=()=>setCalcOpen(media.matches);change();media.addEventListener('change',change);return()=>media.removeEventListener('change',change);},[]);
  const [data,setData]=useState<{model:Policy;frames:ReplayFrame[]}|null>(null),[error,setError]=useState('');
- const [index,setIndex]=useState(0),[playing,setPlaying]=useState(true),[speed,setSpeed]=useState(.25);
+ const [index,setIndex]=useState(0),[playing,setPlaying]=useState(false),[speed,setSpeed]=useState(.25);
  const [askSnapshot,setAskSnapshot]=useState<{time:number;selection:string;context:string}|null>(null);
  const [stage,setStage]=useState(3),[picked,setPicked]=useState(0);
  useEffect(()=>{
@@ -55,20 +55,21 @@ export default function HeightLesson(){
  const status=state.result?(state.result==='success'?'成功接地':'飞行结束'):state.thrust>150?'点火制动':state.thrust>5?'调整推力':'自由下落';
  const rawValues=[frame.observed.h.toFixed(1)+' 米',frame.observed.v.toFixed(1)+' 米/秒',frame.observed.fuel.toFixed(2)+' 千克',frame.observed.thrust.toFixed(0)+' 牛'];
  const tutorSnapshot={time:frame.observed.t,selection:stage===0?names[picked]:stage===3?'输出神经元':`第${stage}组第${neuron+1}号神经元`,context:JSON.stringify({model:'Energy PPO 7-128-128-1',observed:frame.observed,displayedState:state,throttle:t.throttle,selectedLayer:stage,selectedNeuron:stage===0?picked+1:neuron+1,inputNames:names,networkInputs:t.inputs,calculation:stage===0?null:{sum:calc.sum,bias:calc.bias,output:calc.output,terms:calc.terms.map(v=>[v.index+1,...[v.input,v.weight,v.product].map(n=>Number(n.toFixed(5)))])},termColumns:['序号','输入','系数','贡献'],rule:'隐藏层所有贡献相加加b后Tanh；输出层线性求和后限制[-1,1]，(值+1)/2变成油门；速度负数为下降'})};
- function seek(i:number){const next=Math.max(0,Math.min(frames.length-1,Math.round(i)));playhead.current=frames[next].state.t;setIndex(next);}
+ function seek(i:number){const next=Math.max(0,Math.min(frames.length-1,Math.round(i)));playhead.current=frames[next].state.t;setIndex(next);setPlaying(false);}
  return <main className={styles.page} data-realtime="true">
   <div className={styles.pageIntro}><span>网络怎样推理</span><small>选择时刻与神经元，观察真实决策</small></div>
+  <p className={styles.quickGuide}><b>本页目标</b> 看高度、速度等 7 个飞行状态怎样逐层算出油门。<span>入门：选计算步骤 → 点神经元 → 单步看下一刻。</span></p>
   <NeuronPlayground/>
   <div className={styles.workspace}>
    <section className={styles.diagram}>
   <div className={styles.steps}>{steps.map((label,i)=><button key={label} aria-current={stage===i?'step':undefined} onClick={()=>{setStage(i);setPicked(0);}}>{label}</button>)}</div>
 
-    <div className={styles.networkTools}><div><b>点选神经元，查看计算 ↓</b></div>{stage<3&&<label>{stage===0?'输入编号':'神经元编号'} <select aria-label="选择神经元编号" value={picked} onChange={e=>setPicked(Number(e.target.value))}>{Array.from({length:stage===0?7:128},(_,i)=><option key={i} value={i}>{i+1}{stage===0?' · '+names[i]:''}</option>)}</select></label>}</div>
+    <div className={styles.networkTools}><div className={styles.networkPrompt}><b>点选神经元，查看计算</b><div className={styles.diagramControls} role="group" aria-label="飞行回放控制"><button onClick={()=>setPlaying(!playing)}>{playing?'暂停':'播放'}</button><button disabled={index===0} onClick={()=>seek(index-1)}>上一步</button><button disabled={ended} onClick={()=>seek(index+1)}>单步 →</button></div></div>{stage<3&&<label>{stage===0?'输入编号':'神经元编号'} <select aria-label="选择神经元编号" value={picked} onChange={e=>setPicked(Number(e.target.value))}>{Array.from({length:stage===0?7:128},(_,i)=><option key={i} value={i}>{i+1}{stage===0?' · '+names[i]:''}</option>)}</select></label>}</div>
     <LessonNetwork before={old} after={t} stage={stage} inputValues={rawValues} liveAll selected={stage===0?picked:neuron} playing={playing} model={model} onPick={(s,i)=>{setStage(s);setPicked(i);}}/>
     <p className={styles.legend}>蓝色为正贡献 · 棕橙色为负贡献 · 深浅表示大小，弱线省略绘制</p>
     <section className={styles.flightTimeline} aria-label="飞行时间轴">
      <div className={styles.compactReadings}><span>高度 <b>{state.h.toFixed(1)} m</b></span><span>速度 <b>{state.v.toFixed(1)} m/s</b></span><span>油门 <b>{(t.throttle*100).toFixed(1)}%</b></span></div>
-     <div className={styles.playbackLine}><button onClick={()=>setPlaying(!playing)}>{playing?'暂停':'继续循环'}</button><input ref={slider} aria-label="飞行进度" type="range" min="0" max={frames.length-1} step="any" value={index} onChange={e=>seek(Number(e.target.value))}/><span>{state.t.toFixed(2)} / {total.toFixed(2)} s</span></div>
+     <div className={styles.playbackLine}><input ref={slider} aria-label="飞行进度" type="range" min="0" max={frames.length-1} step="any" value={index} onChange={e=>seek(Number(e.target.value))}/><span>{state.t.toFixed(2)} / {total.toFixed(2)} s</span></div>
      <details className={styles.playbackMore}><summary>{status} · {speed}× · 更多控制</summary><div className={styles.timelineControls}><button disabled={index===0} onClick={()=>seek(index-1)}>上一帧</button><button disabled={ended} onClick={()=>seek(index+1)}>下一帧</button>{ignition>=0&&<button onClick={()=>seek(ignition)}>跳到首次点火</button>}<label>速度 <select value={speed} onChange={e=>setSpeed(Number(e.target.value))}>{[.125,.25,.5,1].map(v=><option key={v} value={v}>{v}×</option>)}</select></label><span>燃料 {state.fuel.toFixed(2)} kg · 推力 {state.thrust.toFixed(0)} N</span></div></details>
     </section>
    </section>

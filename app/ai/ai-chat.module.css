@@ -38,8 +38,8 @@
 .statusCard div { display: grid; gap: 6px; }
 .statusCard strong { font-size: 11px; font-weight: 500; color: var(--text-secondary); }
 .statusCard span:not(.statusDot) { font-size: 11px; color: var(--text-muted); }
-.backdrop { display: none; position: fixed; inset: 0; z-index: 20; background: rgb(26 42 62 / 24%); }
-.modalBackdrop { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgb(26 42 62 / 28%); }
+.backdrop { display: none; position: fixed; inset: 0; z-index: 20; background: var(--overlay-scrim); }
+.modalBackdrop { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: var(--overlay-scrim); }
 .modal { width: min(360px, calc(100% - 48px)); max-height: calc(100dvh - 32px); padding: 28px 24px 20px; border: 1px solid var(--border-default); border-radius: var(--radius-3); background: var(--surface-2); box-shadow: var(--shadow-panel); overflow-y: auto; animation: panelIn var(--motion-panel) var(--ease); }
 .modalTitle { margin: 0 0 12px; font-size: 20px; font-weight: 500; }
 .modalDesc { margin: 0 0 24px; font-size: 14px; color: var(--text-secondary); line-height: 1.8; }
@@ -656,7 +656,7 @@
     position: fixed;
     inset: 0;
     z-index: 25;
-    background: rgb(26 42 62 / 24%);
+    background: var(--overlay-scrim);
   }
 }
 

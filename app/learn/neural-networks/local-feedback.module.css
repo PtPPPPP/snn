@@ -1,0 +1,9 @@
+.message { display:flex; align-items:center; gap:8px; min-height:48px; box-sizing:border-box; margin:6px 0; padding:7px 9px; border:1px solid transparent; border-radius:6px; color:var(--text-secondary); font-size:12px; line-height:1.55; text-align:left; font-variant-numeric:tabular-nums; }
+.symbol { flex-shrink:0; font-size:18px; font-weight:500; color:var(--text-primary); }
+.message[data-feedback-active] { border-color:var(--border-active); background:var(--surface-2); color:var(--text-primary); }
+.message[data-feedback-active=complete] { animation:reached 1800ms ease-out; background:var(--accent-soft); }
+.legend { display:flex; flex-direction:column; gap:5px; width:100%; color:var(--text-secondary); font-size:12px; line-height:1.55; }
+.scale { display:flex; justify-content:center; align-items:center; gap:8px; }
+.scale i { width:110px; height:10px; border-radius:3px; border:1px solid var(--border-default); background:linear-gradient(to right,rgb(232 218 194),rgb(194 217 234)); }
+@keyframes reached { 0%,100%{box-shadow:0 0 0 1px transparent} 20%,65%{box-shadow:0 0 0 2px var(--border-active);border-color:var(--text-secondary)} }
+@media(prefers-reduced-motion:reduce) { .message[data-feedback-active=complete] { animation:none; box-shadow:0 0 0 2px var(--border-active); } }

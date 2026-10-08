@@ -33,8 +33,8 @@
 .columnMeta{font-size:9px;fill:var(--text-muted);text-anchor:middle}
 .inputName{font-size:10px;fill:var(--text-secondary)}
 .inputValue{font-size:9px;fill:var(--text-muted);font-variant-numeric:tabular-nums}
-.lossNode rect{fill:#f2eef8;stroke:var(--border-default)}
-.lossNode text{font-size:9px;fill:#795b97;text-anchor:middle}
+.lossNode rect{fill:var(--surface-3);stroke:var(--border-default)}
+.lossNode text{font-size:9px;fill:var(--text-secondary);text-anchor:middle}
 .legend{display:flex;align-items:center;gap:9px;font-size:10px;color:var(--text-secondary);padding:0 0 14px}
 .legend>span:first-child{color:var(--accent);margin-right:8px}
 .legend i{height:5px;width:110px;background:linear-gradient(90deg,#455694,#3e84a0,#77c0bf,#ecf0f1,#eecb86,#dc8b65,#b35570)}
@@ -62,11 +62,11 @@
 .change{display:flex;gap:12px;font-size:12px;color:var(--text-secondary);font-variant-numeric:tabular-nums}
 .change span:nth-child(2){color:var(--border-active)}
 .weightHero>small{display:block;margin-top:9px;color:var(--text-muted);font-size:10px}
-.weightHero b{color:#795b97;font-weight:500}
+.weightHero b{color:var(--text-secondary);font-weight:500}
 .explanation{margin-top:18px}
 .sectionNumber{color:var(--text-muted);letter-spacing:.04em;font-size:9px}
 .explanation p{font-size:11px;line-height:1.85;margin:6px 0 8px;color:var(--text-secondary)}
-.pathCaption{display:flex;gap:12px;padding:7px 0;color:#795b97;font-size:12px;font-variant-numeric:tabular-nums}
+.pathCaption{display:flex;gap:12px;padding:7px 0;color:var(--text-secondary);font-size:12px;font-variant-numeric:tabular-nums}
 .pathCaption span{color:var(--border-active)}
 .equation{padding:10px 12px;border-left:2px solid var(--border-active);background:var(--surface-2);font-variant-numeric:tabular-nums}
 .equation span{display:block;font-size:10px;color:var(--text-secondary);overflow-wrap:anywhere}
@@ -93,14 +93,14 @@
 @media(prefers-reduced-motion:reduce){.studio *{scroll-behavior:auto}}
 
 .lossNode { cursor:pointer; outline:none; }
-.lossNode:hover rect,.lossNode[aria-pressed=true] rect { fill:#f2eef8;stroke:#795b97;stroke-width:1.5; }
+.lossNode:hover rect,.lossNode[aria-pressed=true] rect { fill:var(--surface-3);stroke:var(--text-secondary);stroke-width:1.5; }
 .lossNode:focus-visible rect { stroke:var(--accent);stroke-width:2; }
 .lossInspector h2 {font-size:20px;font-weight:500;margin:6px 0 18px;}
 .lossInspector>p,.lossInspector li p {font-size:11px;line-height:1.85;color:var(--text-muted);}
 .lossInspector ol {list-style:none;padding:0;margin:20px 0;counter-reset:step;}
 .lossInspector li {counter-increment:step;border-left:2px solid var(--border-default);padding:8px 12px;margin:0;opacity:.5;}
-.lossInspector li::before {content:'0' counter(step);font-size:10px;color:#795b97;margin-right:10px;}
-.lossInspector li[data-active=true] {border-color:#795b97;background:#f2eef8;opacity:1;}
+.lossInspector li::before {content:'0' counter(step);font-size:10px;color:var(--text-secondary);margin-right:10px;}
+.lossInspector li[data-active=true] {border-color:var(--text-secondary);background:var(--surface-3);opacity:1;}
 .lossInspector li b {font-size:12px;font-weight:500;}
 .lossInspector li p {margin:5px 0;}
 
@@ -139,7 +139,7 @@
 .lossNode circle:nth-child(2) {fill:var(--surface-2);stroke:var(--accent);stroke-width:1.3;}
 .lossNode text {fill:var(--accent);font-size:10px;}
 .lossNode:hover circle:nth-child(2),.lossNode[aria-pressed=true] circle:nth-child(2) {fill:var(--accent);stroke:var(--accent);}
-.lossNode[aria-pressed=true] text:first-of-type,.lossNode:hover text:first-of-type {fill:#fcfcfd;}
+.lossNode[aria-pressed=true] text:first-of-type,.lossNode:hover text:first-of-type {fill:var(--text-primary);}
 .lossNode:focus-visible circle:first-child {stroke:var(--accent);stroke-width:2;}
 .studio>.tutorPanel {margin:0;padding:16px 0;border-top:0;}
 .studio>.tutorPanel>section {margin:0;padding:0;border:0;}
@@ -216,4 +216,24 @@
  .visual>.viewSwitch>div{pointer-events:auto;}
  .transportFoot{display:none;}
  .transport{padding-bottom:8px;}
+}
+
+.learningGuide { margin: 0 0 10px; padding: 8px 12px; border-left: 2px solid var(--accent); background: var(--surface-2); color: var(--text-secondary); font-size: 12px; line-height: 1.7; }
+.learningGuide b { margin-right: 6px; color: var(--accent); font-weight: 550; }
+.learningGuide span { margin-left: 8px; }
+.stageBar > span { color: var(--text-secondary); font-size: 12px; }
+.diagramHint { color: var(--text-secondary); font-size: 11px; }
+.legend { color: var(--text-secondary); font-size: 11px; }
+.studio .playbackControls { flex-wrap: wrap; }
+.studio .playbackControls button { min-height: 44px; flex-shrink: 0; padding: 5px 9px; font-size: 13px; }
+.studio .playbackControls button:disabled { opacity: .45; cursor: default; }
+.studio .playbackControls select { flex-shrink: 0; }
+@media(max-width:600px) {
+ .learningGuide span { display: block; margin-left: 0; }
+ .stageBar { height: auto; min-height: 44px; }
+ .stageBar > span { white-space: normal; line-height: 1.45; padding-block: 5px; gap: 4px; }
+ .stageBar i { flex-shrink: 0; }
+ .studio .playbackControls { display: grid; grid-template-columns: repeat(3, max-content) minmax(60px, 1fr); gap: 5px; }
+ .studio .playbackControls input { grid-column: 1 / -1; grid-row: 2; width: 100%; min-width: 0; }
+ .studio .playbackControls select { grid-column: 4; grid-row: 1; width: 100%; min-width: 0; }
 }

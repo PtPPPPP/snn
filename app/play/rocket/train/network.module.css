@@ -4,7 +4,7 @@
 .page{min-height:calc(100svh - 113px)}.page button,.page select{border-radius:var(--snn-radius-sm)}.page .primary{background:var(--snn-control);color:var(--snn-control-text)}.toolbar{border-top:0}.formula{border-radius:0 var(--snn-radius-sm) var(--snn-radius-sm) 0}.steps button{border-radius:0}@media(max-width:1050px){.toolbar{top:113px;z-index:10}}
 
 /* SVG presentation attributes must keep their semantic node contrast. */
-.diagramScroll text[fill="white"] { fill:#fcfcfd; }
+.diagramScroll text[fill="white"] { fill:var(--text-primary); }
 .diagramScroll text[fill="var(--text-secondary)"] { fill: var(--text-secondary); }
 .diagramScroll text[fill="var(--text-primary)"] { fill: var(--text-primary); }
 
@@ -53,15 +53,15 @@
 @media(max-width:550px){.weightChoice select{font-size:16px}.weightEquation strong{font-size:16px}}
 
 /* Training is visually distinct from blue/orange inference. */
-.recordPage .roundHeading, .recordPage .weightEquation strong { color: #795b97; }
+.recordPage .roundHeading, .recordPage .weightEquation strong { color: var(--text-secondary); }
 .recordPage .weightEquation [data-sign=negative] strong { color: var(--snn-success); }
-.recordPage .roundTrack input { accent-color: #795b97; }
-.recordPage .roundTicks [data-current=true] { color: #795b97; }
-.recordPage .nodePicker button[aria-pressed=true] { background: #f2eef8; border-color: #795b97; color: #795b97; }
-.recordPage .formula { background: var(--surface-2); border-left-color: #795b97; }
-.recordPage .weightsTable [data-selected=true] { background: #f2eef8; }
+.recordPage .roundTrack input { accent-color: var(--text-secondary); }
+.recordPage .roundTicks [data-current=true] { color: var(--text-secondary); }
+.recordPage .nodePicker button[aria-pressed=true] { background: var(--surface-3); border-color: var(--text-secondary); color: var(--text-secondary); }
+.recordPage .formula { background: var(--surface-2); border-left-color: var(--text-secondary); }
+.recordPage .weightsTable [data-selected=true] { background: var(--surface-3); }
 .recordPage[data-weight-updating=true] [data-touch-layer] circle:first-child { animation: weightSettle 450ms ease-out; }
-@keyframes weightSettle { from {stroke: #795b97; stroke-width: 2.8; } to {stroke: var(--border-active); stroke-width: 1.3;} }
+@keyframes weightSettle { from {stroke: var(--text-secondary); stroke-width: 2.8; } to {stroke: var(--border-active); stroke-width: 1.3;} }
 @media(prefers-reduced-motion:reduce){.recordPage[data-weight-updating=true] [data-touch-layer] circle:first-child{animation:none}}
 
 .heatViewport { overflow: auto; margin: 14px 0 0; }
@@ -77,7 +77,7 @@
 
 .playPresets { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .playPresets button { font-size: 12px; min-height: 36px; border-radius: 4px; }
-.playPresets button[aria-pressed=true] { background: #f2eef8; color: #795b97; border-color: #795b97; }
+.playPresets button[aria-pressed=true] { background: var(--surface-3); color: var(--text-secondary); border-color: var(--text-secondary); }
 .playPresets span { font-size: 11px; color: var(--text-secondary); margin-left: auto; }
 @media(max-width:550px){.playPresets{flex-wrap:wrap}.playPresets span{margin-left:0;width:100%}.roundTicks{font-size:8px}.roundTicks span{min-width:0}}
 

@@ -1,0 +1,30 @@
+"use client";
+import {Component,lazy,Suspense,useCallback,useEffect,useRef,useState,type ReactNode} from 'react';
+import type {Camera,CaseId,Boundary} from '../../../lib/learning/opening-demo';
+import type {CameraAction} from './three-camera-interaction';
+import AsciiFold from './ascii-fold';
+import s from './opening-demo.module.css';
+const HeroScene=lazy(()=>import('./three-opening-scenes').then(m=>({default:m.HeroScene})));
+const ClassificationScene=lazy(()=>import('./three-opening-scenes').then(m=>({default:m.ClassificationScene})));
+const ScoreScene=lazy(()=>import('./three-opening-scenes').then(m=>({default:m.ScoreScene})));
+const NonlinearScene=lazy(()=>import('./three-opening-scenes').then(m=>({default:m.NonlinearScene})));
+class RenderBoundary extends Component<{children:ReactNode;fallback:ReactNode;onFailure:(reason?:string)=>void},{failed:boolean}>{state={failed:false};static getDerivedStateFromError(){return {failed:true};}componentDidCatch(error:Error){this.props.onFailure('场景加载或渲染错误：'+error.name+' · '+error.message.slice(0,220));}render(){return this.state.failed?this.props.fallback:this.props.children;}}
+function Host({hero,fallback,view,id,proof=false,opacity=1,onMode,line,selected,score=false,stage,orbit=false,onInteract}:{orbit?:boolean;onInteract?:()=>void;stage?:number;score?:boolean;hero?:boolean;fallback:ReactNode;view?:Camera;id?:CaseId;proof?:boolean;opacity?:number;onMode?:(mode:'webgl'|'fallback')=>void;line?:Boundary;selected?:string}){
+ const canOrbit=!!(hero||score||stage!==undefined||orbit),[enabled,setEnabled]=useState(false),[action,setAction]=useState<CameraAction>({id:0,kind:'reset'});
+ useEffect(()=>{const frame=requestAnimationFrame(()=>setEnabled(window.matchMedia('(pointer: fine)').matches));return()=>cancelAnimationFrame(frame);},[]);
+ const interaction={enabled:canOrbit&&enabled,action,onInteract};
+ const failedRef=useRef(false),root=useRef<HTMLDivElement>(null),[mounted,setMounted]=useState(false),[mode,setMode]=useState<'loading'|'webgl'|'fallback'>('loading'),[failureReason,setFailureReason]=useState('');
+ useEffect(()=>{const node=root.current;if(!node)return;const observer=new IntersectionObserver(([entry])=>{if(entry.isIntersecting){setMounted(true);observer.disconnect();}},{rootMargin:'180px'});observer.observe(node);return()=>observer.disconnect();},[]);
+ const ready=useCallback(()=>{if(failedRef.current)return;setMode('webgl');onMode?.('webgl');},[onMode]);const failed=useCallback((reason?:string)=>{failedRef.current=true;setFailureReason(reason??'浏览器未提供可用 WebGL 上下文，或上下文已丢失。');setMode('fallback');onMode?.('fallback');},[onMode]);
+ const preview=<div className={s.rendererFallback}>{fallback}<p>正在加载 Three.js 三维场景；当前为二维预览。</p></div>;
+ const unavailable=<div className={s.rendererFallback}>{fallback}<p role="status">三维场景未能启动。当前是二维降级预览，不是实时三维渲染。<br/>{failureReason}</p></div>;
+ return <div ref={root} className={hero?s.threeHero:s.threeScene} data-three-renderer={mode} data-three-kind={hero?'hero':stage!==undefined?'features':score?'score':'classification'} onPointerDown={e=>{if(canOrbit&&enabled)e.stopPropagation();}} onKeyDown={e=>{if(canOrbit)e.stopPropagation();}}><div className={hero?s.heroSurface:s.threeSurface} tabIndex={canOrbit?0:undefined} aria-label={canOrbit?'三维视图，方向键旋转，Home 复位。':undefined} onKeyDown={e=>{if(!canOrbit||mode!=='webgl'||e.target!==e.currentTarget)return;const kinds:Record<string,CameraAction['kind']>={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down',Home:'reset'};const kind=kinds[e.key];if(!kind)return;e.preventDefault();onInteract?.();setAction(a=>({id:a.id+1,kind}));}}>
+ {mode==='fallback'?unavailable:mounted?<><RenderBoundary fallback={unavailable} onFailure={failed}><Suspense fallback={null}>{hero?<HeroScene interaction={interaction} onReady={ready} onFailure={failed}/>:stage!==undefined?<NonlinearScene stage={stage} selected={selected!} interaction={interaction} onReady={ready} onFailure={failed}/>:score?<ScoreScene id={id!} line={line!} selected={selected} interaction={interaction} onReady={ready} onFailure={failed}/>:<ClassificationScene view={view!} id={id!} proof={proof} opacity={opacity} line={line} selected={selected} interaction={canOrbit?interaction:undefined} onReady={ready} onFailure={failed}/>}</Suspense></RenderBoundary>{mode==='loading'&&preview}</>:preview}</div>
+ {canOrbit&&<div className={s.cameraToolbar} aria-label="三维相机控制" onPointerDown={e=>e.stopPropagation()}>{mode==='fallback'&&<button onClick={()=>{failedRef.current=false;setFailureReason('');setMode('loading');}}>重试三维</button>}<button disabled={mode!=='webgl'} aria-pressed={enabled} onClick={()=>setEnabled(v=>!v)}>{enabled?'结束转动':'转动 / 缩放'}</button><button disabled={mode!=='webgl'} aria-label="放大三维视图" onClick={()=>{onInteract?.();setAction(a=>({id:a.id+1,kind:'in'}));}}>＋</button><button disabled={mode!=='webgl'} aria-label="缩小三维视图" onClick={()=>{onInteract?.();setAction(a=>({id:a.id+1,kind:'out'}));}}>−</button><button disabled={mode!=='webgl'} onClick={()=>{onInteract?.();setAction(a=>({id:a.id+1,kind:'reset'}));}}>复位视角</button><small>{enabled?'拖动旋转；滚轮或双指缩放。':'阅读模式保留页面滚动。'}</small></div>}</div>;
+}
+export function HeroThreeView(){return <Host hero fallback={<AsciiFold/>}/>;}
+export function ClassificationThreeView({view,id,proof,opacity,fallback,onMode,line,selected,orbit,onInteract}:{orbit?:boolean;onInteract?:()=>void;view:Camera;id:CaseId;proof:boolean;opacity:number;fallback:ReactNode;onMode?:(mode:'webgl'|'fallback')=>void;line?:Boundary;selected?:string}){return <Host orbit={orbit} onInteract={onInteract} fallback={fallback} onMode={onMode} view={view} id={id} proof={proof} opacity={opacity} line={line} selected={selected}/>;}
+
+export function ScoreThreeView({id,line,selected,fallback}:{id:CaseId;line:Boundary;selected?:string;fallback:ReactNode}){return <Host score id={id} line={line} selected={selected} fallback={fallback}/>;}
+
+export function NonlinearThreeView({stage,selected,fallback,onInteract}:{stage:number;selected:string;fallback:ReactNode;onInteract?:()=>void}){return <Host onInteract={onInteract} stage={stage} selected={selected} fallback={fallback}/>;}

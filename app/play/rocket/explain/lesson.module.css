@@ -177,3 +177,19 @@
 .networkViewport[data-expanded=true] svg{width:1100px;min-width:1100px;height:auto;max-height:none;}
 @media(max-width:650px){.networkViewSwitch{flex-wrap:wrap;}.networkViewSwitch>span{width:100%;}.networkViewSwitch>div{margin-left:auto;}.networkViewport[data-expanded=false] svg{max-height:none;}}
 @media(pointer:coarse){.networkViewSwitch button{min-height:44px;}}
+
+.pageIntro small { display: inline; color: var(--text-secondary); font-size: 12px; }
+.quickGuide { margin: 0 0 8px; padding: 7px 10px; border-left: 2px solid var(--accent); background: var(--lesson-wash); color: var(--text-secondary); font-size: 12px; line-height: 1.65; }
+.quickGuide b { margin-right: 6px; color: var(--lesson-ink); font-weight: 550; }
+.quickGuide span { margin-left: 8px; }
+.networkPrompt { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 10px; min-width: 0; }
+.diagramControls { display: flex; align-items: center; gap: 5px; }
+.diagramControls button { min-height: 36px; padding: 5px 9px; border: 1px solid var(--lesson-line); border-radius: 4px; color: var(--lesson-ink); background: var(--snn-bg); cursor: pointer; }
+.diagramControls button:first-child { background: var(--snn-control); color: var(--snn-control-text); }
+.diagramControls button:disabled { opacity: .45; cursor: default; }
+.diagramControls button:hover:not(:disabled) { border-color: var(--accent); }
+.legend { color: var(--text-secondary); font-size: 11px; }
+.playbackLine span { color: var(--text-secondary); font-size: 12px; }
+.steps button { min-height: 44px; }
+@media(max-width:650px) { .pageIntro small { max-width: 48%; text-align: right; font-size: 10px; }.quickGuide span { display: block; margin-left: 0; }.networkPrompt { flex: 1; }.diagramControls button { min-height: 40px; padding-inline: 7px; } }
+@media(pointer:coarse) { .diagramControls button { min-height: 44px; } }
