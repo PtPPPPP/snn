@@ -9,7 +9,7 @@ import { existsSync } from "node:fs";
 import { readFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { startBuiltWorker } from "../../scripts/built-worker.mjs";
 import { AgentRuntimeManager } from "../../ai-node/src/agent/runtime-manager.mjs";
 import { AgentSessionController } from "../../ai-node/src/agent/session-controller.mjs";
 import { BUILT_IN_TOOL_METADATA } from "../../ai-node/src/agent/built-in-tools.mjs";
@@ -119,7 +119,7 @@ const MIME = { ".js": "text/javascript", ".css": "text/css", ".png": "image/png"
 async function createFrontendProxy(getBffBaseUrl) {
   const clientRoot = path.join(repoRoot, "dist", "client");
   const fontRoot = path.join(repoRoot, ".vinext", "fonts");
-  const worker = (await import(pathToFileURL(path.join(repoRoot, "dist", "server", "index.js")).href)).default;
+  const worker = await startBuiltWorker({ root: repoRoot });
 
   function assetResponse(url) {
     const relative = decodeURIComponent(new URL(url, "http://127.0.0.1").pathname).replace(/^\/+/, "");
@@ -166,9 +166,7 @@ async function createFrontendProxy(getBffBaseUrl) {
         });
         result = await forwardToBff(incoming);
       } else {
-        result = await worker.fetch(new Request(`http://127.0.0.1${url.pathname}${url.search}`, { method: request.method, headers: request.headers }), {
-          ASSETS: { fetch: (assetRequest) => assetResponse(assetRequest.url) },
-        }, { waitUntil() {}, passThroughOnException() {} });
+        result = await worker.fetch(new Request(`http://127.0.0.1${url.pathname}${url.search}`, { method: request.method, headers: request.headers }));
       }
       const headers = {};
       result.headers.forEach((value, key) => {
@@ -188,7 +186,7 @@ async function createFrontendProxy(getBffBaseUrl) {
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = server.address().port;
-  return { url: `http://127.0.0.1:${port}`, origin: `http://127.0.0.1:${port}`, async close() { await new Promise((resolve) => { server.closeAllConnections(); server.close(resolve); }); } };
+  return { url: `http://127.0.0.1:${port}`, origin: `http://127.0.0.1:${port}`, async close() { try { await new Promise((resolve) => { server.closeAllConnections(); server.close(resolve); }); } finally { await worker.close(); } } };
 }
 
 export async function bootWorkspaceEditEnv(label, { fetchAllowPrivateNetworks = false } = {}) {

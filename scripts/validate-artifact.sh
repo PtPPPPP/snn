@@ -21,16 +21,20 @@ hosting="${SITES_PROJECT_ROOT}/dist/.openai/hosting.json"
 
 node --input-type=module - "${worker}" "${hosting}" <<'NODE'
 import { readFile } from "node:fs/promises";
-import { pathToFileURL } from "node:url";
+import { startBuiltWorker } from "./scripts/built-worker.mjs";
 
 const [workerPath, hostingPath] = process.argv.slice(2);
 JSON.parse(await readFile(hostingPath, "utf8"));
 
-const workerUrl = pathToFileURL(workerPath);
-workerUrl.searchParams.set("sites-validation", `${process.pid}-${Date.now()}`);
-const worker = await import(workerUrl.href);
-if (!worker.default || typeof worker.default.fetch !== "function") {
-  throw new Error("dist/server/index.js must have an ESM default export with fetch(request, env, ctx)");
+const worker = await startBuiltWorker();
+try {
+  const response = await worker.fetch(new Request("http://localhost/", { headers: { accept: "text/html" } }));
+  if (response.status !== 200 || !(response.headers.get("content-type") || "").includes("text/html")) {
+    throw new Error(`${workerPath} must serve HTML through its ESM default.fetch`);
+  }
+  await response.text();
+} finally {
+  await worker.close();
 }
 NODE
 

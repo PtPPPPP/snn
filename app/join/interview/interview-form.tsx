@@ -36,7 +36,7 @@ export default function InterviewForm(){
  const identityId=session?.identity?.id,receiptId=receipt?.id;
  useEffect(()=>{
   if(!identityId||receiptId)return;
-  const controller=new AbortController();setTimingError('');
+  const controller=new AbortController();
   void api<{startedAt:string;serverTime:string}>('/api/interview/start',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}',signal:controller.signal}).then(data=>{if(!controller.signal.aborted)setTiming(data);}).catch(reason=>{if(!controller.signal.aborted)setTimingError(reason instanceof Error?reason.message:'无法开始计时，请重试。');});
   return ()=>controller.abort();
  },[identityId,receiptId,timingAttempt]);
@@ -103,7 +103,7 @@ export default function InterviewForm(){
  <label>学院 / 专业（选填）<input maxLength={80} value={profile.department} onChange={e=>setProfile({...profile,department:e.target.value})}/></label>
  <label>年级（选填）<select value={profile.year} onChange={e=>setProfile({...profile,year:e.target.value})}><option value="">请选择年级</option>{['大一','大二','大三','大四'].map(year=><option key={year} value={year}>{year}</option>)}</select></label>
  </div><label className={s.confirmIdentity}><input type="checkbox" required checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/><span>以上是我本人的信息，我将在当前浏览器完成本轮笔试。</span></label></fieldset>{error&&<p className={s.error} role="alert">{error}</p>}<button type="submit" disabled={busy||!confirmed}>[ {busy?'正在登记身份…':'确认信息，开始作答'} ]</button><p className={s.muted}>每个学号限提交一份答卷。需要更正信息或更换浏览器时，请联系招新负责人。</p></form>;
- if(!timing)return <section className={s.accessGate}><h2>{timingError?'暂时无法开始计时':'正在开始笔试…'}</h2>{timingError?<><p className={s.error} role="alert">{timingError}</p><button type="button" onClick={()=>setTimingAttempt(value=>value+1)}>[ 重试计时 ]</button><button type="button" onClick={()=>void loadSession()}>[ 刷新笔试状态 ]</button></>:<p>开始时间将由服务器记录。</p>}</section>;
+ if(!timing)return <section className={s.accessGate}><h2>{timingError?'暂时无法开始计时':'正在开始笔试…'}</h2>{timingError?<><p className={s.error} role="alert">{timingError}</p><button type="button" onClick={()=>{setTimingError('');setTimingAttempt(value=>value+1);}}>[ 重试计时 ]</button><button type="button" onClick={()=>void loadSession()}>[ 刷新笔试状态 ]</button></>:<p>开始时间将由服务器记录。</p>}</section>;
  return <form onSubmit={submit}>
  <AnswerTimer startedAt={timing.startedAt} serverTime={timing.serverTime}/>
  <section className={s.identitySummary}><div><p className={s.eyebrow}>IDENTITY BOUND</p><strong>{profile.name} · {profile.studentId}</strong><p>{[profile.department,profile.year].filter(Boolean).join(' / ')||'本轮笔试身份已绑定'}</p></div><span className={s.boundLabel}>身份已锁定</span></section>
