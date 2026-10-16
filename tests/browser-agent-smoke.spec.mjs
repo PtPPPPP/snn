@@ -17,6 +17,54 @@ async function mockAgentStatus(page, agent = true) {
   });
 }
 
+for (const extension of ["docx", "xlsx"]) {
+  for (const width of [390, 1280]) {
+    test(`Office ${extension} preview stays read-only and contained at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      const sessionId = "snn-agent-12345678-1234-4234-8234-123456789012";
+      const file = { fileId: "snn-file-12345678-1234-4234-8234-123456789012", originalName: `项目资料.${extension}`, size: 120, kind: extension, updatedAt: 42 };
+      let previewText = `正文预览 ${"long_path_".repeat(100)}`;
+      let sessionCreated = false;
+      await mockAgentStatus(page);
+      await page.route("**/api/agent/sessions", (route) => {
+        if (route.request().method() === "POST") {
+          sessionCreated = true;
+          return route.fulfill({ status: 201, json: { sessionId } });
+        }
+        return route.fulfill({ json: { sessions: sessionCreated ? [{ sessionId }] : [] } });
+      });
+      await page.route(`**/api/agent/sessions/${sessionId}/files`, (route) => route.fulfill({ status: route.request().method() === "POST" ? 201 : 200, json: route.request().method() === "POST" ? { file } : { files: [file] } }));
+      await page.route(`**/api/agent/sessions/${sessionId}/files/${file.fileId}/preview`, (route) => route.fulfill({ json: { fileId: file.fileId, name: file.originalName, size: file.size, truncated: false, format: "extracted-text", content: previewText } }));
+      await page.goto("/ai/", { waitUntil: "networkidle" });
+      await page.getByRole("tab", { name: /Agent/ }).click();
+      await page.getByTestId("agent-file-input").setInputFiles({ name: file.originalName, mimeType: "application/octet-stream", buffer: Buffer.from("mock Office upload") });
+      await expect(page.getByTestId("attachment-chip")).toContainText(file.originalName);
+      const toggle = page.locator('button[aria-controls="agent-workspace-panel"]');
+      if (await toggle.getAttribute("aria-expanded") === "false") await toggle.click();
+      await page.getByRole("button", { name: `预览 ${file.originalName}` }).click();
+      const panel = page.getByTestId("workspace-panel");
+      await expect(panel.locator("pre")).toContainText("正文预览");
+      await expect(panel).toContainText("原始排版请下载查看");
+      await expect(panel.getByTestId("editor-open")).toHaveCount(0);
+      await expect(panel.getByRole("link", { name: `下载 ${file.originalName}` })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+      if (extension === "docx" && width === 1280) {
+        await page.route(`**/api/agent/sessions/${sessionId}/runs`, (route) => {
+          file.updatedAt = 84;
+          previewText = "已润色正文";
+          return route.fulfill({ contentType: "text/event-stream", body: `event: tool.completed\ndata: ${JSON.stringify({ type: "tool.completed", toolCallId: "word-edit", payload: { name: "workspace.word.patch" } })}\n\nevent: run.completed\ndata: ${JSON.stringify({ type: "run.completed", sessionId })}\n\n` });
+        });
+        await page.getByTestId("agent-input").fill("润色正文并保留排版");
+        await page.getByTestId("agent-send-button").click();
+        await expect(panel).toContainText("文件已更新");
+        await panel.getByRole("button", { name: "刷新预览" }).click();
+        await expect(panel.locator("pre")).toHaveText("已润色正文");
+        await expect(panel).not.toContainText("文件已更新");
+      }
+    });
+  }
+}
+
 test("Agent mode switch is visible and preserves chat", async ({ page }) => {
   await mockAgentStatus(page, true);
   await page.goto("/ai/", { waitUntil: "networkidle" });

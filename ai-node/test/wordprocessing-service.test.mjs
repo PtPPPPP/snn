@@ -22,6 +22,56 @@ const STYLED_XML = `<?xml version="1.0"?><w:document xmlns:w="${W_NS}"><w:body>`
   + `<w:tbl><w:tr><w:tc><w:p><w:r><w:t xml:space="preserve">表格单元格甲</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>表格单元格乙</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`
   + `</w:body></w:document>`;
 
+test("word polishing reads beyond the preview and scopes repeated text to its paragraph", async (t) => {
+  const blocks = Array.from({ length: 25 }, (_, index) => ({ text: `第${index}段：${"正文".repeat(70)}草稿` }));
+  const env = await createEnvironment({ blocks });
+  t.after(() => rm(env.root, { recursive: true, force: true }));
+  const args = { workspaceId: env.workspace.id, fileId: env.upload.fileId };
+  const first = await env.word.inspect(args);
+  assert.equal(first.nextOffset, 10);
+  assert.equal(first.textParagraphCount, 25);
+  assert.ok(!first.textPreview.includes("第24段"));
+  const last = await env.word.inspect({ ...args, offset: 20, limit: 10 });
+  assert.equal(last.nextOffset, null);
+  assert.equal(last.paragraphs[4].paragraph, 24);
+  assert.equal(last.paragraphs[4].text, blocks[24].text);
+  const edited = await env.word.replaceText({ ...args, expectedVersion: last.version, paragraph: 24, find: "草稿", replace: "定稿" });
+  const after = await env.word.inspect({ ...args, find: "草稿", offset: 20 });
+  assert.equal(after.version, edited.newVersion);
+  assert.equal(after.matchCount, 24);
+  assert.ok(after.paragraphs[4].text.endsWith("定稿"));
+});
+
+test("word preserves added edge spaces and accepts insertions at the end of styled text", async (t) => {
+  const env = await createEnvironment({ bytes: buildTestDocx(`<w:document xmlns:w="${W_NS}"><w:body><w:p><w:r><w:t>项目</w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>完成</w:t></w:r></w:p></w:body></w:document>`) });
+  t.after(() => rm(env.root, { recursive: true, force: true }));
+  const args = { workspaceId: env.workspace.id, fileId: env.upload.fileId };
+  const before = await env.word.inspect(args);
+  const result = await env.word.replaceText({ ...args, expectedVersion: before.version, find: "项目完成", replace: "项目完成！ " });
+  const xml = documentXmlOf((await env.files.readFile(args)).bytes);
+  assert.ok(xml.includes('<w:rPr><w:b/></w:rPr><w:t xml:space="preserve">完成！ </w:t>'));
+  await assert.rejects(env.word.replaceText({ ...args, expectedVersion: result.newVersion, find: "项目", replace: "坏\u0001字" }), { code: "AGENT_WORD_INVALID_REQUEST" });
+});
+
+test("word does not match phantom text across tabs or line breaks", async (t) => {
+  const env = await createEnvironment({ bytes: buildTestDocx(`<w:document xmlns:w="${W_NS}"><w:body><w:p><w:r><w:t>甲</w:t><w:tab/><w:t>乙</w:t><w:br/><w:t>丙</w:t></w:r></w:p></w:body></w:document>`) });
+  t.after(() => rm(env.root, { recursive: true, force: true }));
+  const args = { workspaceId: env.workspace.id, fileId: env.upload.fileId };
+  const before = await env.word.inspect({ ...args, find: "甲乙丙" });
+  assert.equal(before.matchCount, 0);
+  await assert.rejects(env.word.replaceText({ ...args, expectedVersion: before.version, find: "甲乙丙", replace: "错" }), { code: "AGENT_WORD_MATCH_NOT_FOUND" });
+});
+
+test("word verifies replacements that create a new match across the original match boundary", async (t) => {
+  const env = await createEnvironment({ blocks: [{ text: "aaa" }] });
+  t.after(() => rm(env.root, { recursive: true, force: true }));
+  const args = { workspaceId: env.workspace.id, fileId: env.upload.fileId };
+  const before = await env.word.inspect({ ...args, find: "aa" });
+  assert.equal(before.matchCount, 1);
+  await env.word.replaceText({ ...args, expectedVersion: before.version, find: "aa", replace: "a" });
+  assert.equal((await env.word.inspect(args)).paragraphs[0].text, "aa");
+});
+
 async function createEnvironment(options = {}) {
   const root = await mkdtemp(join(tmpdir(), "snn-word-service-"));
   const manager = new WorkspaceManager();
@@ -115,8 +165,9 @@ test("word patch replaces text split across runs within one paragraph, preservin
 
   const downloaded = await env.files.readFile({ workspaceId: env.workspace.id, fileId: env.upload.fileId });
   const xml = documentXmlOf(downloaded.bytes);
-  // the FIRST matched run keeps its own <w:rPr> and absorbs the whole replacement
-  assert.ok(xml.includes("<w:rPr><w:b/></w:rPr><w:t>Project status: approved</w:t>"), "first matched run must keep <w:rPr> and absorb the replacement");
+  assert.ok(xml.includes("<w:rPr><w:b/></w:rPr><w:t>Project</w:t>"), "unchanged bold prefix must stay in its original run");
+  assert.ok(xml.includes('<w:t xml:space="preserve"> status:</w:t>'), "unchanged middle run must remain unchanged");
+  assert.ok(xml.includes('<w:t xml:space="preserve"> approved</w:t>'), "changed word must keep its original run style");
   assert.ok(!xml.includes("draft"), "old cross-run text must be fully cleared");
   assert.ok(xml.includes("无关段落保持不变"), "unrelated paragraph must survive untouched");
   // all four runs survive (matched chars cleared from the tail runs; runs are never deleted)
@@ -164,7 +215,8 @@ test("word patch replaces cross-run text inside a table cell and leaves other ce
   assert.equal(after.matchCount, 1);
   const downloaded = await env.files.readFile({ workspaceId: env.workspace.id, fileId: env.upload.fileId });
   const xml = documentXmlOf(downloaded.bytes);
-  assert.ok(xml.includes("状态：已批准"), "table cell text must be replaced");
+  assert.ok(xml.includes("<w:t>状态：</w:t>"), "unchanged label must retain its run");
+  assert.ok(xml.includes("<w:t>已批准</w:t>"), "changed cell phrase must retain its own run");
   assert.ok(!xml.includes("草稿"), "old cell text must be gone");
   assert.ok(xml.includes("其它单元格"), "sibling cell must be untouched");
   assert.ok(xml.includes("表格外段落"), "paragraph outside the table must be untouched");

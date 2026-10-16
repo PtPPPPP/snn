@@ -1,7 +1,8 @@
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { TEXT_EXTENSIONS } from "../documents/file-access.mjs";
+import { TEXT_EXTENSIONS, createDefaultDocumentParserRegistry } from "../documents/file-access.mjs";
+import { DEFAULT_DOCUMENT_LIMITS } from "../documents/limits.mjs";
 import { FILE_LIMITS } from "../documents/file-limits.mjs";
 import { isEditableTextFile } from "../workspace/file-ingestion-service.mjs";
 import { startSseHeartbeat } from "../sse-heartbeat.mjs";
@@ -20,6 +21,8 @@ const PREVIEW_EXTENSIONS = TEXT_EXTENSIONS;
 // All size bounds come from the one authoritative FILE_LIMITS registry so the
 // public HTTP layer and production ingestion can never drift apart.
 const MAX_PREVIEW_BYTES = FILE_LIMITS.previewMaxBytes;
+const DOCUMENT_PREVIEW_EXTENSIONS = new Set(["docx", "xlsx"]);
+const documentParsers = createDefaultDocumentParserRegistry();
 // Direct user editing reuses the preview envelope: a file is editable exactly
 // when it loads as preview (UTF-8 text within this bound). Keeping both limits
 // identical makes the boundary easy to reason about.
@@ -465,6 +468,17 @@ export function createPublicAgentBff({
             const files = await ingestionService.list(workspace.id);
             const file = files.find((item) => item.fileId === subId);
             if (!file) throw Object.assign(new Error("File was not found"), { status: 404, code: "AGENT_FILE_NOT_FOUND" });
+            const extension = /\.([a-z0-9]+)$/i.exec(file.originalName)?.[1]?.toLowerCase();
+            if (DOCUMENT_PREVIEW_EXTENSIONS.has(extension)) {
+              if (file.size > DEFAULT_DOCUMENT_LIMITS.maxDocumentBytes) throw Object.assign(new Error("File is too large to preview"), { status: 413, code: "AGENT_PREVIEW_TOO_LARGE" });
+              const { file: current, bytes } = await ingestionService.readFile({ workspaceId: workspace.id, fileId: subId });
+              let parsed;
+              try { parsed = await documentParsers.get(extension).parse(bytes, DEFAULT_DOCUMENT_LIMITS); }
+              catch { throw Object.assign(new Error("Document cannot be previewed"), { status: 415, code: "AGENT_PREVIEW_UNSUPPORTED" }); }
+              const text = parsed.render(current.originalName);
+              sendJson(response, 200, { fileId: current.fileId, name: current.originalName, mime: current.contentType, size: current.size, truncated: parsed.truncated || text.length > 120_000, content: text.slice(0, 120_000), format: "extracted-text" }, originInfo);
+              return true;
+            }
             if (!isPreviewableFile(file)) throw Object.assign(new Error("This file type cannot be previewed"), { status: 415, code: "AGENT_PREVIEW_UNSUPPORTED" });
             if (file.size > MAX_PREVIEW_BYTES) throw Object.assign(new Error("File is too large to preview"), { status: 413, code: "AGENT_PREVIEW_TOO_LARGE" });
             const { bytes } = await ingestionService.readFile({ workspaceId: workspace.id, fileId: subId });

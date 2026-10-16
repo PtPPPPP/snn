@@ -25,29 +25,32 @@ export function apply(ctx, config = {}) {
 
   ctx.tools.register(defineTool({
     name: "workspace.word.inspect",
-    description: "Inspect one uploaded DOCX (Word) document by server-assigned file_id. Return the file version, paragraph and text-fragment counts, a bounded text preview, and optionally how many times an exact string occurs within single text fragments. Use this before any Word mutation to obtain the version. It never modifies the document.",
+    description: "Inspect an uploaded DOCX by file_id. Returns version, a bounded preview and paginated paragraphs with paragraph indexes. Read all pages with offset/nextOffset before polishing a long document; never treat a truncated preview as the full document. Exact find counts matches across styled runs within each paragraph. Does not modify the document.",
     parameters: {
       file_id: { type: "string", required: true, description: "Server-assigned DOCX file id from the current Workspace." },
-      find: { type: "string", description: "Exact text to locate. Counts only occurrences that fall entirely within one text fragment." },
+      find: { type: "string", description: "Exact text to locate within one paragraph; it may span styled runs." },
+      offset: { type: "number", description: "Zero-based text-paragraph offset, default 0. Use nextOffset from the preceding page." },
+      limit: { type: "number", description: "Paragraphs per page, 1 to 20, default 10. Output is also bounded by text length." },
     },
     output: { schema: { type: "string" }, render: (_args, value) => [{ type: "text", text: value }] },
     async execute(args) {
       try {
         const find = typeof args?.find === "string" && args.find.length > 0 ? args.find : undefined;
-        return JSON.stringify(await word.inspect({ workspaceId: await workspaceId(), fileId: typeof args?.file_id === "string" ? args.file_id : "", find }));
+        return JSON.stringify(await word.inspect({ workspaceId: await workspaceId(), fileId: typeof args?.file_id === "string" ? args.file_id : "", find, offset: args?.offset, limit: args?.limit }));
       } catch (error) { throw stableWordError(error); }
     },
   }));
 
   ctx.tools.register(defineTool({
     name: "workspace.word.patch",
-    description: "Replace exact text in an uploaded DOCX (Word) document while preserving all formatting, after workspace.word.inspect returned the version. The search text must fall entirely within a single text fragment; if it spans multiple styled fragments this tool changes nothing and reports AGENT_WORD_MATCH_NOT_FOUND, so retry with a shorter string. By default exactly one occurrence must match; set replace_all to replace every occurrence. Never guess a version.",
+    description: "Replace exact text within one DOCX paragraph, including text split across styled runs. Use the version from inspect or the last successful patch. Optional paragraph scopes repeated text to one inspected paragraph. Default requires one match; replace_all replaces all scoped matches. Keep paragraph, table and run properties; unchanged prefix/suffix retain their styles, changed text inherits its insertion run style. For polishing, prefer small phrase edits to retain mixed emphasis. No new paragraphs, layout editing, legacy DOC, headers or footers. Never guess a version; re-inspect to verify.",
     parameters: {
       file_id: { type: "string", required: true, description: "Server-assigned DOCX file id from the current Workspace." },
       expected_version: { type: "string", required: true, description: "Exact version returned by workspace.word.inspect." },
-      find: { type: "string", required: true, description: "Exact text to replace, contained within one text fragment." },
+      find: { type: "string", required: true, description: "Exact text to replace within one paragraph, up to 16000 characters. It may span styled runs." },
       replace: { type: "string", required: true, description: "Replacement text. May be empty to delete the matched text." },
       replace_all: { type: "boolean", description: "Replace every occurrence instead of requiring exactly one. Defaults to false." },
+      paragraph: { type: "number", description: "Optional zero-based paragraph index returned by inspect, to disambiguate repeated text." },
     },
     output: { schema: { type: "string" }, render: (_args, value) => [{ type: "text", text: value }] },
     async execute(args) {
@@ -58,7 +61,8 @@ export function apply(ctx, config = {}) {
           expectedVersion: typeof args?.expected_version === "string" ? args.expected_version : "",
           find: typeof args?.find === "string" ? args.find : "",
           replace: typeof args?.replace === "string" ? args.replace : "",
-          replaceAll: args?.replace_all === true,
+          replaceAll: args?.replace_all ?? false,
+          paragraph: args?.paragraph,
         }));
       } catch (error) { throw stableWordError(error); }
     },

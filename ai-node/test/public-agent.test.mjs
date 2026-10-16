@@ -313,6 +313,34 @@ test("public file upload/list/delete via BFF is bounded and safe", async () => {
   });
 });
 
+test("public DOCX and XLSX previews use bounded extraction, retain downloads and ownership", async () => {
+  await withPublic({}, async ({ baseUrl }) => {
+    const origin = "https://snnai.cn";
+    const session = await fetch(`${baseUrl}/api/agent/sessions`, { method: "POST", headers: { origin, "content-type": "application/json" }, body: "{}" });
+    const sid = (await session.json()).sessionId;
+    const cookie = session.headers.get("set-cookie").split(";")[0];
+    for (const [name, bytes, marker] of [
+      ["report.docx", buildTestDocx(docxDocumentXml([{ text: "正文预览标记" }])), "正文预览标记"],
+      ["report.xlsx", buildTestXlsx({ sheets: [{ name: "表格", cells: [{ ref: "A1", kind: "s", value: "单元格预览标记" }] }] }), "单元格预览标记"],
+    ]) {
+      const upload = await fetch(`${baseUrl}/api/agent/sessions/${sid}/files`, { method: "POST", headers: { origin, cookie, "content-type": "application/octet-stream", "x-snn-file-name": name }, body: bytes });
+      assert.equal(upload.status, 201);
+      const file = (await upload.json()).file;
+      const url = `${baseUrl}/api/agent/sessions/${sid}/files/${file.fileId}`;
+      const preview = await fetch(`${url}/preview`, { headers: { origin, cookie } });
+      assert.equal(preview.status, 200);
+      assert.equal(preview.headers.get("cache-control"), "no-store");
+      const result = await preview.json();
+      assert.equal(result.format, "extracted-text");
+      assert.equal(result.sha256, undefined, "extracted document text must never activate the plain text editor");
+      assert.ok(result.content.includes(marker));
+      const download = await fetch(url, { headers: { origin, cookie } });
+      assert.deepEqual(Buffer.from(await download.arrayBuffer()), bytes, "preview must not alter original bytes");
+      assert.equal((await fetch(`${url}/preview`, { headers: { origin } })).status, 404);
+    }
+  });
+});
+
 test("public text preview endpoint is read-only, safe, and bounded", async () => {
   await withPublic({}, async ({ baseUrl }) => {
     const origin = "https://snnai.cn";

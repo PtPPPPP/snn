@@ -100,11 +100,14 @@ npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
 | 类型 | 已实现能力 |
 | --- | --- |
 | 文本与代码 | 读取、编辑、创建和下载；前端工作区支持直接文本编辑 |
-| PDF / DOCX | 上传、读取、提取；不修改原文档 |
-| XLSX | 结构化检查；通过受限工具删除一条精确匹配的数据行，使用读取时的版本校验 |
+| PDF | 上传、读取、提取；不修改原文档 |
+| DOCX | 正文与表格文本预览；按段读取、精确替换及润色，支持跨格式片段匹配；保留文档结构与原有样式属性 |
+| XLSX | 工作表发现、指定范围读取；批量修改已有数据单元格，保护公式；支持删除一条精确匹配的数据行 |
 | XLS / XLSM、加密或外部链接工作簿 | 不支持相应的 XLSX 编辑流程 |
 
-XLSX 修改需要先通过 `workspace.spreadsheet.inspect` 得到唯一匹配和版本，再调用 `workspace.spreadsheet.patch`；它不是通用电子表格编辑器。具体能力仍受服务配置和工具权限约束。
+Excel 改值先通过 `workspace.spreadsheet.inspect` 读取工作表、范围与版本，再以 `operation: updateCells` 调用 `workspace.spreadsheet.patch`，每批最多 100 个已有单元格。公式与其他工作簿部件保留，打开 Excel 时重新计算；服务不计算公式结果。删除行仍要求唯一精确匹配。
+
+Word 润色通过 `workspace.word.inspect` 分页读取，再用 `workspace.word.patch` 修改段内文字；建议逐短语修改以保留混合强调样式。文字变长可能改变换行、分页，不保证渲染结果完全一致。不支持旧版 `.doc`、页眉页脚或排版编辑。具体能力受服务配置与工具权限约束，详见 [Office 文件编辑](docs/OFFICE-EDITING.md)。
 
 SNN 负责产品界面与 API 边界，DeepSeek Harness 提供底层 Agent 运行时。前端不直接连接内部运行时，公开 Agent 不提供任意 Shell 执行能力。
 

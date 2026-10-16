@@ -281,6 +281,54 @@ test("NL Case D (xlsx): model deletes one exact row and preserves the other shee
   });
 });
 
+test("NL Office column edit preserves formula XML and untouched workbook parts", { skip: SKIP, timeout: 240_000 }, async (t) => {
+  await withSession(async ({ upload, streamRun, downloadBytes }) => {
+    const workbook = createWorkbook();
+    const sheet = addWorksheet(workbook, "预算");
+    ["项目", "数量", "金额"].forEach((value, index) => setCell(sheet, 1, index + 1, value));
+    for (const row of [2, 3]) {
+      setCell(sheet, row, 1, `项目${row}`);
+      setCell(sheet, row, 2, row);
+      setCell(sheet, row, 3, { kind: "formula", formula: `B${row}*10`, t: "normal", cachedValue: row * 10 });
+    }
+    setCell(addWorksheet(workbook, "说明"), 1, 1, "保留原样");
+    const bytes = Buffer.from(await workbookToBytes(workbook));
+    const file = await upload("预算.xlsx", bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    const run = await streamRun("把预算表的数量列第2、3行分别改为10和20，金额列保留原公式，其它工作表保持原样。直接修改 Excel 文件供我下载。", [file.fileId]);
+    assert.equal(run.terminal, "run.completed", run.raw);
+    const after = await downloadBytes(file.fileId);
+    const loaded = await loadWorkbook(fromBuffer(after));
+    const result = loaded.sheets.find((entry) => entry.kind === "worksheet" && entry.sheet.title === "预算").sheet;
+    assert.equal(result.rows.get(2).get(2).value, 10);
+    assert.equal(result.rows.get(3).get(2).value, 20);
+    const original = BoundedZipArchive.open(bytes, DEFAULT_DOCUMENT_LIMITS);
+    const edited = BoundedZipArchive.open(after, DEFAULT_DOCUMENT_LIMITS);
+    assert.deepEqual(original.names(), edited.names());
+    for (const name of original.names()) {
+      if (name !== "xl/workbook.xml" && name !== "xl/worksheets/sheet1.xml") assert.deepEqual(edited.readEntry(name), original.readEntry(name), name);
+    }
+    const formulas = (archive) => [...archive.readEntry("xl/worksheets/sheet1.xml").toString().matchAll(/<f\b[^>]*>[\s\S]*?<\/f>/g)].map(([value]) => value);
+    assert.deepEqual(formulas(edited), formulas(original));
+    t.diagnostic(`NL_OFFICE_COLUMN_TOOLS=${run.toolEvents.join(",")}`);
+  });
+});
+
+test("NL Office Word polishing retains heading, paragraph and table properties", { skip: SKIP, timeout: 240_000 }, async (t) => {
+  await withSession(async ({ upload, streamRun, downloadBytes }) => {
+    const xml = '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'
+      + '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>项目周报</w:t></w:r></w:p>'
+      + '<w:p><w:pPr><w:spacing w:after="240"/></w:pPr><w:r><w:t>咱们下周把这个功能搞定。</w:t></w:r></w:p>'
+      + '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>表格保持原样</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:body></w:document>';
+    const bytes = buildTestDocx(xml);
+    const file = await upload("项目周报.docx", bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    const run = await streamRun("润色正文，把‘咱们下周把这个功能搞定。’改为‘我们计划于下周完成该功能。’，保留标题、加粗、段落格式和表格，直接修改 Word 文件供我下载。", [file.fileId]);
+    assert.equal(run.terminal, "run.completed", run.raw);
+    const edited = BoundedZipArchive.open(await downloadBytes(file.fileId), DEFAULT_DOCUMENT_LIMITS);
+    assert.equal(edited.readEntry("word/document.xml").toString(), xml.replace("咱们下周把这个功能搞定。", "我们计划于下周完成该功能。"));
+    t.diagnostic(`NL_OFFICE_WORD_TOOLS=${run.toolEvents.join(",")}`);
+  });
+});
+
 test("NL Case E (pdf >16MiB): upload+attach succeed and the model reads the first-page title", { skip: SKIP, timeout: 300_000 }, async (t) => {
   await withSession(async ({ uploadChunked, streamRun }) => {
     const pdf = buildLargePdf();

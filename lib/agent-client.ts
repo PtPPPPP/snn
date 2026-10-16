@@ -22,6 +22,7 @@ export type AgentFilePreview = {
   truncated: boolean;
   content: string;
   sha256?: string;
+  format?: "extracted-text";
 };
 
 export type AgentFileUpdateRequest = {
@@ -53,8 +54,9 @@ const PREVIEW_TEXT_EXTENSIONS = new Set([
 ]);
 
 export function isPreviewableAgentFile(file: AgentFile): boolean {
-  if (file.kind !== "text") return false;
   const extension = /\.([a-z0-9]+)$/i.exec(file.originalName)?.[1]?.toLowerCase();
+  if (extension === "docx" || extension === "xlsx") return true;
+  if (file.kind !== "text") return false;
   return extension === undefined || PREVIEW_TEXT_EXTENSIONS.has(extension);
 }
 

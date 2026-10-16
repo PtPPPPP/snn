@@ -624,7 +624,7 @@ export default function AiChat() {
                     <div className={styles.emptyState} data-testid="agent-empty">
                       <span className={styles.emptyMark}>AGENT / WORKSPACE</span>
                       <h2>让文件，成为思考的起点。</h2>
-                      <p>上传文本、PDF、DOCX 或 XLSX，让 Agent 帮你阅读资料、整理内容。文本文件支持编辑；PDF、DOCX 和 XLSX 支持读取与提取。</p>
+                      <p>上传文本、PDF、DOCX 或 XLSX，让 Agent 帮你阅读资料、整理内容。可修改 Excel 数据单元格并保留公式，或润色 Word 正文并保留文档结构；修改后从工作区下载。PDF 支持读取与提取。</p>
                       <p>修改后的文本可在工作区预览、编辑和下载。Agent 也可以读取公开网页。</p>
                     </div>
                   ) : (

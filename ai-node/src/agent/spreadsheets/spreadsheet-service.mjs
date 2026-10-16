@@ -4,6 +4,7 @@ import { fromBuffer } from "@office-kit/xlsx/node";
 import { cellValueAsString } from "@office-kit/xlsx/cell";
 import { BoundedZipArchive } from "../documents/bounded-zip.mjs";
 import { DEFAULT_DOCUMENT_LIMITS } from "../documents/limits.mjs";
+import { cellPosition, normalizeCellEdits, patchWorkbookCells } from "./patch-workbook-cells.mjs";
 
 const MAX_MATCHES_IN_RESULT = 20;
 const MAX_CELL_TEXT = 512;
@@ -22,9 +23,11 @@ export class SpreadsheetService {
     this.files = fileIngestionService;
   }
 
-  async inspect({ workspaceId, fileId, sheet, find } = {}) {
+  async inspect({ workspaceId, fileId, sheet, find, range = "A1:L20" } = {}) {
     const managed = await this.files.readFile({ workspaceId, fileId });
-    const { workbook, worksheet } = await this.#openWorkbook(managed.file, managed.bytes, sheet);
+    const { workbook, worksheet } = await this.#openWorkbook(managed.file, managed.bytes, sheet, true);
+    const availableSheets = workbook.sheets.filter((entry) => entry.kind === "worksheet").map((entry) => entry.sheet.title);
+    if (!worksheet) return Object.freeze({ fileId: managed.file.fileId, version: digest(managed.bytes), workbook: managed.file.originalName, availableSheets, sheet: null, sheetRequired: true });
     const summary = describeWorksheet(worksheet);
     const requestedFind = normalizeFind(find);
     const matches = requestedFind ? findRows(summary, requestedFind) : [];
@@ -33,7 +36,9 @@ export class SpreadsheetService {
       version: digest(managed.bytes),
       workbook: managed.file.originalName,
       sheet: worksheet.title,
-      availableSheets: workbook.sheets.filter((entry) => entry.kind === "worksheet").map((entry) => entry.sheet.title),
+      availableSheets,
+      range,
+      cells: inspectCells(worksheet, range),
       headers: summary.headers.map((header) => header.value),
       usedRange: summary.usedRange,
       rowCount: summary.rowCount,
@@ -42,6 +47,26 @@ export class SpreadsheetService {
       matches: matches.slice(0, MAX_MATCHES_IN_RESULT).map((match) => ({ row: match.row, values: match.values })),
       truncated: matches.length > MAX_MATCHES_IN_RESULT,
     });
+  }
+
+  async updateCells({ workspaceId, fileId, expectedVersion, sheet, edits } = {}) {
+    const changes = normalizeCellEdits(edits);
+    const managed = await this.files.readFile({ workspaceId, fileId });
+    if (expectedVersion !== digest(managed.bytes)) throw spreadsheetError("AGENT_SPREADSHEET_STALE_VERSION");
+    const { worksheet } = await this.#openWorkbook(managed.file, managed.bytes, sheet);
+    for (const { cell } of changes) {
+      const { row, column } = cellPosition(cell);
+      if (worksheet.mergedCells.some((r) => row >= r.minRow && row <= r.maxRow && column >= r.minCol && column <= r.maxCol)) throw spreadsheetError("AGENT_SPREADSHEET_UNSUPPORTED_LAYOUT");
+    }
+    const archive = BoundedZipArchive.open(Buffer.from(managed.bytes), DEFAULT_DOCUMENT_LIMITS);
+    const nextBytes = Buffer.from(await patchWorkbookCells(archive, worksheet.title, changes));
+    const reloaded = await this.#openWorkbook(managed.file, nextBytes, worksheet.title);
+    for (const { cell, value } of changes) {
+      const { row, column } = cellPosition(cell);
+      if ((reloaded.worksheet.rows.get(row)?.get(column)?.value ?? null) !== value) throw spreadsheetError("AGENT_SPREADSHEET_VERIFICATION_FAILED");
+    }
+    const replaced = await this.files.replaceFileBytes({ workspaceId, fileId, expectedVersion, bytes: nextBytes });
+    return Object.freeze({ modified: true, operation: "updateCells", sheet: worksheet.title, cellsAffected: changes.length, fileId: replaced.file.fileId, previousVersion: replaced.previousVersion, newVersion: replaced.version, downloadAvailable: true, recalculationRequired: true });
   }
 
   async deleteRows({ workspaceId, fileId, expectedVersion, sheet, match, requireMatchCount = 1 } = {}) {
@@ -82,7 +107,7 @@ export class SpreadsheetService {
     });
   }
 
-  async #openWorkbook(file, bytes, requestedSheet) {
+  async #openWorkbook(file, bytes, requestedSheet, allowDiscovery = false) {
     assertXlsxFile(file, bytes);
     let workbook;
     try { workbook = await loadWorkbook(fromBuffer(Buffer.from(bytes))); }
@@ -92,8 +117,8 @@ export class SpreadsheetService {
     const selected = sheetName
       ? worksheets.find((entry) => entry.sheet.title === sheetName)
       : worksheets.length === 1 ? worksheets[0] : undefined;
-    if (!selected) throw spreadsheetError(sheetName ? "AGENT_SPREADSHEET_SHEET_NOT_FOUND" : "AGENT_SPREADSHEET_SHEET_REQUIRED");
-    return { workbook, worksheet: selected.sheet };
+    if (!selected && !(allowDiscovery && !sheetName && worksheets.length > 1)) throw spreadsheetError(sheetName ? "AGENT_SPREADSHEET_SHEET_NOT_FOUND" : "AGENT_SPREADSHEET_SHEET_REQUIRED");
+    return { workbook, worksheet: selected?.sheet };
   }
 }
 
@@ -153,11 +178,30 @@ function findRows(summary, find) {
   if (!header) throw spreadsheetError("AGENT_SPREADSHEET_COLUMN_NOT_FOUND");
   return summary.rows
     .filter((entry) => entry.row !== summary.headerRow)
-    .filter((entry) => boundedCellText(entry.cells.get(header.column)?.value) === find.equals)
+    .filter((entry) => cellValueAsString(entry.cells.get(header.column)?.value ?? null) === find.equals)
     .map((entry) => ({
       row: entry.row,
       values: Object.fromEntries(summary.headers.map(({ column, value }) => [value, boundedCellText(entry.cells.get(column)?.value)])),
     }));
+}
+
+function inspectCells(worksheet, range) {
+  if (typeof range !== "string") throw spreadsheetError("AGENT_SPREADSHEET_INVALID_REQUEST");
+  const refs = range.split(":");
+  if (refs.length > 2) throw spreadsheetError("AGENT_SPREADSHEET_INVALID_REQUEST");
+  const start = cellPosition(refs[0]);
+  const end = cellPosition(refs[1] ?? refs[0]);
+  if (end.row < start.row || end.column < start.column || (end.row - start.row + 1) * (end.column - start.column + 1) > 400) throw spreadsheetError("AGENT_SPREADSHEET_INVALID_REQUEST");
+  const cells = [];
+  for (let row = start.row; row <= end.row; row++) {
+    for (let column = start.column; column <= end.column; column++) {
+      const cell = worksheet.rows.get(row)?.get(column);
+      if (!cell) continue;
+      const formula = cell.value?.kind === "formula" ? cell.value.formula : undefined;
+      cells.push({ cell: `${columnName(column)}${row}`, value: boundedCellText(cell.value), ...(formula === undefined ? {} : { formula }), truncated: cellValueAsString(cell.value ?? null).length > MAX_CELL_TEXT });
+    }
+  }
+  return cells;
 }
 
 function assertSupportedRowDeletion(worksheet, row) {

@@ -83,6 +83,8 @@ export default function AgentWorkspacePanel({
   // The editor is session-scoped but independent of the live manifest: it
   // survives a concurrent deletion so the save attempt can report 404.
   const activeEdit = edit && edit.sessionId === sessionId ? edit : null;
+  const latestPreviewFile = activePreview ? files.find((file) => file.fileId === activePreview.file.fileId) : undefined;
+  const previewStale = latestPreviewFile && latestPreviewFile.updatedAt !== activePreview?.file.updatedAt;
   const editDirty = activeEdit !== null && activeEdit.content !== activeEdit.originalContent;
   // Orphaned editor from a previous session: never saveable, discard is
   // explicit so unsaved work is never silently dropped.
@@ -301,6 +303,11 @@ export default function AgentWorkspacePanel({
           <div className={styles.workspacePreviewName} title={activePreview.file.originalName}>
             {activePreview.file.originalName}
           </div>
+          {previewStale ? (
+            <p className={styles.workspacePreviewNotice}>
+              文件已更新。<button type="button" className={styles.workspaceRetry} onClick={() => void openPreview(latestPreviewFile)}>刷新预览</button>
+            </p>
+          ) : null}
           {activePreview.status === "loading" ? (
             <p className={styles.workspacePreviewNotice}>正在加载预览…</p>
           ) : activePreview.status === "unsupported" ? (
@@ -311,6 +318,9 @@ export default function AgentWorkspacePanel({
             <p className={styles.workspacePreviewNotice} role="alert">无法加载预览，请重试。</p>
           ) : (
             <>
+              {activePreview.data?.format === "extracted-text" ? (
+                <p className={styles.workspacePreviewNotice}>正文与表格内容预览；原始排版请下载查看。可在对话中让 Agent 修改此文件。</p>
+              ) : null}
               {activePreview.data?.truncated ? (
                 <p className={styles.workspacePreviewTruncated}>文件较大，仅显示前部分内容。</p>
               ) : null}
@@ -496,6 +506,8 @@ function toolLabel(name: string) {
   if (name === "workspace.extract") return "解析文档";
   if (name === "workspace.spreadsheet.inspect") return "读取工作簿";
   if (name === "workspace.spreadsheet.patch") return "修改工作簿";
+  if (name === "workspace.word.inspect") return "读取 Word 文档";
+  if (name === "workspace.word.patch") return "修改 Word 文档";
   if (name === "workspace.fetch") return "抓取网页";
   return name;
 }

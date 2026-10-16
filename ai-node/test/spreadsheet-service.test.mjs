@@ -11,7 +11,9 @@ import { addCellXf } from "@office-kit/xlsx/styles";
 import { FileIngestionService } from "../src/agent/workspace/file-ingestion-service.mjs";
 import { SpreadsheetService } from "../src/agent/spreadsheets/spreadsheet-service.mjs";
 import { WorkspaceManager } from "../src/agent/workspace/workspace-manager.mjs";
-import { buildTestXlsx } from "./helpers/document-fixtures.mjs";
+import { buildTestXlsx, buildZip } from "./helpers/document-fixtures.mjs";
+import { BoundedZipArchive } from "../src/agent/documents/bounded-zip.mjs";
+import { DEFAULT_DOCUMENT_LIMITS } from "../src/agent/documents/limits.mjs";
 
 async function workbookBytes({ duplicateTarget = false } = {}) {
   const workbook = createWorkbook();
@@ -143,4 +145,82 @@ test("spreadsheet inspection rejects macro containers before workbook loading", 
     env.spreadsheets.inspect({ workspaceId: env.workspace.id, fileId: env.upload.fileId, sheet: "人员信息" }),
     (error) => error.code === "AGENT_SPREADSHEET_UNSUPPORTED",
   );
+});
+
+test("spreadsheet discovers sheets and exposes addressable values and formulas in requested ranges", async (t) => {
+  const env = await createEnvironment();
+  t.after(() => rm(env.root, { recursive: true, force: true }));
+  const args = { workspaceId: env.workspace.id, fileId: env.upload.fileId };
+  const discovery = await env.spreadsheets.inspect(args);
+  assert.equal(discovery.sheetRequired, true);
+  assert.deepEqual(discovery.availableSheets, ["人员信息", "说明"]);
+  const page = await env.spreadsheets.inspect({ ...args, sheet: "人员信息", range: "C2:C4" });
+  assert.deepEqual(page.cells.map((cell) => cell.cell), ["C2", "C3", "C4"]);
+  assert.equal(page.cells[2].formula, "1+1");
+  await assert.rejects(env.spreadsheets.inspect({ ...args, sheet: "人员信息", range: "A1:XFD9999" }), { code: "AGENT_SPREADSHEET_INVALID_REQUEST" });
+});
+
+test("spreadsheet column updates preserve formulas, styles and all unrelated archive parts", async (t) => {
+  const env = await createEnvironment();
+  t.after(() => rm(env.root, { recursive: true, force: true }));
+  const args = { workspaceId: env.workspace.id, fileId: env.upload.fileId, sheet: "人员信息" };
+  const original = await env.files.readFile(args);
+  const before = await env.spreadsheets.inspect(args);
+  const result = await env.spreadsheets.updateCells({ ...args, expectedVersion: before.version, edits: [{ cell: "B2", value: "已完成 & <复核>" }, { cell: "B3", value: 42 }, { cell: "B4", value: true }] });
+  assert.equal(result.cellsAffected, 3);
+  assert.equal(result.recalculationRequired, true);
+  const after = await env.files.readFile(args);
+  const a = BoundedZipArchive.open(original.bytes, DEFAULT_DOCUMENT_LIMITS);
+  const b = BoundedZipArchive.open(after.bytes, DEFAULT_DOCUMENT_LIMITS);
+  assert.deepEqual(a.names(), b.names());
+  for (const name of a.names()) {
+    if (name !== "xl/worksheets/sheet1.xml" && name !== "xl/workbook.xml") assert.deepEqual(b.readEntry(name), a.readEntry(name), name);
+  }
+  const sheetBefore = a.readEntry("xl/worksheets/sheet1.xml").toString();
+  const sheetAfter = b.readEntry("xl/worksheets/sheet1.xml").toString();
+  assert.deepEqual([...sheetAfter.matchAll(/<c\b[^>]*>[\s\S]*?<\/c>/g)].filter(([tag]) => !/r="B[234]"/.test(tag)).map(([tag]) => tag), [...sheetBefore.matchAll(/<c\b[^>]*>[\s\S]*?<\/c>/g)].filter(([tag]) => !/r="B[234]"/.test(tag)).map(([tag]) => tag));
+  assert.match(b.readEntry("xl/workbook.xml").toString(), /fullCalcOnLoad="1"/);
+  await assert.rejects(env.spreadsheets.updateCells({ ...args, expectedVersion: before.version, edits: [{ cell: "B2", value: "stale" }] }), { code: "AGENT_SPREADSHEET_STALE_VERSION" });
+});
+
+test("spreadsheet refuses formula writes and invalid batches atomically", async (t) => {
+  const env = await createEnvironment();
+  t.after(() => rm(env.root, { recursive: true, force: true }));
+  const args = { workspaceId: env.workspace.id, fileId: env.upload.fileId, sheet: "人员信息" };
+  const before = await env.spreadsheets.inspect(args);
+  const original = await env.files.readFile(args);
+  for (const [edits, code] of [
+    [[{ cell: "B2", value: "must not persist" }, { cell: "C4", value: 2 }], "FORMULA_PROTECTED"],
+    [[{ cell: "B2", value: "must not persist" }, { cell: "Z99", value: 2 }], "CELL_NOT_FOUND"],
+    [[{ cell: "B2", value: 1 }, { cell: "B2", value: 2 }], "INVALID_REQUEST"],
+    [[{ cell: "B2", value: { formula: "1+1" } }], "INVALID_REQUEST"],
+  ]) {
+    await assert.rejects(env.spreadsheets.updateCells({ ...args, expectedVersion: before.version, edits }), { code: `AGENT_SPREADSHEET_${code}` });
+    assert.deepEqual((await env.files.readFile(args)).bytes, original.bytes);
+  }
+});
+
+test("spreadsheet keeps null, empty strings and formula-like strings as literal cell values", async (t) => {
+  const env = await createEnvironment();
+  t.after(() => rm(env.root, { recursive: true, force: true }));
+  const args = { workspaceId: env.workspace.id, fileId: env.upload.fileId, sheet: "人员信息" };
+  const before = await env.spreadsheets.inspect(args);
+  await env.spreadsheets.updateCells({ ...args, expectedVersion: before.version, edits: [{ cell: "B2", value: null }, { cell: "B3", value: "" }, { cell: "B4", value: "=SUM(A1:A2)" }] });
+  const after = await loadWorkbook(fromBuffer((await env.files.readFile(args)).bytes));
+  const sheet = after.sheets[0].sheet;
+  assert.equal(sheet.rows.get(2)?.get(2)?.value ?? null, null);
+  assert.equal(sheet.rows.get(3).get(2).value, "");
+  assert.equal(sheet.rows.get(4).get(2).value, "=SUM(A1:A2)");
+});
+
+test("spreadsheet protects array formula follower cells without explicit formula nodes", async (t) => {
+  const original = await workbookBytes();
+  const archive = BoundedZipArchive.open(original, DEFAULT_DOCUMENT_LIMITS);
+  const bytes = buildZip(archive.names().map((name) => ({ name, data: name === "xl/worksheets/sheet1.xml" ? archive.readEntry(name).toString().replace(/<c\b[^>]*r="C3"[^>]*>[\s\S]*?<\/c>/, '<c r="C3"><f t="array" ref="C3:C4">1+1</f><v>2</v></c>').replace(/<c\b[^>]*r="C4"[^>]*>[\s\S]*?<\/c>/, '<c r="C4"><v>2</v></c>') : archive.readEntry(name) })));
+  const env = await createEnvironment({ bytes });
+  t.after(() => rm(env.root, { recursive: true, force: true }));
+  const args = { workspaceId: env.workspace.id, fileId: env.upload.fileId, sheet: "人员信息" };
+  const before = await env.spreadsheets.inspect(args);
+  await assert.rejects(env.spreadsheets.updateCells({ ...args, expectedVersion: before.version, edits: [{ cell: "C4", value: 99 }] }), { code: "AGENT_SPREADSHEET_FORMULA_PROTECTED" });
+  assert.deepEqual((await env.files.readFile(args)).bytes, bytes);
 });
