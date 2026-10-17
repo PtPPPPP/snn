@@ -21,10 +21,10 @@
   --status-error-soft: #332725;
   --status-warning: #e2cc72;
   --status-warning-soft: #332e20;
-  --radius-1: 0px;
-  --radius-2: 2px;
-  --radius-3: 2px;
-  --radius-4: 4px;
+  --radius-1: 6px;
+  --radius-2: 10px;
+  --radius-3: 16px;
+  --radius-4: 24px;
   --space-1: .25rem;
   --space-2: .5rem;
   --space-3: .75rem;
@@ -69,7 +69,7 @@
   --opening-space-3: 1.5rem;
   --opening-space-4: 2.5rem;
   --opening-space-5: 4rem;
-  --opening-radius: 0px;
+  --opening-radius: var(--radius-2);
   --opening-stroke: 1px;
   --opening-control-height: 48px;
   --opening-mono: var(--font-geist-mono), monospace;
