@@ -40,6 +40,7 @@ function setup(t,beforeUpgrade){
  async function bind(info=applicant){
   const state=await request('/api/interview/session');assert.equal(state.status,200);
   const cookie=state.cookie,registered=await request('/api/interview/identity',{cookie,method:'POST',data:info});
+  if(registered.status===201&&!registered.data.receipt)assert.equal((await request('/api/interview/start',{cookie,method:'POST',data:{}})).status,200);
   return {...registered,cookie};
  }
  const count=table=>db.sqlite.prepare('SELECT COUNT(*) AS n FROM '+table).get().n;
