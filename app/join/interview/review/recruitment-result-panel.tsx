@@ -1,5 +1,5 @@
 'use client';
-import {useEffect,useState} from 'react';
+import {useState} from 'react';
 import {RESULT_LABELS,RESULT_MESSAGES,replyLabel,type RecruitmentResult,type ResultStatus} from '../../../../lib/interview/results';
 import s from '../interview.module.css';
 
@@ -7,7 +7,12 @@ type Props={id:string;totalScore:number|null;reviewRevision:number;result:Recrui
 const date=(value:string)=>new Date(value).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'});
 export default function RecruitmentResultPanel({id,totalScore,reviewRevision,result,disabled,onSaved,onRefresh}:Props){
  const [status,setStatus]=useState<ResultStatus>(result.status),[message,setMessage]=useState(result.message),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[conflict,setConflict]=useState(false);
- useEffect(()=>{setStatus(result.status);setMessage(result.message);setError('');setConflict(false);},[id,result.revision,result.status,result.message]);
+ const [source,setSource]=useState({id,revision:result.revision,status:result.status,message:result.message});
+ // Reset the draft before rendering a changed server result; keep it when only reply metadata refreshes.
+ if(source.id!==id||source.revision!==result.revision||source.status!==result.status||source.message!==result.message){
+  setSource({id,revision:result.revision,status:result.status,message:result.message});
+  setStatus(result.status);setMessage(result.message);setError('');setConflict(false);
+ }
  async function publish(){
   if(disabled||busy)return;setBusy(true);setError('');setNotice('');
   try{

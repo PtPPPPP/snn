@@ -66,7 +66,7 @@ for (const [name, viewport] of viewports) {
     page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
     await page.route("**/api/ai/status", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ online: false, model: null, status: "offline" }) }));
     await page.setViewportSize(viewport);
-    await page.goto("/ai/", { waitUntil: "networkidle" });
+    await page.goto("/ai/", { waitUntil: "domcontentloaded" });
     await expect(page.locator('section[aria-label="SNN AI Chat"]')).toBeVisible();
     await expect(page.locator("#ai-message")).toBeVisible();
     await expect(page.getByRole("button", { name: /深度思考/ })).toBeVisible();
@@ -114,7 +114,7 @@ test("AI delete dialog keyboard smoke", async ({ page }) => {
   await mockAiStatusOffline(page);
   await page.goto("/ai/", { waitUntil: "domcontentloaded" });
   await seedConversation(page, { id: "browser-smoke", title: "Browser smoke conversation", createdAt: Date.now(), updatedAt: Date.now(), messages: [{ role: "user", content: `https://example.com/${"unbroken-token-".repeat(90)}\n第一段消息。\n\n第二段消息。` }], version: 1 });
-  await page.reload({ waitUntil: "networkidle" });
+  await page.reload({ waitUntil: "domcontentloaded" });
   const messageBubble = page.locator('[class*="messageBubble"]').first();
   await expect(messageBubble).toBeVisible();
   expect(await messageBubble.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
@@ -145,7 +145,7 @@ test("AI thinking preference restores without hydration errors", async ({ page }
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
   await mockAiStatusOffline(page);
   await page.addInitScript("localStorage.setItem('snn-ai-thinking-mode', 'true')");
-  await page.goto("/ai/", { waitUntil: "networkidle" });
+  await page.goto("/ai/", { waitUntil: "domcontentloaded" });
   const toggle = page.getByRole("button", { name: /深度思考/ });
   // Persisted preference restored after hydration, without any hydration error.
   await expect(toggle).toHaveAttribute("aria-pressed", "true");
@@ -163,7 +163,7 @@ test("AI thinking preference restores without hydration errors", async ({ page }
 test("AI first-message title persists after response completion and reload", async ({ page }) => {
   await mockAiStatusOffline(page);
   await page.route("**/api/ai/chat/stream", (route) => route.fulfill({ status: 503, contentType: "text/plain", body: "offline" }));
-  await page.goto("/ai/", { waitUntil: "networkidle" });
+  await page.goto("/ai/", { waitUntil: "domcontentloaded" });
   await page.fill("#ai-message", "帮我分析一下这个项目");
   await page.keyboard.press("Enter");
   await expect(page.locator('[class*="streamNotice"]').first()).toBeVisible();
@@ -171,7 +171,7 @@ test("AI first-message title persists after response completion and reload", asy
   await expect(title).toHaveText("帮我分析一下这个项目");
   await page.waitForTimeout(900);
   await expect(title).toHaveText("帮我分析一下这个项目");
-  await page.reload({ waitUntil: "networkidle" });
+  await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.locator('[class*="historyItemTitle"]').first()).toHaveText("帮我分析一下这个项目");
 });
 
@@ -179,7 +179,7 @@ test("AI first-message title persists after response completion and reload", asy
 // geometry — previously it shrank 40px → 36px and made the composer jump.
 test("AI composer textarea keeps geometry while disabled", async ({ page }) => {
   await mockAiStatusOffline(page);
-  await page.goto("/ai/", { waitUntil: "networkidle" });
+  await page.goto("/ai/", { waitUntil: "domcontentloaded" });
   const textarea = page.locator("#ai-message");
   const enabledHeight = await textarea.evaluate((element) => element.getBoundingClientRect().height);
   await textarea.evaluate((element) => { element.disabled = true; });
@@ -200,7 +200,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1024, height: 768
     await page.setViewportSize(viewport);
     await page.goto("/ai/", { waitUntil: "domcontentloaded" });
     await seedConversation(page, { id: `audit-max-${viewport.width}`, title: `max multiline ${viewport.width}`, createdAt: Date.now(), updatedAt: Date.now(), messages, version: 1 });
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload({ waitUntil: "domcontentloaded" });
     await page.fill("#ai-message", Array.from({ length: 30 }, (_, i) => `第 ${i + 1} 行多行输入`).join("\n"));
     await page.locator('[class*="messages"]').evaluate((element) => { element.scrollTop = element.scrollHeight; });
     const bubble = page.locator('[class*="messageBubble"]').last();

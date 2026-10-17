@@ -35,7 +35,7 @@ for (const extension of ["docx", "xlsx"]) {
       });
       await page.route(`**/api/agent/sessions/${sessionId}/files`, (route) => route.fulfill({ status: route.request().method() === "POST" ? 201 : 200, json: route.request().method() === "POST" ? { file } : { files: [file] } }));
       await page.route(`**/api/agent/sessions/${sessionId}/files/${file.fileId}/preview`, (route) => route.fulfill({ json: { fileId: file.fileId, name: file.originalName, size: file.size, truncated: false, format: "extracted-text", content: previewText } }));
-      await page.goto("/ai/", { waitUntil: "networkidle" });
+      await page.goto("/ai/", { waitUntil: "domcontentloaded" });
       await page.getByRole("tab", { name: /Agent/ }).click();
       await page.getByTestId("agent-file-input").setInputFiles({ name: file.originalName, mimeType: "application/octet-stream", buffer: Buffer.from("mock Office upload") });
       await expect(page.getByTestId("attachment-chip")).toContainText(file.originalName);
@@ -67,7 +67,7 @@ for (const extension of ["docx", "xlsx"]) {
 
 test("Agent mode switch is visible and preserves chat", async ({ page }) => {
   await mockAgentStatus(page, true);
-  await page.goto("/ai/", { waitUntil: "networkidle" });
+  await page.goto("/ai/", { waitUntil: "domcontentloaded" });
   // ModeSwitch should be visible
   await expect(page.getByRole("tab", { name: "Chat" })).toBeVisible();
   await expect(page.getByRole("tab", { name: /Agent/ })).toBeVisible();
@@ -107,7 +107,7 @@ test("Agent upload and attachment flow", async ({ page }) => {
     return route.fulfill({ status: 200, headers: { "content-type": "text/event-stream" }, body });
   });
 
-  await page.goto("/ai/", { waitUntil: "networkidle" });
+  await page.goto("/ai/", { waitUntil: "domcontentloaded" });
   await page.getByRole("tab", { name: /Agent/ }).click();
   // Upload via file input
   const fileInput = page.getByTestId("agent-file-input");
@@ -148,7 +148,7 @@ test("Agent XSS-safe filename and model output", async ({ page }) => {
     const body = `event: message.delta\ndata: {"type":"message.delta","runId":"snn-run-1","sessionId":"${sessionId}","payload":{"text":${JSON.stringify(unsafeOutput)}}}\n\nevent: run.completed\ndata: {"type":"run.completed","runId":"snn-run-1","sessionId":"${sessionId}","timestamp":"2026-01-01T00:00:00.000Z"}\n\n`;
     return route.fulfill({ status: 200, headers: { "content-type": "text/event-stream" }, body });
   });
-  await page.goto("/ai/", { waitUntil: "networkidle" });
+  await page.goto("/ai/", { waitUntil: "domcontentloaded" });
   await page.getByRole("tab", { name: /Agent/ }).click();
   const fileInput = page.getByTestId("agent-file-input");
   await fileInput.setInputFiles({ name: evilName, mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4") });
@@ -194,7 +194,7 @@ test("Agent cancel and reload resume", async ({ page }) => {
     return route.fulfill({ status: 202, contentType: "application/json", body: JSON.stringify({ status: "cancellation_requested" }) });
   });
 
-  await page.goto("/ai/", { waitUntil: "networkidle" });
+  await page.goto("/ai/", { waitUntil: "domcontentloaded" });
   await page.getByRole("tab", { name: /Agent/ }).click();
   await page.getByTestId("agent-file-input").setInputFiles({ name: "a.txt", mimeType: "text/plain", buffer: Buffer.from("hi") });
   await expect(page.getByTestId("attachment-chip")).toBeVisible();
@@ -205,7 +205,7 @@ test("Agent cancel and reload resume", async ({ page }) => {
   await page.getByRole("button", { name: "停止生成" }).click();
   await expect(page.getByText("已停止生成")).toBeVisible({ timeout: 3000 });
   // Reload should retain session
-  await page.reload({ waitUntil: "networkidle" });
+  await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.getByRole("tab", { name: /Agent/ })).toBeVisible();
   await page.getByRole("tab", { name: /Agent/ }).click();
   // Session list should still contain the session
@@ -229,7 +229,7 @@ test("Agent limits a multi-file selection to eight pending uploads", async ({ pa
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ files: [] }) });
   });
 
-  await page.goto("/ai/", { waitUntil: "networkidle" });
+  await page.goto("/ai/", { waitUntil: "domcontentloaded" });
   await page.getByRole("tab", { name: /Agent/ }).click();
   await page.getByTestId("agent-file-input").setInputFiles(
     Array.from({ length: 9 }, (_, index) => ({ name: `附件-${index + 1}.txt`, mimeType: "text/plain", buffer: Buffer.from(String(index)) })),
@@ -261,7 +261,7 @@ test("Removing a pending attachment preserves the workspace file; deleting it re
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ files: [file] }) });
   });
 
-  await page.goto("/ai/", { waitUntil: "networkidle" });
+  await page.goto("/ai/", { waitUntil: "domcontentloaded" });
   await page.getByRole("tab", { name: /Agent/ }).click();
   await page.getByTestId("agent-file-input").setInputFiles({ name: file.originalName, mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4") });
   await expect(page.getByTestId("attachment-chip")).toBeVisible();
@@ -299,7 +299,7 @@ test("Upload status stays visible and XHR uploads complete through the agent API
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ files: [] }) });
   });
 
-  await page.goto("/ai/", { waitUntil: "networkidle" });
+  await page.goto("/ai/", { waitUntil: "domcontentloaded" });
   await page.getByRole("tab", { name: /Agent/ }).click();
   const uploadRequest = page.waitForRequest((request) => request.url().includes(`/api/agent/sessions/${sessionId}/files`) && request.method() === "POST");
   await page.getByTestId("agent-file-input").setInputFiles({ name: "large.log", mimeType: "text/plain", buffer: Buffer.alloc(2 * 1024 * 1024, 97) });
@@ -330,7 +330,7 @@ test("A late upload result cannot leak into a newly selected session", async ({ 
   });
   await page.route(`**/api/agent/sessions/${sessionB}/files`, async (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ files: [] }) }));
 
-  await page.goto("/ai/", { waitUntil: "networkidle" });
+  await page.goto("/ai/", { waitUntil: "domcontentloaded" });
   await page.getByRole("tab", { name: /Agent/ }).click();
   await page.getByRole("button", { name: new RegExp(`^Agent ${sessionA.slice(-6)}`) }).click();
   await page.getByTestId("agent-file-input").setInputFiles({ name: "学校泳池项目合作意向书(1).docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", buffer: Buffer.from("docx") });
@@ -361,7 +361,7 @@ test("Upload failure leaves no ghost chip and long Unicode names stay within a m
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ files: [] }) });
   });
 
-  await page.goto("/ai/", { waitUntil: "networkidle" });
+  await page.goto("/ai/", { waitUntil: "domcontentloaded" });
   await page.getByRole("tab", { name: /Agent/ }).click();
   const fileInput = page.getByTestId("agent-file-input");
   await fileInput.setInputFiles({ name: longName, mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4") });
@@ -403,7 +403,7 @@ test("Files Panel refreshes the authoritative inventory after an Agent file muta
     const body = `event: run.started\ndata: {"runId":"run-refresh"}\n\nevent: tool.started\ndata: {"runId":"run-refresh","payload":{"name":"edit"}}\n\nevent: tool.completed\ndata: {"runId":"run-refresh","payload":{"name":"write"}}\n\nevent: run.completed\ndata: {"runId":"run-refresh"}\n\n`;
     return route.fulfill({ status: 200, headers: { "content-type": "text/event-stream" }, body });
   });
-  await page.goto("/ai/", { waitUntil: "networkidle" });
+  await page.goto("/ai/", { waitUntil: "domcontentloaded" });
   await page.getByRole("tab", { name: /Agent/ }).click();
   await page.getByTestId("agent-file-input").setInputFiles({ name: "notes.md", mimeType: "text/markdown", buffer: Buffer.from("version one") });
   await page.getByTestId("agent-input").fill("edit notes and create summary");
@@ -436,7 +436,7 @@ test("Workspace panel previews text read-only, escapes payloads, and isolates se
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ fileId, name: "notes.md", mime: "text/markdown", size: 42, truncated: false, content: xssContent }) });
   });
 
-  await page.goto("/ai/", { waitUntil: "networkidle" });
+  await page.goto("/ai/", { waitUntil: "domcontentloaded" });
   await page.getByRole("tab", { name: /Agent/ }).click();
 
   // Desktop default: workspace panel opens automatically; toggle reflects state.

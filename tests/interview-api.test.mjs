@@ -42,8 +42,13 @@ function setup(t,beforeUpgrade){
   const cookie=state.cookie,registered=await request('/api/interview/identity',{cookie,method:'POST',data:info});
   return {...registered,cookie};
  }
+ async function begin(){
+  const bound=await bind();assert.equal(bound.status,201);
+  const started=await request('/api/interview/start',{cookie:bound.cookie,method:'POST',data:{}});assert.equal(started.status,200);
+  return bound;
+ }
  const count=table=>db.sqlite.prepare('SELECT COUNT(*) AS n FROM '+table).get().n;
- return {db,env,request,bind,count};
+ return {db,env,request,bind,begin,count};
 }
 function answers(identityId,overrides={}){
  const ids=[...OBJECTIVE_IDS,...COMMON_IDS,'q09','q13'];
@@ -53,7 +58,7 @@ function answers(identityId,overrides={}){
  })),...overrides};
 }
 function fullGrades(questions,fraction=1){return Object.fromEntries(questions.map(q=>[q.id,isObjectiveQuestion(q)?{score:q.maxScore,comment:'评分测试',automatic:true}:{score:q.maxScore*fraction,comment:'评分测试',criteria:Object.fromEntries(RUBRICS[q.id].criteria.map(c=>[c.id,c.points*fraction]))}]));}
-async function submitted(s){const identity=await s.bind();assert.equal(identity.status,201);const result=await s.request('/api/interview/submissions',{cookie:identity.cookie,method:'POST',data:answers(identity.data.identity.id)});assert.equal(result.status,201);return {...identity,id:result.data.receipt.id};}
+async function submitted(s){const identity=await s.begin();assert.equal(identity.status,201);const result=await s.request('/api/interview/submissions',{cookie:identity.cookie,method:'POST',data:answers(identity.data.identity.id)});assert.equal(result.status,201);return {...identity,id:result.data.receipt.id};}
 
 test('group visitors register directly without ChatGPT, access codes or pre-created invitations',async t=>{
  const s=setup(t),state=await s.request('/api/interview/session');assert.equal(state.status,200);assert.equal(state.data.identity,null);assert.equal(state.data.receipt,null);assert.ok(state.cookie);
@@ -117,17 +122,28 @@ test('concurrent registration enforces browser and normalized student uniqueness
   assert.equal(s.count('interview_invitations'),0);
  }
 });
+test('server timing is required, retries keep the original start, and submissions retain it',async t=>{
+ const s=setup(t),bound=await s.bind(),options={cookie:bound.cookie,method:'POST',data:{}};
+ const premature=await s.request('/api/interview/submissions',{...options,data:answers(bound.data.identity.id)});
+ assert.equal(premature.status,409);assert.equal(premature.data.code,'START_REQUIRED');assert.equal(s.count('interview_submissions'),0);
+ const started=await s.request('/api/interview/start',options);assert.equal(started.status,200);assert.ok(Number.isFinite(Date.parse(started.data.startedAt)));
+ const retry=await s.request('/api/interview/start',options);assert.equal(retry.status,200);assert.equal(retry.data.startedAt,started.data.startedAt);
+ const saved=await s.request('/api/interview/submissions',{...options,data:answers(bound.data.identity.id)});
+ assert.equal(saved.status,201);assert.equal(saved.data.receipt.startedAt,started.data.startedAt);assert.ok(saved.data.receipt.elapsedSeconds>=0);
+ const afterSubmit=await s.request('/api/interview/start',options);assert.equal(afterSubmit.status,409);assert.equal(afterSubmit.data.code,'ALREADY_SUBMITTED');
+});
+
 test('submission rejects unbound sessions, forged identity/profile and incomplete or foreign questions',async t=>{
  const s=setup(t),unbound=await s.request('/api/interview/session');
  assert.equal((await s.request('/api/interview/submissions',{cookie:unbound.cookie,method:'POST',data:answers(crypto.randomUUID())})).status,428);
- const bound=await s.bind(),id=bound.data.identity.id;
+ const bound=await s.begin(),id=bound.data.identity.id;
  assert.equal((await s.request('/api/interview/submissions',{cookie:bound.cookie,method:'POST',data:answers(crypto.randomUUID())})).status,403);
  assert.equal((await s.request('/api/interview/submissions',{cookie:bound.cookie,method:'POST',data:answers(id,{...applicant,name:'伪造的名字'})})).status,409);
  assert.equal((await s.request('/api/interview/submissions',{cookie:bound.cookie,method:'POST',data:answers(id,{answers:{q01:'incomplete'}})})).status,400);
  assert.equal(s.count('interview_submissions'),0);
 });
 test('concurrent and repeated submissions keep one answer sheet, audit record and receipt',async t=>{
- const s=setup(t),bound=await s.bind(),id=bound.data.identity.id,data=answers(id);
+ const s=setup(t),bound=await s.begin(),id=bound.data.identity.id,data=answers(id);
  const results=await Promise.all([1,2].map(()=>s.request('/api/interview/submissions',{cookie:bound.cookie,method:'POST',data})));
  assert.deepEqual(results.map(result=>result.status).sort(),[200,201]);assert.deepEqual(results[0].data.receipt,results[1].data.receipt);assert.equal(results[0].data.receipt.id,id);assert.equal(s.count('interview_submissions'),1);
  const before=s.db.sqlite.prepare('SELECT answers_json FROM interview_submissions').get().answers_json;
@@ -183,7 +199,7 @@ test('cross-origin, invalid content types, malformed and oversized bodies never 
  assert.equal((await s.request('/api/interview/identity',{cookie:state.cookie,method:'POST',raw:JSON.stringify({name:'汉'.repeat(40000)})})).status,413);assert.equal(s.count('interview_identities'),0);
 });
 test('maximum-length Chinese parts fit the byte limit and all twelve subjective parts are persisted',async t=>{
- const s=setup(t),bound=await s.bind(),data=answers(bound.data.identity.id);
+ const s=setup(t),bound=await s.begin(),data=answers(bound.data.identity.id);
  for(const id of Object.keys(data.answers))for(const part of (QUESTIONS.find(q=>q.id===id).parts??[]))data.answers[id][part.id]='汉'.repeat(part.maxLength);
  assert.equal((await s.request('/api/interview/submissions',{cookie:bound.cookie,method:'POST',data})).status,201);
  const row=s.db.sqlite.prepare('SELECT answers_json FROM interview_submissions').get(),saved=JSON.parse(row.answers_json);assert.equal(Object.keys(saved).length,12);assert.equal(Object.values(saved).reduce((sum,value)=>sum+(value&&typeof value==='object'&&!Array.isArray(value)?Object.keys(value).length:0),0),12);
@@ -230,7 +246,7 @@ test('every selectable mixed paper has twelve questions and the same 40 plus 60 
 });
 
 test('new submissions require the matching bank and the declared bounded answer parts',async t=>{
- const s=setup(t),bound=await s.bind(),id=bound.data.identity.id;
+ const s=setup(t),bound=await s.begin(),id=bound.data.identity.id;
  const call=data=>s.request('/api/interview/submissions',{cookie:bound.cookie,method:'POST',data});
  for(const version of [undefined,LEGACY_BANK_VERSION,'future-bank']){
   const result=await call(answers(id,{questionBankVersion:version}));assert.equal(result.status,409);assert.equal(result.data.code,'QUESTION_BANK_CHANGED');
@@ -252,7 +268,7 @@ test('new submissions require the matching bank and the declared bounded answer 
 });
 
 test('the server stores its own questions and rubric snapshot without leaking private scoring',async t=>{
- const s=setup(t),bound=await s.bind(),id=bound.data.identity.id;
+ const s=setup(t),bound=await s.begin(),id=bound.data.identity.id;
  const received=await s.request('/api/interview/submissions',{cookie:bound.cookie,method:'POST',data:answers(id,{questions:[{maxScore:999}],rubrics:{q01:{example:'forged'}}})});assert.equal(received.status,201);
  const row=s.db.sqlite.prepare('SELECT * FROM interview_submissions').get(),snapshot=JSON.parse(row.rubrics_json);
  assert.equal(row.question_bank_version,QUESTION_BANK_VERSION);assert.equal(Object.keys(snapshot).length,12);assert.deepEqual(snapshot.q01,RUBRICS.q01);

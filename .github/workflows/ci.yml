@@ -29,6 +29,9 @@ jobs:
       - name: Test ai-gateway
         run: npm run test:ai-gateway
 
+      - name: Test interview API
+        run: npm run test:interview
+
       - name: Production build
         run: npm run build
 

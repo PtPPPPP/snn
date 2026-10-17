@@ -1,6 +1,6 @@
 import { devices } from "@playwright/test";
 
-export default {
+const config = {
   testDir: "./tests/prodcheck",
   timeout: 180_000,
   expect: { timeout: 15_000 },
@@ -11,3 +11,5 @@ export default {
     ...devices["Desktop Chrome"],
   },
 };
+
+export default config;

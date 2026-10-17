@@ -1,8 +1,10 @@
-import test from 'node:test';
+import test,{after} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-const {default:worker}=await import('../dist/server/index.js');
-async function response(path){return worker.fetch(new Request('http://localhost'+path,{headers:{accept:'text/html'}}),{ASSETS:{fetch:async()=>new Response('Not found',{status:404})}},{waitUntil(){},passThroughOnException(){}});}
+import {startBuiltWorker} from '../scripts/built-worker.mjs';
+const worker=await startBuiltWorker();
+after(()=>worker.close());
+async function response(path){return worker.fetch(new Request('http://localhost'+path,{headers:{accept:'text/html'}}));}
 async function html(path){const r=await response(path);assert.equal(r.status,200,path);return r.text();}
 function elementWith(html,attribute,tag){const start=new RegExp(`<${tag}\\b[^>]*\\b${attribute}(?:="[^"]*")?[^>]*>`).exec(html);if(!start)return null;const rest=html.slice(start.index),tags=new RegExp(`<(/?)${tag}\\b[^>]*>`,'g');let depth=0;for(const match of rest.matchAll(tags)){depth+=match[1]?-1:1;if(depth===0)return rest.slice(0,match.index+match[0].length);}return null;}
 test('canonical route is one sequential article with seven independent local experiments',async()=>{

@@ -1,26 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { startBuiltWorker } from "../scripts/built-worker.mjs";
 
 const pageTitle = /<title>SNN[^<]*<\/title>/i;
 
-test("renders page title metadata", async () => {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-  const { default: worker } = await import(workerUrl.href);
+test("renders page title metadata", async (t) => {
+  const worker = await startBuiltWorker();
+  t.after(() => worker.close());
 
   const response = await worker.fetch(
     new Request("http://localhost/", {
       headers: { accept: "text/html" },
     }),
-    {
-      ASSETS: {
-        fetch: async () => new Response("Not found", { status: 404 }),
-      },
-    },
-    {
-      waitUntil() {},
-      passThroughOnException() {},
-    },
   );
 
   assert.equal(response.status, 200);
@@ -31,11 +22,10 @@ test("renders page title metadata", async () => {
   assert.match(await response.text(), pageTitle);
 });
 
-test("homepage exposes functional navigation and removes obsolete Menu control", async () => {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}-nav`);
-  const { default: worker } = await import(workerUrl.href);
-  const response = await worker.fetch(new Request("http://localhost/", { headers: { accept: "text/html" } }), { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } }, { waitUntil() {}, passThroughOnException() {} });
+test("homepage exposes functional navigation and removes obsolete Menu control", async (t) => {
+  const worker = await startBuiltWorker();
+  t.after(() => worker.close());
+  const response = await worker.fetch(new Request("http://localhost/", { headers: { accept: "text/html" } }));
   const html = await response.text();
   assert.match(html, /href="#projects"/);
   assert.match(html, /href="\/ai\/"/);
@@ -43,22 +33,13 @@ test("homepage exposes functional navigation and removes obsolete Menu control",
   assert.doesNotMatch(html, />\s*Menu\s*</);
 });
 
-test("production site URL drives canonical metadata without localhost", async () => {
-  // The SSR bundle reads process.env.NEXT_PUBLIC_SITE_URL at request time.
-  // Set it before the cache-busted import so the module-scope constant picks
-  // it up, then verify no localhost leaks into public metadata.
-  process.env.NEXT_PUBLIC_SITE_URL = "https://snnai.cn";
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}-site-url`);
-  const { default: worker } = await import(workerUrl.href);
+test("production site URL drives canonical metadata without localhost", async (t) => {
+  const worker = await startBuiltWorker({ vars: { NEXT_PUBLIC_SITE_URL: "https://snnai.cn" } });
+  t.after(() => worker.close());
 
   const response = await worker.fetch(
     new Request("http://localhost/", { headers: { accept: "text/html" } }),
-    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
-    { waitUntil() {}, passThroughOnException() {} },
   );
-  process.env.NEXT_PUBLIC_SITE_URL = undefined;
-
   const html = await response.text();
   assert.match(html, /https:\/\/snnai\.cn/);
   assert.doesNotMatch(html, /metadataBase[^>]*localhost/);

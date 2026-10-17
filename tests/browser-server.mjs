@@ -1,12 +1,15 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { startBuiltWorker } from "../scripts/built-worker.mjs";
 
 const root = process.cwd();
 const clientRoot = path.join(root, "dist", "client");
 const fontRoot = path.join(root, ".vinext", "fonts");
-const worker = (await import(pathToFileURL(path.join(root, "dist", "server", "index.js")).href)).default;
+const worker = await startBuiltWorker({ root });
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.once(signal, async () => { await worker.close(); process.exit(0); });
+}
 const mime = { ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".woff2": "font/woff2" };
 
 function assetResponse(url) {
@@ -25,9 +28,7 @@ createServer(async (request, response) => {
   try {
     const result = url.pathname.startsWith("/assets/") || url.pathname.startsWith("/__fonts/")
       ? await assetResponse(url)
-      : await worker.fetch(new Request(`http://127.0.0.1:3000${url.pathname}${url.search}`, { method: request.method, headers: request.headers }), {
-        ASSETS: { fetch: (assetRequest) => assetResponse(assetRequest.url) },
-      }, { waitUntil() {}, passThroughOnException() {} });
+      : await worker.fetch(new Request(`http://127.0.0.1:3000${url.pathname}${url.search}`, { method: request.method, headers: request.headers }));
     let body = Buffer.from(await result.arrayBuffer());
     const contentType = result.headers.get("content-type") || "";
     if (contentType.includes("text/html")) {
