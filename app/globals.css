@@ -7,7 +7,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text-primary);
-  font: 400 var(--type-body)/1.75 var(--font-geist-sans), sans-serif;
+  font: 400 var(--type-body)/var(--snn-leading) var(--font-geist-sans), sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 a { color: inherit; text-decoration: none; }
@@ -16,24 +16,24 @@ button, select { color: inherit; }
 button, a, summary { -webkit-tap-highlight-color: transparent; }
 button:not(:disabled), summary { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
-h1, h2, h3 { text-wrap: balance; font-weight: 500; }
+h1, h2, h3 { text-wrap: balance; font-weight: 400; }
 p { text-wrap: pretty; }
 img { max-width: 100%; }
 ::selection { background: var(--accent-soft); color: var(--text-primary); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 * { scrollbar-width: thin; scrollbar-color: var(--border-active) transparent; }
-body:has([data-site-shell][data-lab=true]) { --snn-shell-height: 113px; }
+body:has([data-site-shell][data-lab=true]) { --snn-shell-height: calc(var(--snn-ch) * 5); }
 .button {
   display: inline-flex;
   justify-content: center;
   align-items: center;
-  gap: 14px;
-  min-height: 48px;
-  padding: 0 22px;
+  gap: calc(var(--snn-inline-step) * 4);
+  min-height: var(--snn-control-size);
+  padding: 0 calc(var(--snn-inline-step) * 6);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-2);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--snn-type-body);
+  font-weight: 400;
   transition: background var(--motion-fast) var(--ease), border-color var(--motion-fast) var(--ease), transform var(--motion-fast) var(--ease);
 }
 .button-primary { background: var(--snn-control); color: var(--snn-control-text); border-color: transparent; box-shadow: var(--shadow-button); }
@@ -42,7 +42,7 @@ body:has([data-site-shell][data-lab=true]) { --snn-shell-height: 113px; }
 .button-ghost:hover { background: var(--surface-2); color: var(--text-primary); border-color: var(--border-active); }
 .button:active { transform: translateY(1px); }
 @media (pointer: coarse) {
-  input, textarea, select { font-size: 16px; }
+  input, textarea, select { font-size: var(--snn-type-body); }
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
@@ -57,3 +57,15 @@ body:has([data-site-shell][data-lab=true]) { --snn-shell-height: 113px; }
 /* Numeric alignment is a shared material rule. */
 output, input[type=number], code, pre { font-variant-numeric: tabular-nums; }
 button:disabled { opacity: .45; }
+
+/* Character-grid foundation applies to UI text; formulas retain math typography. */
+html { font-size: var(--snn-type-body); }
+body { font-kerning: none; font-variant-ligatures: none; font-synthesis: none; letter-spacing: 0; }
+button, input, select, textarea, pre, code, output { font-family: var(--snn-font-mono); font-variant-ligatures: none; letter-spacing: 0; }
+pre { tab-size: 2; }
+.button { min-height: var(--snn-control-size); padding-inline: calc(var(--snn-cw) * 3); }
+.button-primary { background: transparent; color: var(--text-primary); border-color: var(--border-active); }
+.button-primary:hover { background: var(--surface-2); }
+.button:active { transform: none; }
+@media(max-width:640px) { :root { --type-display: var(--snn-type-heading); } }
+@media(max-width:760px) { :root { --snn-shell-height:64px; } body:has([data-site-shell][data-lab=true]) { --snn-shell-height:112px; } }

@@ -30,12 +30,6 @@ import DeleteConversationDialog from "./delete-conversation-dialog";
 import styles from "./ai-chat.module.css";
 import { buildConversationSnapshot, canApplyGeneration, canApplyNavigation } from "../../lib/ai-conversation-state.mjs";
 import { deleteConversationLifecycle, saveConversationWithNotice } from "../../lib/ai-conversation-lifecycle.mjs";
-import ModeSwitch, { type ChatMode } from "./mode-switch";
-import { useAgent } from "./use-agent";
-import AgentComposer from "./agent-composer";
-import AgentWorkspacePanel from "./agent-files-panel";
-import AgentMessage from "./agent-message";
-import AgentToolActivity from "./agent-tool-activity";
 
 type AiNodeState = "checking" | "offline" | "online";
 const THINKING_STORAGE_KEY = "snn-ai-thinking-mode";
@@ -74,31 +68,6 @@ function preferenceStore(key: string) {
 }
 const thinkingPreference = preferenceStore(THINKING_STORAGE_KEY);
 const webSearchPreference = preferenceStore(WEB_SEARCH_STORAGE_KEY);
-
-// Workspace panel open/closed is a hydration-safe preference. The server
-// snapshot is always false (panel closed during SSR/first render); after
-// hydration React switches to the live snapshot, which defaults to open on
-// desktop and closed on mobile so the drawer never covers a fresh mobile view.
-const WORKSPACE_OPEN_KEY = "snn-agent-workspace-open";
-function readWorkspaceOpen(): boolean {
-  try {
-    const stored = window.localStorage.getItem(WORKSPACE_OPEN_KEY);
-    if (stored === "true") return true;
-    if (stored === "false") return false;
-    return window.matchMedia("(min-width: 901px)").matches;
-  } catch {
-    return false;
-  }
-}
-const workspaceOpenPreference = {
-  subscribe: subscribePreference,
-  getSnapshot: readWorkspaceOpen,
-  getServerSnapshot: () => false,
-  write(open: boolean) {
-    try { window.localStorage.setItem(WORKSPACE_OPEN_KEY, String(open)); } catch {}
-    for (const listener of preferenceListeners) listener();
-  },
-};
 
 function toUiMessages(messages: AiChatMessage[]): ChatMessageModel[] {
   return messages.map((m, i) => ({
@@ -149,27 +118,6 @@ export default function AiChat() {
   const webSearchMode = useSyncExternalStore(webSearchPreference.subscribe, webSearchPreference.getSnapshot, webSearchPreference.getServerSnapshot);
   const [webSearchAvailable, setWebSearchAvailable] = useState(false);
   const [isThinkingRequest, setIsThinkingRequest] = useState(false);
-  const [mode, setMode] = useState<ChatMode>("chat");
-  const agent = useAgent();
-  const workspaceOpen = useSyncExternalStore(
-    workspaceOpenPreference.subscribe,
-    workspaceOpenPreference.getSnapshot,
-    workspaceOpenPreference.getServerSnapshot,
-  );
-
-  useEffect(() => {
-    try {
-      const v = localStorage.getItem("snn-chat-mode");
-      if (v === "chat" || v === "agent") {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate persisted mode once on mount
-        setMode(v);
-      }
-    } catch {}
-  }, []);
-  useEffect(() => {
-    try { localStorage.setItem("snn-chat-mode", mode); } catch {}
-  }, [mode]);
-
   const messagesRef = useRef<HTMLDivElement>(null);
   const chatPanelRef = useRef<HTMLDivElement>(null);
   const shouldFollowStreamRef = useRef(true);
@@ -216,7 +164,7 @@ export default function AiChat() {
       observer?.disconnect();
       panel.style.removeProperty("--snn-composer-extent");
     };
-  }, [mode, agent.isAgentAvailable]);
+  }, []);
 
   // Load conversations on mount
   useEffect(() => {
@@ -520,11 +468,6 @@ export default function AiChat() {
     const id = confirmDeleteId;
     if (!id) return;
     setConfirmDeleteId(null);
-    // Agent sessions use BFF ownership; Chat uses IndexedDB
-    if (id.startsWith("snn-agent-")) {
-      void agent.deleteSession(id).catch(() => setStorageNotice("本次对话未保存"));
-      return;
-    }
     void deleteConversationLifecycle({
       targetConversationId: id,
       activeConversationId: activeIdRef.current,
@@ -545,39 +488,11 @@ export default function AiChat() {
     aiNodeState === "checking" ? STATUS_DETAILS.checking
       : aiNodeState === "online" ? modelName ?? STATUS_DETAILS.ready : STATUS_DETAILS.offline;
 
-  // Agent mode derived sidebar data (mapped to Conversation shape for reuse)
-  const agentConversations: Conversation[] = agent.sessions.map((s) => ({
-    id: s.sessionId,
-    title: `Agent ${s.sessionId.slice(-6)}`,
-    createdAt: s.createdAt ? Date.parse(s.createdAt) : 0,
-    updatedAt: s.lastAccessAt ? Date.parse(s.lastAccessAt) : 0,
-    messages: [],
-    version: 1,
-  }));
-  const effectiveConversations = mode === "agent" ? agentConversations : conversations;
-  const effectiveActiveId = mode === "agent" ? agent.activeSessionId : activeId;
-  const handleNew = mode === "agent" ? agent.startNewSession : startNewConversation;
-  const handleSelect = mode === "agent" ? agent.selectSession : switchConversation;
-  const handleDeleteForMode = handleDelete;
-
   return (
     <main className={styles.page}>
       <header className={styles.header}>
-        <span className={styles.workspaceTitle}>AI 工作台</span>
+        <span className={styles.workspaceTitle}>SNN AI · 对话</span>
         <div className={styles.headerRight}>
-          <ModeSwitch mode={mode} onChange={setMode} agentAvailable={agent.isAgentAvailable} />
-          {mode === "agent" ? (
-            <button
-              className={styles.workspaceToggle}
-              type="button"
-              aria-label={workspaceOpen ? "关闭工作区" : "打开工作区"}
-              aria-expanded={workspaceOpen}
-              aria-controls="agent-workspace-panel"
-              onClick={() => workspaceOpenPreference.write(!workspaceOpen)}
-            >
-              工作区
-            </button>
-          ) : null}
           <button
             className={styles.sidebarToggle}
             type="button"
@@ -592,85 +507,30 @@ export default function AiChat() {
       </header>
 
       <section
-        className={`${styles.chatShell} ${sidebarOpen ? styles.chatShellShifted : ""} ${mode === "agent" && workspaceOpen ? styles.chatShellWithWorkspace : ""}`}
+        className={`${styles.chatShell} ${sidebarOpen ? styles.chatShellShifted : ""}`}
         aria-label="SNN AI Chat"
       >
         <ConversationSidebar
           id="conversation-sidebar"
           open={sidebarOpen}
-          conversations={effectiveConversations}
-          activeId={effectiveActiveId}
-          statusLabel={mode === "agent" ? (agent.isAgentAvailable ? "AGENT · READY" : agent.isAgentAvailable === false ? "AGENT · UNAVAILABLE" : statusLabel) : statusLabel}
-          statusDetail={mode === "agent" ? (agent.isAgentAvailable === false ? "Agent 暂不可用，普通对话仍可使用" : agent.isAgentAvailable ? "Agent 已就绪，可上传文件" : statusDetail) : statusDetail}
+          conversations={conversations}
+          activeId={activeId}
+          statusLabel={statusLabel}
+          statusDetail={statusDetail}
           nodeState={aiNodeState}
           onOpenChange={setSidebarOpen}
-          onNew={handleNew}
-          onSelect={handleSelect}
-          onDelete={handleDeleteForMode}
+          onNew={startNewConversation}
+          onSelect={switchConversation}
+          onDelete={handleDelete}
         />
 
         {sidebarOpen ? <div className={styles.backdrop} onClick={() => setSidebarOpen(false)} aria-hidden="true" /> : null}
 
-        <div className={styles.chatPanel} ref={chatPanelRef} id={mode === "agent" ? "agent-panel" : "chat-panel"}>
+        <div className={styles.chatPanel} ref={chatPanelRef} id="chat-panel">
           <div className={styles.panelHeader}>
-            <span>{mode === "agent" ? "AGENT / WORKSPACE READY" : "CHAT / HTTP READY"}</span>
+            <span>CHAT / HTTP READY</span>
             <span>{aiNodeState === "online" ? NODE_STATES.ready : NODE_STATES.offline}</span>
           </div>
-          {mode === "agent" ? (
-            <>
-              <div className={styles.messages} ref={messagesRef} onScroll={handleMessagesScroll} aria-live="off">
-                <div className={styles.conversationRail}>
-                  {!agent.loaded ? <div className={styles.loadingState} role="status" aria-label="正在加载工作区"><span /><span /><span /></div> : agent.messages.length === 0 ? (
-                    <div className={styles.emptyState} data-testid="agent-empty">
-                      <span className={styles.emptyMark}>AGENT / WORKSPACE</span>
-                      <h2>让文件，成为思考的起点。</h2>
-                      <p>上传文本、PDF、DOCX 或 XLSX，让 Agent 帮你阅读资料、整理内容。可修改 Excel 数据单元格并保留公式，或润色 Word 正文并保留文档结构；修改后从工作区下载。PDF 支持读取与提取。</p>
-                      <p>修改后的文本可在工作区预览、编辑和下载。Agent 也可以读取公开网页。</p>
-                    </div>
-                  ) : (
-                    agent.messages.map((m) => <AgentMessage key={m.id} message={m} toolActivity={m.role === "assistant" && agent.toolActivity.length > 0 && m.id === agent.messages[agent.messages.length - 1].id ? agent.toolActivity : undefined} />)
-                  )}
-                  {(agent.runState === "streaming" || agent.runState === "starting") ? (
-                    <div className={styles.typing}><span>Agent 正在处理</span><i /><i /><i /></div>
-                  ) : null}
-                  {agent.toolActivity.length > 0 && agent.runState !== "idle" && agent.messages.length > 0 && agent.messages[agent.messages.length - 1].role === "assistant" ? null : agent.toolActivity.length > 0 ? <AgentToolActivity items={agent.toolActivity} /> : null}
-                  {agent.error ? <p className={styles.streamNotice} role="alert">{agent.error}</p> : null}
-                  {agent.runState === "failed" && !agent.error ? <p className={styles.streamNotice}>Agent 运行失败，请重试。</p> : null}
-                  {agent.runState === "cancelled" ? <p className={styles.streamNotice}>已停止生成。</p> : null}
-                  {agent.runState === "incomplete" ? (
-                    <p className={styles.streamNotice} role="status">
-                      本次输出达到长度上限，任务可能尚未完成。
-                      <button type="button" onClick={() => void agent.sendMessage("请从中断处继续完成上面的任务。")}>继续完成任务</button>
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-              <div className={styles.composerDock}>
-                {showScrollToBottom ? (
-                  <button className={styles.scrollToBottom} type="button" onClick={scrollToBottom} aria-label="回到底部" title="回到底部">
-                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                      <path d="M12 4v15M6 13l6 6 6-6" />
-                    </svg>
-                  </button>
-                ) : null}
-                {agent.isAgentAvailable === false ? (
-                  <p className={styles.streamNotice}>Agent 暂不可用，普通对话仍可使用。</p>
-                ) : (
-                  <AgentComposer
-                    isStreaming={agent.runState === "streaming" || agent.runState === "starting" || agent.runState === "cancelling"}
-                    pendingAttachments={agent.pendingAttachments}
-                    uploadState={agent.uploadState}
-                    uploadProgress={agent.uploadProgress}
-                    onSend={(content) => void agent.sendMessage(content)}
-                    onStop={() => void agent.cancelRun()}
-                    onUpload={(file) => agent.uploadFile(file)}
-                    onRemovePending={agent.removePending}
-                    onAttachmentLimit={() => agent.setError("最多只能附加 8 个文件")}
-                  />
-                )}
-              </div>
-            </>
-          ) : (
             <>
               <div className={styles.messages} ref={messagesRef} onScroll={handleMessagesScroll} aria-live="polite">
                 <div className={styles.conversationRail}>
@@ -714,32 +574,8 @@ export default function AiChat() {
                 />
               </div>
             </>
-          )}
         </div>
 
-        {mode === "agent" && workspaceOpen ? (
-          <div className={styles.workspaceBackdrop} onClick={() => workspaceOpenPreference.write(false)} aria-hidden="true" />
-        ) : null}
-
-        {mode === "agent" ? (
-          <AgentWorkspacePanel
-            id="agent-workspace-panel"
-            open={workspaceOpen}
-            files={agent.files}
-            filesLoading={agent.filesLoading}
-            filesError={agent.filesError}
-            sessionId={agent.activeSessionId}
-            onAttach={agent.attachExisting}
-            onDelete={agent.deleteFile}
-            onRetryLoad={() => {
-              if (agent.activeSessionId) void agent.refreshFiles(agent.activeSessionId);
-            }}
-            pendingIds={new Set(agent.pendingAttachments.map((file) => file.fileId))}
-            recentChanges={agent.recentChanges}
-            activity={agent.workspaceActivity}
-            onClose={() => workspaceOpenPreference.write(false)}
-          />
-        ) : null}
       </section>
 
       {confirmDeleteId ? <DeleteConversationDialog returnFocusId={`conversation-delete-${confirmDeleteId}`} onCancel={() => setConfirmDeleteId(null)} onConfirm={confirmDelete} /> : null}

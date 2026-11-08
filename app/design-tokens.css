@@ -1,3 +1,4 @@
+@import "../public/learning/charcoal-v2/SNN-design-tokens.css";
 @import "./design-foundation.css";
 
 /* Semantic compatibility aliases: new components use the foundation. */
@@ -25,7 +26,7 @@
   --snn-radius-md: var(--radius-2);
   --snn-radius-lg: var(--radius-3);
   --snn-radius-xl: var(--radius-4);
-  --snn-radius-pill: 999px;
+  --snn-radius-pill: 0px;
   --snn-space-1: var(--space-1);
   --snn-space-2: var(--space-2);
   --snn-space-3: var(--space-3);
@@ -34,17 +35,17 @@
   --snn-space-6: var(--space-6);
   --snn-space-7: var(--space-7);
   --snn-space-8: var(--space-8);
-  --snn-container-main: 1200px;
-  --snn-container-chat: 760px;
-  --snn-page-gutter: max(24px, calc((100% - var(--snn-container-main)) / 2));
-  --snn-section-space: clamp(72px, 8vw, 120px);
-  --snn-shell-height: 65px;
+  --snn-container-main: var(--snn-page-width);
+  --snn-container-chat: calc(var(--snn-cw) * 96);
+  --snn-page-gutter: max(calc(var(--snn-cw) * 3), calc((100% - var(--snn-container-main)) / 2));
+  --snn-section-space: calc(var(--snn-ch) * 4);
+  --snn-shell-height: calc(var(--snn-ch) * 3);
   --snn-motion-fast: var(--motion-fast);
   --snn-motion-panel: var(--motion-panel);
   --snn-ease: var(--ease);
   --snn-focus-ring: var(--accent);
   --snn-focus-ring-width: 2px;
-  --snn-focus-ring-offset: 3px;
+  --snn-focus-ring-offset: var(--snn-inline-step);
   --snn-shadow-floating: var(--shadow-panel);
   --paper: var(--bg);
   --paper-soft: var(--surface-1);

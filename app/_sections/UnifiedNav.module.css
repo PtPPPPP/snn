@@ -1,0 +1,14 @@
+.shell { position:sticky; top:0; z-index:30; background:var(--bg); border-bottom:1px solid var(--border-default); font-family:var(--snn-font-mono),monospace; }
+.bar { max-width:1440px; min-height:72px; margin:auto; padding:0 32px; display:flex; align-items:center; gap:24px; }
+.brand { display:flex; align-items:center; gap:10px; flex-shrink:0; text-align:left; color:var(--text-primary); }
+.brand img { width:32px; height:32px; object-fit:contain; filter:grayscale(1) brightness(0) invert(.82); }
+.brand span { display:flex; flex-direction:column; line-height:1.25; }.brand b { font-size:17px; font-weight:500; }.brand small { margin-top:3px; font-size:8px; color:var(--text-muted); white-space:nowrap; }
+.links { display:flex; align-items:stretch; gap:4px; margin-left:auto; min-height:72px; }.links a { position:relative; display:flex; align-items:center; padding:0 13px; color:var(--text-secondary); font-size:12px; white-space:nowrap; }.links a:hover,.links a[aria-current] { color:var(--text-primary); }.links a[aria-current]::after { content:''; position:absolute; height:2px; background:var(--text-primary); bottom:0; left:13px; right:13px; }
+.toggle { display:none; }
+.labBar { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:0 32px; min-height:48px; border-top:1px solid var(--border-default); color:var(--text-muted); font-size:11px; }.labBar nav { display:flex; align-items:center; gap:24px; }.labBar nav [aria-current],.labBar nav a:hover { color:var(--text-primary); }
+@media(max-width:1050px){.bar{gap:16px;padding:0 24px}.links a{padding:0 9px}.links a[aria-current]::after{left:9px;right:9px}}
+@media(max-width:760px){
+ .bar { min-height:64px; padding:0 20px; }.brand small { display:none; }.toggle { display:block; margin-left:auto; border:0; padding:8px 0; background:none; color:var(--text-primary); font-size:12px; }
+ .links { display:none; position:absolute; top:64px; left:0; right:0; min-height:0; margin:0; padding:8px 20px 16px; background:var(--bg); border-bottom:1px solid var(--border-default); grid-template-columns:repeat(2,minmax(0,1fr)); }.open { display:grid; }.links a { min-height:42px; padding:0 8px; }.links a[aria-current]::after { left:8px; right:auto; width:18px; }
+ .labBar { padding:12px 20px; align-items:flex-start; flex-direction:column; gap:10px; }.labBar nav { flex-wrap:wrap; gap:18px; }
+}

@@ -1,8 +1,8 @@
-.snn-markdown { white-space: normal; overflow-wrap: anywhere; min-width: 0; max-width: 100%; line-height: 1.85; color: inherit; }
+.snn-markdown { white-space: normal; overflow-wrap: anywhere; min-width: 0; max-width: 100%; line-height: var(--snn-leading); color: inherit; }
 .snn-markdown p { font: inherit; color: inherit; margin: 0 0 .85em; }
 .snn-markdown > :last-child { margin-bottom: 0; }
-.snn-markdown :is(h1,h2,h3,h4) { font-size: 1.12em; line-height: 1.5; margin: 1.25em 0 .5em; color: inherit; font-weight: 550; letter-spacing: -.015em; }
-.snn-markdown strong { font-weight: 600; }
+.snn-markdown :is(h1,h2,h3,h4) { font-size: 1.12em; line-height: var(--snn-leading); margin: 1.25em 0 .5em; color: inherit; font-weight: 400; letter-spacing: 0; }
+.snn-markdown strong { font-weight: 400; }
 .snn-markdown :is(ul,ol) { padding-left: 1.5em; margin: .6em 0 1em; }
 .snn-markdown ul { list-style: disc; }
 .snn-markdown ol { list-style: decimal; }
@@ -11,14 +11,14 @@
 .snn-markdown blockquote { margin: 1em 0; padding: .5em 1em; border-left: 2px solid var(--border-active); background: var(--surface-2); color: var(--text-secondary); }
 .snn-markdown a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
 .snn-markdown a:hover { text-decoration-thickness: 2px; }
-.snn-markdown pre { max-width: 100%; overflow: auto; padding: 16px; background: var(--surface-2); border: 1px solid var(--border-default); border-radius: var(--radius-2); white-space: pre; font-size: .875em; line-height: 1.7; margin: 1em 0; }
+.snn-markdown pre { max-width: 100%; overflow: auto; padding: calc(var(--snn-block-step) * 3); background: var(--surface-2); border: 1px solid var(--border-default); border-radius: var(--radius-2); white-space: pre; font-size: .875em; line-height: var(--snn-leading); margin: 1em 0; }
 .snn-markdown code { font-family: var(--font-geist-mono), Consolas, monospace; background: var(--surface-3); padding: .1em .3em; border-radius: 4px; }
 .snn-markdown pre code { padding: 0; background: none; }
 .snn-markdown-table { max-width: 100%; overflow: auto; margin: 1em 0; border: 1px solid var(--border-default); border-radius: var(--radius-2); }
 .snn-markdown table { width: 100%; border-collapse: collapse; font-size: .9em; }
-.snn-markdown :is(th,td) { border-bottom: 1px solid var(--border-default); padding: 10px 14px; text-align: left; }
+.snn-markdown :is(th,td) { border-bottom: 1px solid var(--border-default); padding: calc(var(--snn-block-step) * 2) calc(var(--snn-inline-step) * 4); text-align: left; }
 .snn-markdown tr:last-child td { border-bottom: 0; }
-.snn-markdown th { background: var(--surface-2); font-weight: 550; }
+.snn-markdown th { background: var(--surface-2); font-weight: 400; }
 .snn-markdown .katex { font-size: 1.05em; }
-.snn-markdown .katex-display { overflow-x: auto; overflow-y: hidden; max-width: 100%; padding: 8px 0; margin: 1em 0; }
+.snn-markdown .katex-display { overflow-x: auto; overflow-y: hidden; max-width: 100%; padding: var(--snn-block-step) 0; margin: 1em 0; }
 .snn-markdown img { max-width: 100%; height: auto; border-radius: var(--radius-2); }

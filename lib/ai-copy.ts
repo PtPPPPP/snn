@@ -28,7 +28,7 @@ export const EMPTY_STATE = {
 } as const;
 
 export const SIDEBAR = {
-  sectionCode: "PERSONAL WORKSPACE",
+  sectionCode: "CONVERSATIONS",
   title: "SNN AI",
   description: "和同学一起思考、探索、构建。",
 } as const;

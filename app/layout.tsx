@@ -40,7 +40,7 @@ export const metadata: Metadata = {
   },
 };
 
-import { Nav } from './_sections/Nav';
+import { Nav } from './_sections/UnifiedNav';
 
 export default function RootLayout({
   children,

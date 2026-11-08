@@ -1,3 +1,3 @@
-import OpeningDemo from './opening-demo';
-export const metadata={title:'分类与空间 · SNN',description:'先看两组点：一条直线能分开的，和怎样调整直线也分不开的。从分类直线到加权求和、阈值与一个神经元。'};
-export default function Page(){return <OpeningDemo/>;}
+import Notebook from './notebook';
+export const metadata={title:'从分类线到神经网络 · SNN',description:'先只绕中心旋转，再用参数设计分数面；遇到平移问题引入偏置，先让数据学习，发现线性结构局限后再引入 ReLU。'};
+export default function Page(){return <Notebook/>;}

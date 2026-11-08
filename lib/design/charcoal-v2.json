@@ -1,0 +1,521 @@
+{
+  "meta": {
+    "name": "SNN / Charcoal Character Grid",
+    "version": "3.3.7",
+    "date": "2026-10-08",
+    "source": "已确认的独立神经网络与二分类分数曲面组件",
+    "scope": "独立整改副本：全站共享字符字格；用户确认后再合入主站",
+    "units": "字格 cw=8px / ch=24px；小间距允许半列 4px / 四分之一行 6px；物理边框 1px；时间 ms"
+  },
+  "color": {
+    "background": "#151515",
+    "text": {
+      "primary": "#e8e8e2",
+      "secondary": "#bcbcb5",
+      "muted": "#999992",
+      "quiet": "#777770",
+      "highlight": "#ffffff",
+      "transit": "#d8d8d1"
+    },
+    "border": {
+      "default": "#393936",
+      "grid": "#343430"
+    },
+    "graph": {
+      "inactive": "#494942",
+      "waiting": "#777770",
+      "unprinted": "#696962",
+      "zeroHead": "#b5b5ad",
+      "axis": "#73736b",
+      "surfaceWire0": "#52524b",
+      "surfaceWire1": "#777770",
+      "routeInactive": "#4a4a43",
+      "inputGrid": "#51514a",
+      "gateWaiting": "#575750",
+      "coreWaiting": "#5a5a53",
+      "surfaceWire": "#474740",
+      "surfaceLabel": "#8a8a82"
+    },
+    "class": {
+      "zero": "#ff5f65",
+      "one": "#79ff8b"
+    },
+    "numeric": {
+      "domain": [
+        -2,
+        2
+      ],
+      "interpolation": "continuous sRGB; clamp color only",
+      "stops": [
+        {
+          "value": -2,
+          "color": "#a58bf5"
+        },
+        {
+          "value": -1,
+          "color": "#6b9be8"
+        },
+        {
+          "value": 0,
+          "color": "#66665f"
+        },
+        {
+          "value": 0.5,
+          "color": "#7ecb91"
+        },
+        {
+          "value": 1.25,
+          "color": "#e2cc72"
+        },
+        {
+          "value": 2,
+          "color": "#ec806b"
+        }
+      ]
+    }
+  },
+  "font": {
+    "body": "\"SNN Grid\",monospace",
+    "mono": "\"SNN Grid\",monospace",
+    "canvas": "\"SNN Grid\",monospace",
+    "size": {
+      "glyph": 8,
+      "meta": 12,
+      "caption": 12,
+      "label": 16,
+      "body": 16,
+      "score": 16,
+      "subheading": 24,
+      "detailValue": 24,
+      "title": 32,
+      "titleNarrow": 24,
+      "classification": 32
+    },
+    "weight": {
+      "regular": 400
+    },
+    "lineHeight": {
+      "body": 1.5,
+      "formula": 1.5,
+      "asciiBox": 1.5,
+      "classification": 1.5
+    },
+    "tracking": {
+      "title": "0",
+      "eyebrow": "0"
+    }
+  },
+  "space": {
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "xxl": 32,
+    "controlGap": 8,
+    "sectionGap": 24,
+    "pipelineGap": 24,
+    "relatedGap": 6,
+    "groupGap": 24,
+    "pageInline": 24,
+    "pageBlock": 24,
+    "pageInlineNarrow": 16,
+    "pageBlockNarrow": 12
+  },
+  "shape": {
+    "radius": 0,
+    "borderWidth": 1,
+    "shadow": "none"
+  },
+  "control": {
+    "height": 48,
+    "heightNarrow": 48,
+    "focusWidth": 1,
+    "focusOffset": 4,
+    "selectedUnderlineOffset": 4,
+    "background": "transparent"
+  },
+  "opacity": {
+    "disabled": 0.3,
+    "classContext": 0.65,
+    "edgeInactive": 0.3,
+    "edgeTrail": 0.36,
+    "edgeComplete": 0.8,
+    "edgeHead": 1,
+    "nodeWaiting": 0.65,
+    "nodePrinted": 0.95,
+    "nodeUnprinted": 0.45
+  },
+  "ascii": {
+    "densityRamp": " .:-=+*#%@",
+    "contour": [
+      "-",
+      "|",
+      "/",
+      "\\",
+      "(",
+      ")",
+      "_"
+    ],
+    "direction": {
+      "right": ">",
+      "left": "<",
+      "down": "v",
+      "up": "^"
+    },
+    "value": {
+      "positive": "+",
+      "negative": "-",
+      "zero": ":",
+      "waiting": "."
+    },
+    "class": {
+      "zero": "o",
+      "one": "#"
+    },
+    "command": {
+      "open": "[",
+      "close": "]"
+    },
+    "selection": "[x]",
+    "progress": {
+      "passed": "-",
+      "cursor": "|",
+      "waiting": "."
+    },
+    "cell": {
+      "measureFont": true,
+      "sampleOccupancy": 0.8,
+      "maxNodeFont": 12,
+      "networkSmallWidth": 350,
+      "networkMediumWidth": 560
+    },
+    "controls": {
+      "range": {
+        "open": "[",
+        "close": "]",
+        "passed": "-",
+        "waiting": ".",
+        "tick": "+",
+        "tickEvery": 4,
+        "cursor": "|",
+        "readout": "fixed decimal or three-digit percent",
+        "pointer": "one glyph cell per visible jump; preserve source numeric step"
+      },
+      "choice": {
+        "selected": "[x]",
+        "idle": "[ ]",
+        "collapsed": "[v]",
+        "expanded": "[^]",
+        "inlineLimit": 4
+      },
+      "number": {
+        "decrease": "[-]",
+        "increase": "[+]"
+      },
+      "disclosure": {
+        "collapsed": "[+]",
+        "expanded": "[-]"
+      },
+      "command": {
+        "open": "[",
+        "close": "]",
+        "active": ">",
+        "inactive": " "
+      },
+      "compactRows": 2,
+      "motion": "no easing, glow or pulse; only glyph-cell changes",
+      "integration": "independent character-control study first; integrate after user approval"
+    }
+  },
+  "layout": {
+    "maxPageWidth": 1408,
+    "verticalAt": 640,
+    "surfaceBelowAt": 1088,
+    "networkAspect": {
+      "wide": 1.9,
+      "medium": 1.65,
+      "scanWide": 1.35,
+      "scanMedium": 1.8
+    },
+    "networkVerticalHeight": {
+      "min": 200,
+      "max": 350,
+      "viewportReserve": 440
+    },
+    "inputWidth": {
+      "wide": 120,
+      "medium": 106,
+      "verticalMax": 320,
+      "verticalPlot": 80
+    },
+    "normalizerWidth": {
+      "wide": 194,
+      "medium": 180,
+      "verticalMax": 380
+    },
+    "surfaceHeight": {
+      "wide": 310,
+      "medium": 260,
+      "vertical": 300
+    },
+    "orientationBasis": "network remains horizontal at every container width",
+    "oneScreen": "输入与结果并列在上，横向网络独占下方整行；默认收起参数和推导，窄屏调整网络标注位置，保留正常阅读滚动。",
+    "horizontalOrder": [
+      "input point and Softmax/argmax above",
+      "full-width horizontal network below",
+      "optional score surface"
+    ],
+    "verticalOrder": [
+      "input point",
+      "network input row",
+      "hidden sum row",
+      "activation row",
+      "output sum and Linear",
+      "Softmax and argmax label",
+      "optional score surface"
+    ],
+    "projection": {
+      "verticalHalfHeight": 2.38,
+      "verticalMinHalfWidth": 1.18,
+      "wideMinHalfWidth": 2.2
+    }
+  },
+  "motion": {
+    "uiDuration": 0,
+    "easing": "linear character-cell progression",
+    "stages": [
+      {
+        "id": "input",
+        "ms": 1200
+      },
+      {
+        "id": "inputTravel",
+        "ms": 2400
+      },
+      {
+        "id": "hiddenSum",
+        "ms": 1700
+      },
+      {
+        "id": "activation",
+        "ms": 1800
+      },
+      {
+        "id": "hiddenTravel",
+        "ms": 2400
+      },
+      {
+        "id": "output",
+        "ms": 1800
+      },
+      {
+        "id": "normalization",
+        "ms": 2400
+      },
+      {
+        "id": "label",
+        "ms": 1200
+      }
+    ],
+    "reveal": {
+      "input": 0.72,
+      "weighted": 0.53,
+      "travelEnd": 0.9,
+      "sumEnd": 0.8,
+      "activationEnd": 0.8,
+      "outputLinear": 0.94,
+      "exponents": 0.22,
+      "denominator": 0.45,
+      "probability0": 0.62,
+      "probability1": 0.78,
+      "probabilityCheck": 0.9,
+      "label": 0.8
+    },
+    "playbackSpeeds": [
+      0.5,
+      1,
+      2
+    ],
+    "reducedMotion": "pause automatic playback; preserve manual step, scrub and explicit scan",
+    "geometry": "fixed routes; moving ASCII head and short character trail; no ambient jitter"
+  },
+  "component": {
+    "network": {
+      "defaultView": "fixed front",
+      "rotation": "explicit toggle",
+      "pan": false,
+      "damping": false,
+      "render": "single canvas; common 3D projection for drawing and hit targets",
+      "direction": "horizontal"
+    },
+    "scan": {
+      "defaultGrid": 9,
+      "gridOptions": [
+        9,
+        17,
+        25
+      ],
+      "defaultPointsPerSecond": 3,
+      "rateOptions": [
+        1,
+        3,
+        6
+      ],
+      "defaultVisible": false,
+      "heightValue": "raw score s",
+      "completion": "record point after label phase",
+      "clickPoint": "replay that point"
+    },
+    "disclosure": {
+      "primaryActions": [
+        "play / pause",
+        "next step",
+        "scan surface"
+      ],
+      "initiallyClosed": [
+        "coordinates",
+        "camera",
+        "calculation details",
+        "parameters",
+        "full derivation",
+        "scan settings"
+      ],
+      "alwaysVisible": [
+        "Linear",
+        "ReLU",
+        "output sum",
+        "output Linear",
+        "Softmax",
+        "argmax",
+        "classification"
+      ]
+    },
+    "networkStudy": {
+      "render": "original character spheres, lighting, fine curved routes and compact activation plots",
+      "inputX": -1.2,
+      "hiddenX": -0.12,
+      "activationX": 0.68,
+      "outputX": 1.72,
+      "scanPreview": "compact and medium: input and surface above network; wide: input, network and surface share a row; toolbar stays below",
+      "layout": "reflow surrounding sections by available character columns; preserve horizontal network art, curved routes and operator typography",
+      "nodeLabelGap": 6,
+      "selection": "highlight the existing caption; no additional large brackets",
+      "outputCaption": {
+        "placement": "beside the sphere; share activationChart typography",
+        "gapColumns": 2,
+        "reservedColumns": 12
+      },
+      "activationChart": {
+        "fontRole": "glyph",
+        "rowScale": 0.5,
+        "pointSpan": 2,
+        "baselineOffset": -4,
+        "formulaOffset": -26,
+        "captionOffset": 18,
+        "curve": "one slash per row; preserve the natural glyph proportions",
+        "marker": "@ replaces one curve cell; round to integer cell; no continuous overlay"
+      }
+    },
+    "inputPlot": {
+      "selection": "only the displayed scanner lattice",
+      "pointFontRole": "glyph",
+      "cornerFontRole": "meta",
+      "selectedMarker": "@",
+      "minimumInset": 20,
+      "maximumInset": 24,
+      "cornerOffsetX": 10,
+      "cornerOffsetY": 12,
+      "knownCornerLabels": "[0] and [1] outside the lattice; scanned predictions remain inside",
+      "keyboard": "one grid point per arrow key; editors use the same lattice"
+    }
+  },
+  "rules": {
+    "numericColor": "计算节点显示当前真实数值；连线过权重前表示输入值，过权重后表示加权贡献。负值、正值与零沿固定色标映射。",
+    "binaryColor": "CRT 荧光红表示类别 0，荧光绿表示类别 1；白色表示尚未分类。类别颜色为离散语义，不沿数值插值；曲面高度仍承载真实 s。数值热力色保留原有色标。",
+    "sampleIdentity": "@ 替换对应字符并离散移动。输入与曲面当前点在分类完成前为白色，完成后按真实类别变红或绿；函数曲线的 @ 按其真实激活数值着色。背景分类点使用 classContext 明暗层次，四角已知标签保持完整对比。",
+    "grouping": "relatedGap 用于属于同一对象的标签与数值；groupGap 用于不同对象之间。类别使用 body 与类别色，由 > 标记被选中的概率，不使用巨大的结果数字。",
+    "asciiLighting": "字符密度表达球体体积与明暗；数值颜色表达计算值，两者独立。",
+    "narrow": "用户确认各宽度保留从左往右的网络。窄页输入点阵与曲面在上方，网络在下方；扫描操作与进度分行；坐标按容器自动分行。结果与类别居中，激活仍沿原传递路径显示，绘制与命中共享投影。",
+    "progressiveDisclosure": "先显示主流程；点击节点、连线或计算子展开细节。扫描后才显示曲面。必要激活与归一化不能藏进详情。",
+    "mathematics": "权重、偏置、网络拓扑、ReLU 和 Softmax 算法属于业务计算，不属于设计 token。",
+    "integration": "先在独立组件呈现，得到用户批准后再接入主站。",
+    "grid": "所有界面与字符图形共享字格 token；正文英文一列、中文两列。标注使用 12px 子格；字符绘图使用 8px 子格。不要把三维世界坐标强行吸附到屏幕网格。",
+    "characterControls": "控件的可见形态由字符组成：[] 命令、| 滑块、+ 刻度、[x]/[ ] 选项、[+]/[-] 展开。显示离散进度；不擅自改变计算结果或原参数步长。"
+  },
+  "grid": {
+    "fontSize": 16,
+    "column": 8,
+    "row": 24,
+    "inlineStep": 4,
+    "blockStep": 6,
+    "leading": 1.5,
+    "fontFamily": "\"SNN Grid\",monospace",
+    "roles": {
+      "glyph": 8,
+      "meta": 12,
+      "body": 16,
+      "subheading": 24,
+      "heading": 32,
+      "display": 48
+    },
+    "pageColumns": 150,
+    "narrowColumns": 80,
+    "compactColumns": 48,
+    "maxColumns": 176,
+    "page": {
+      "measure": "available page width in base character cells; distribute whole character cells into layout columns",
+      "modes": [
+        {
+          "name": "compact",
+          "fromColumns": 0,
+          "layoutColumns": 4,
+          "maxCharacterColumns": 48,
+          "gutterColumns": 2,
+          "gapColumns": 1,
+          "gapRows": 0.25,
+          "pipeline": {"input": [1, 2, 1], "surface": [3, 2, 1], "toolbar": [1, 4, 2], "network": [1, 4, 3]}
+        },
+        {
+          "name": "medium",
+          "fromColumns": 80,
+          "layoutColumns": 8,
+          "maxCharacterColumns": 112,
+          "gutterColumns": 3,
+          "gapColumns": 2,
+          "gapRows": 0.75,
+          "pipeline": {"input": [1, 3, 1], "surface": [4, 5, 1], "toolbar": [1, 8, 2], "network": [1, 8, 3]}
+        },
+        {
+          "name": "wide",
+          "fromColumns": 144,
+          "layoutColumns": 12,
+          "maxCharacterColumns": 144,
+          "gutterColumns": 4,
+          "gapColumns": 2,
+          "gapRows": 1,
+          "pipeline": {"input": [1, 2, 1], "network": [3, 7, 1], "surface": [10, 3, 1], "toolbar": [1, 12, 2]},
+          "regions": {"header": [1, 3, 1], "controls": [4, 9, 1], "inspector": [1, 4, "auto"], "notebook": [5, 8, "auto"]}
+        }
+      ]
+    },
+    "controlRows": 2,
+    "rules": {
+      "width": "ASCII 1 column; CJK 2 columns; no letter spacing or ligatures",
+      "scale": "Fixed UI type tiers. Each tier has its own half-em column and 1.5-em row. Sample glyphs shrink to actual lattice spacing; neuron sculpting glyphs never exceed their geometric cell. Never stretch characters.",
+      "layout": "Major blocks align to whole columns and rows. Compact gaps may use half columns and quarter rows.",
+      "responsive": "grid.page owns whole-page widths, gutters, 4/8/12 layout columns and region spans. Character columns remain the base unit. Keep network horizontal; reflow the whole page and its controls without scaling the interface.",
+      "geometry": "3D world coordinates and perspective remain continuous. Glyph sizes derive from the shared lattice.",
+      "exceptions": "1px borders, intrinsic images, video and mathematical notation retain their own geometry."
+    },
+    "roleScale": {
+      "glyph": 0.5,
+      "meta": 0.75,
+      "body": 1,
+      "subheading": 1.5,
+      "heading": 2,
+      "display": 3
+    }
+  },
+  "version": "3.3.7"
+}
