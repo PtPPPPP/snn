@@ -1,0 +1,22 @@
+# These generated files have content hashes in their names. Other assets,
+# documents and all APIs retain their existing revalidation behavior.
+/assets/*.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*.css
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*.woff2
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*.woff
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*.ttf
+  Cache-Control: public, max-age=31536000, immutable
+
+/fonts/snn-grid-home-*.woff2
+  Cache-Control: public, max-age=31536000, immutable
+
+/fonts/snn-grid-site-*.woff2
+  Cache-Control: public, max-age=31536000, immutable

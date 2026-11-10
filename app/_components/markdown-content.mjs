@@ -1,5 +1,7 @@
 "use client";
 import {createElement, memo} from 'react';
+import 'katex/dist/katex.min.css';
+import './markdown-content.css';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';

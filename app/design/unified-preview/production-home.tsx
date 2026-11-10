@@ -54,7 +54,7 @@ function Home({ open }: { open: (view: View) => void }) {
     </section>
     <section className={`${s.section} ${s.join}`} id="join" aria-labelledby="preview-join-title">
       <div><p className={s.kicker}>04 / JOIN</p><h2 id="preview-join-title">想学点东西？<br />来和我们一起做。</h2><p>只要愿意学习、交流和动手，SNN 都欢迎你。</p><a className={s.primaryAction} href="/join/interview">参加入社笔试 <span>↗</span></a></div>
-      <div className={s.qr}><img src="/assets/snn-wechat.jpg" width="128" height="128" alt="SNN 社团公众号二维码" /><span>关注 SNN 社团公众号<br />了解活动、项目和招新</span></div>
+      <div className={s.qr}><img src="/assets/snn-wechat.jpg" width="128" height="128" loading="lazy" decoding="async" alt="SNN 社团公众号二维码" /><span>关注 SNN 社团公众号<br />了解活动、项目和招新</span></div>
     </section>
     <footer className={s.footer}><strong>SNN</strong><span>SMART NEURAL NETWORK / 学生共建</span><a href="mailto:1074897559@qq.com">联系邮箱</a><a href="https://github.com/PtPPPPP" target="_blank" rel="noreferrer">GitHub ↗</a><a href="#top">回到顶部 ↑</a></footer>
   </main>;
