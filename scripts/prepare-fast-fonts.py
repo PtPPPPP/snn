@@ -57,6 +57,15 @@ home = (collect(ROOT / path for path in home_paths) | set(range(32, 127))) & sup
 # The home face is also available on the rest of the site.  Keep only the
 # additional glyphs here so visitors do not download shared outlines twice.
 site = (collect(site_paths) & supported) - home
+course_paths = []
+for directory in ('app/learn/neural-networks', 'lib/learning'):
+    base = ROOT / directory
+    if base.exists():
+        course_paths.extend(path for path in base.rglob('*') if path.is_file()
+                            and path.suffix in ('.tsx', '.ts', '.js', '.mjs', '.css')
+                            and path.stat().st_size < 1_000_000)
+course = collect(course_paths) & site
+site -= course
 
 def make_face(name, points):
     font = TTFont(SOURCE)
@@ -85,8 +94,9 @@ def make_face(name, points):
     return rule, filename
 
 site_face, site_file = make_face('site', site)
+course_face, course_file = make_face('course', course)
 home_face, home_file = make_face('home', home)
-faces = [site_face, home_face]
+faces = [site_face, course_face, home_face]
 css_path = FONTS / 'snn-grid.css'
 css = css_path.read_text(encoding='utf-8')
 if START in css:
@@ -95,6 +105,7 @@ if START in css:
     css = before.rstrip() + '\n' + after.lstrip()
 css_path.write_text(css.rstrip() + '\n\n' + START + '\n' + '\n\n'.join(faces) + '\n' + END + '\n', encoding='utf-8')
 (ROOT / 'lib' / 'design' / 'fast-fonts.json').write_text(
-    json.dumps({'home': '/fonts/' + home_file, 'site': '/fonts/' + site_file}, indent=2) + '\n',
+    json.dumps({'home': '/fonts/' + home_file, 'course': '/fonts/' + course_file,
+                'site': '/fonts/' + site_file}, indent=2) + '\n',
     encoding='utf-8',
 )

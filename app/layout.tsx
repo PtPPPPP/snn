@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import aiConfigScript from "../public/ai-config.js?raw";
 import "./fonts.css";
 import "./globals.css";
 import fastFonts from "../lib/design/fast-fonts.json";
@@ -54,10 +55,9 @@ export default function RootLayout({
       >
         <Nav />
         {children}
-        {/* Keep the runtime config ahead of hydration without blocking the
-            browser from parsing and painting the server-rendered page. */}
-        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
-        <script src="/ai-config.js"></script>
+        {/* The public config stays the single source of truth. Inlining it
+            removes a blocking round trip while preserving execution order. */}
+        <script dangerouslySetInnerHTML={{ __html: aiConfigScript.replace(/<\/script/gi, "<\\/script") }} />
       </body>
     </html>
   );

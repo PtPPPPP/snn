@@ -219,7 +219,8 @@ npm run deploy:production
 该命令依次完成构建、生产产物检查和 Cloudflare Workers 部署。配置、凭据和发布检查见 [生产检查清单](docs/production-checklist.md)。
 
 - `NEXT_PUBLIC_SITE_URL` 用于生成站点分享元数据中的绝对地址。
-- 浏览器 API 入口以 `public/ai-config.js` 为准；仅设置环境变量不会自动改写该文件。
+- 浏览器 API 入口以 `public/ai-config.js` 为准；网站构建时将它内联进页面以避免额外阻塞请求，修改后需要重新部署。仅设置环境变量不会自动改写该文件。
+- 首屏预算、按需字库和公开页面缓存规则见 [性能维护说明](docs/performance.md)。
 - `.openai/hosting.json` 和 `vite.config.ts` 定义可选绑定与构建配置。
 - 网站、AI Node 和网关是不同部署单元；网站构建成功不代表模型或 Agent 服务已就绪。
 - 密钥和私有配置放在部署环境中，不提交到仓库。

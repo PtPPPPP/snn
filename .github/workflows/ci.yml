@@ -32,6 +32,9 @@ jobs:
       - name: Test interview API
         run: npm run test:interview
 
+      - name: Verify public page cache isolation
+        run: node --test tests/public-page-cache.test.mjs
+
       - name: Production build
         run: npm run build
 

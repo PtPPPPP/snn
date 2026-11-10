@@ -5,6 +5,9 @@
   "main": "./worker/index.ts",
   "compatibility_date": "2026-10-08",
   "compatibility_flags": ["nodejs_compat"],
+  "version_metadata": {
+    "binding": "SNN_VERSION_METADATA"
+  },
   "d1_databases": [
     {
       "binding": "DB",

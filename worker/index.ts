@@ -4,8 +4,10 @@ import handler from "vinext/server/app-router-entry";
 import {interviewAPI} from './interview-api';
 import {isInterviewReviewer,type InterviewEnv} from '../lib/interview/database';
 import {cloudflareReviewerRequest} from './reviewer-auth';
+import {canCachePublicPage, publicPageCacheCopy, publicPageCacheKey, publicPageResponse} from './public-page-cache.mjs';
 
 interface Env extends InterviewEnv {
+  SNN_VERSION_METADATA?: { id: string };
   ASSETS: {
     fetch(input: Request | URL | string, init?: RequestInit): Promise<Response>;
   };
@@ -72,12 +74,28 @@ const worker = {
       }, allowedWidths);
     }
 
+    // Cache only two anonymous public HTML pages; API, RSC and personalized
+    // requests never enter the shared cache.
+    const pageKey=publicPageCacheKey(request,env.SNN_VERSION_METADATA?.id);
+    let pageCache: Cache | undefined;
+    if(pageKey && typeof caches !== 'undefined'){
+      try{
+        pageCache=(caches as CacheStorage & {default?: Cache}).default;
+        const hit=await pageCache?.match(pageKey);
+        if(hit)return publicPageResponse(hit,'HIT');
+      }catch(error){console.warn('Public page cache lookup failed',error);pageCache=undefined;}
+    }
     const response=await handler.fetch(request, env, ctx);
     if(url.pathname==='/join/interview'||url.pathname.startsWith('/join/interview/')){
       const protectedResponse=new Response(response.body,response);
       protectedResponse.headers.set('Cache-Control','private, no-store');
       protectedResponse.headers.append('Vary','Cookie, oai-authenticated-user-id, oai-authenticated-user-email');
       return protectedResponse;
+    }
+    if(pageKey && pageCache && canCachePublicPage(response)){
+      const cache=pageCache;
+      ctx.waitUntil(cache.put(pageKey,publicPageCacheCopy(response)).catch(error=>console.warn('Public page cache write failed',error)));
+      return publicPageResponse(response,'MISS');
     }
     return response;
   },
