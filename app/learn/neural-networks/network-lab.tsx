@@ -34,7 +34,8 @@ export default function NetworkLab({mode,id}:{mode:Mode;id:string}){
  useEffect(()=>{if(!playing)return;const timer=window.setTimeout(()=>{if(document.hidden||!visible.current){setPlaying(false);return;}if(phase===4){setPlaying(false);return;}setPhase(v=>v+1);},500);return()=>clearTimeout(timer);},[playing,phase]);
  useEffect(()=>{if(!auto)return;const timer=window.setInterval(()=>{
   if(document.hidden||!visible.current){setAuto(false);return;}
-  let next=clone(current.current),added=0,lastGradient:number[]=[],before=parameters(next.model)[tracked],losses:number[]=[];
+  const next=clone(current.current),before=parameters(next.model)[tracked],losses:number[]=[];
+  let added=0,lastGradient:number[]=[];
   for(let i=0;i<5;i++){const data=learningSamples(next),g=gradient(next.model,data);lastGradient=g;const model=update(next.model,g,rate),value=evaluate(model,data).loss;if(!Number.isFinite(value)){setAuto(false);return;}next.model=model;losses.push(value);added++;if(Math.max(...g.map(Math.abs))<.0001){setAuto(false);setSettled(true);break;}}
   setLast({before,gradient:lastGradient[tracked],after:parameters(next.model)[tracked]});change(next);setSteps(n=>n+added);setHistory(values=>[...values,...losses]);setPhase(4);
  },160);return()=>clearInterval(timer);},[auto,rate,tracked]);
