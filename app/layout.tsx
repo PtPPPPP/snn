@@ -52,13 +52,12 @@ export default function RootLayout({
       <body
         className="antialiased"
       >
-        {/* Must run synchronously before the client bundle: injects
-            window.__SNN_AI_API_BASE_URL__ consumed by lib/ai-client.ts.
-            async/defer would race hydration and break AI endpoint resolution. */}
-        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
-        <script src="/ai-config.js"></script>
         <Nav />
         {children}
+        {/* Keep the runtime config ahead of hydration without blocking the
+            browser from parsing and painting the server-rendered page. */}
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script src="/ai-config.js"></script>
       </body>
     </html>
   );
