@@ -1,18 +1,18 @@
 "use client";
-import {useState} from 'react';
+import {useEffect,useState} from 'react';
 import {useRouter} from 'next/navigation';
 import {projects, activities} from '../../_sections/data';
+import IntentLink from '../../_sections/IntentLink';
 import NetworkGlyphs from './preview-network';
 import type {CourseModel, Point} from '../../../lib/learning/geometry-course';
 import s from './unified-preview.module.css';
-type View = 'home' | 'learn' | 'experiment' | 'ai';
 const sampleModel: CourseModel = {
   linear: [1, 1, -0.5], hinge: [1, 1, -1], gain: -2, activation: 'relu',
 };
 const samplePoint: Point = [0.75, 0.625];
 const observations = ['第一路连接', '第二路连接', '输出求和', 'ReLU 的第一路连接', 'ReLU 的第二路连接', 'ReLU 输入', 'ReLU 输出的连接'];
 
-function Home({ open }: { open: (view: View) => void }) {
+function Home() {
   const [selected, setSelected] = useState<number | null>(null);
   return <main className={s.home}>
     <div className={s.breadcrumb}>SNN / 学生科技社团 <span>学习 · 动手 · 分享</span></div>
@@ -22,22 +22,22 @@ function Home({ open }: { open: (view: View) => void }) {
         <h1>一起学习，<br />一起把想法做出来。</h1>
         <p className={s.intro}>从一个问题，到一个能运行的作品。<br />和同学一起探索 AI、机器人与智能系统。</p>
         <div className={s.heroActions}>
-          <button className={s.primaryAction} onClick={() => open('learn')}>开始学习 <span>→</span></button>
-          <button className={s.textAction} onClick={() => open('ai')}>和 SNN AI 对话 <span>↗</span></button>
+          <IntentLink className={s.primaryAction} href="/learn/neural-networks">开始学习 <span>→</span></IntentLink>
+          <IntentLink className={s.textAction} href="/ai">和 SNN AI 对话 <span>↗</span></IntentLink>
         </div>
       </div>
       <div className={s.heroFigure}>
         <div className={s.figureHeading}><span>学习实验室 / 神经网络</span><span>2 → 3 → 1</span></div>
         <NetworkGlyphs model={sampleModel} input={samplePoint} phase={4} bias onSelect={setSelected} />
-        <div className={s.figureCaption}><span>{selected === null ? '点击节点或连接，观察网络' : `正在观察：${observations[selected]}`}</span><button onClick={() => open('learn')}>进入课程 ↗</button></div>
+        <div className={s.figureCaption}><span>{selected === null ? '点击节点或连接，观察网络' : `正在观察：${observations[selected]}`}</span><IntentLink href="/learn/neural-networks">进入课程 ↗</IntentLink></div>
       </div>
     </section>
     <section className={s.section} id="learning-lab" aria-labelledby="preview-explore">
       <div className={s.sectionHeading}><span>01 / EXPLORE</span><h2 id="preview-explore">从这里开始</h2><p>看、动手、提问，选一种方式开始。</p></div>
       <div className={s.entries}>
-        <button onClick={() => open('learn')}><span className={s.entryNumber}>01 / LEARN</span><strong>神经网络学习笔记</strong><span>从分类问题出发，一边读一边操作。</span><b>进入学习 →</b></button>
-        <button onClick={() => open('experiment')}><span className={s.entryNumber}>02 / LAB</span><strong>火箭回收实验</strong><span>动手操纵火箭，观察人与模型的控制。</span><b>进入实验 →</b></button>
-        <button onClick={() => open('ai')}><span className={s.entryNumber}>03 / ASK</span><strong>SNN AI</strong><span>围绕你的问题继续对话和探索。</span><b>开始对话 →</b></button>
+        <IntentLink href="/learn/neural-networks"><span className={s.entryNumber}>01 / LEARN</span><strong>神经网络学习笔记</strong><span>从分类问题出发，一边读一边操作。</span><b>进入学习 →</b></IntentLink>
+        <IntentLink href="/play/rocket"><span className={s.entryNumber}>02 / LAB</span><strong>火箭回收实验</strong><span>动手操纵火箭，观察人与模型的控制。</span><b>进入实验 →</b></IntentLink>
+        <IntentLink href="/ai"><span className={s.entryNumber}>03 / ASK</span><strong>SNN AI</strong><span>围绕你的问题继续对话和探索。</span><b>开始对话 →</b></IntentLink>
       </div>
     </section>
     <section className={s.section} id="about" aria-labelledby="about-title">
@@ -63,6 +63,24 @@ function Home({ open }: { open: (view: View) => void }) {
 
 export default function ProductionHome() {
  const router=useRouter();
- const routes:Record<View,string>={home:'/',learn:'/learn/neural-networks',experiment:'/play/rocket',ai:'/ai'};
- return <div className={s.preview} id="top"><Home open={view=>router.push(routes[view])}/></div>;
+ useEffect(()=>{
+  // Wait until the homepage has loaded; then prepare the main destinations
+  // at idle priority. Respect visitors who ask to save data or use 2G.
+  const connection=(navigator as Navigator & {connection?:{saveData?:boolean;effectiveType?:string}}).connection;
+  if(connection?.saveData||connection?.effectiveType?.includes('2g'))return;
+  const timers:number[]=[],idles:number[]=[];
+  const prepare=()=>{
+   ['/learn/neural-networks','/ai','/play/rocket'].forEach((href,index)=>{
+    timers.push(window.setTimeout(()=>{
+     const warm=()=>{if(document.visibilityState==='visible')router.prefetch(href);};
+     if('requestIdleCallback' in window)idles.push(window.requestIdleCallback(warm,{timeout:2000}));
+     else warm();
+    },1500+index*3000));
+   });
+  };
+  if(document.readyState==='complete')prepare();
+  else window.addEventListener('load',prepare,{once:true});
+  return()=>{window.removeEventListener('load',prepare);timers.forEach(clearTimeout);idles.forEach(id=>window.cancelIdleCallback(id));};
+ },[router]);
+ return <div className={s.preview} id="top"><Home/></div>;
 }
