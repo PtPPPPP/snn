@@ -54,7 +54,9 @@ for directory in ('app', 'lib', 'shared'):
                           and path.suffix in ('.tsx', '.ts', '.js', '.mjs', '.css')
                           and path.stat().st_size < 1_000_000)
 home = (collect(ROOT / path for path in home_paths) | set(range(32, 127))) & supported
-site = (collect(site_paths) | home) & supported
+# The home face is also available on the rest of the site.  Keep only the
+# additional glyphs here so visitors do not download shared outlines twice.
+site = (collect(site_paths) & supported) - home
 
 def make_face(name, points):
     font = TTFont(SOURCE)
