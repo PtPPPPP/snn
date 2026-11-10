@@ -69,7 +69,15 @@ export default function ProductionHome() {
   const connection=(navigator as Navigator & {connection?:{saveData?:boolean;effectiveType?:string}}).connection;
   if(connection?.saveData||connection?.effectiveType?.includes('2g'))return;
   const timers:number[]=[],idles:number[]=[];
+  let stopped=false;
+  const stop=()=>{
+   stopped=true;
+   window.removeEventListener('load',prepare);
+   timers.forEach(clearTimeout);
+   idles.forEach(id=>window.cancelIdleCallback(id));
+  };
   const prepare=()=>{
+   if(stopped)return;
    ['/learn/neural-networks','/ai','/play/rocket'].forEach((href,index)=>{
     timers.push(window.setTimeout(()=>{
      const warm=()=>{if(document.visibilityState==='visible')router.prefetch(href);};
@@ -78,9 +86,11 @@ export default function ProductionHome() {
     },1500+index*3000));
    });
   };
+  document.addEventListener('pointerdown',stop,{capture:true,once:true});
+  document.addEventListener('keydown',stop,{capture:true,once:true});
   if(document.readyState==='complete')prepare();
   else window.addEventListener('load',prepare,{once:true});
-  return()=>{window.removeEventListener('load',prepare);timers.forEach(clearTimeout);idles.forEach(id=>window.cancelIdleCallback(id));};
+  return()=>{stop();document.removeEventListener('pointerdown',stop,true);document.removeEventListener('keydown',stop,true);};
  },[router]);
  return <div className={s.preview} id="top"><Home/></div>;
 }
