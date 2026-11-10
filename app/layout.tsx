@@ -49,7 +49,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <head><link rel="preload" href={fastFonts.home} as="font" type="font/woff2" crossOrigin="anonymous" /></head>
+      <head>
+        <link rel="preload" href={fastFonts.home} as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link id="snn-font-fallback" rel="stylesheet" href={fastFonts.fallback} media="print" />
+        <noscript><link rel="stylesheet" href={fastFonts.fallback} /></noscript>
+      </head>
       <body
         className="antialiased"
       >

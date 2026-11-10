@@ -1,8 +1,8 @@
 """Make small, exact-glyph SNN Grid subsets for the site and its home page.
 
-The larger existing subsets remain in the CSS as fallbacks. Run from any
-directory with fontTools and brotli installed when site copy changes enough to
-justify rebuilding these optional subsets.
+The larger existing subsets remain available as asynchronously loaded
+fallbacks. Run from any directory with fontTools and brotli installed when
+site copy changes enough to justify rebuilding these optional subsets.
 """
 from hashlib import sha256
 from io import BytesIO
@@ -103,9 +103,17 @@ if START in css:
     before, tail = css.split(START, 1)
     _, after = tail.split(END, 1)
     css = before.rstrip() + '\n' + after.lstrip()
-css_path.write_text(css.rstrip() + '\n\n' + START + '\n' + '\n\n'.join(faces) + '\n' + END + '\n', encoding='utf-8')
+fallback_css = css.replace('font-family: "SNN Grid";', 'font-family: "SNN Grid Fallback";')
+if fallback_css == css:
+    raise ValueError('Original fallback font faces were not found')
+fallback_bytes = fallback_css.encode('utf-8')
+fallback_file = f'snn-grid-fallback-{sha256(fallback_bytes).hexdigest()[:12]}.css'
+(FONTS / fallback_file).write_bytes(fallback_bytes)
+fast_css = START + '\n' + '\n\n'.join(faces) + '\n' + END + '\n'
+(FONTS / 'snn-grid-fast.css').write_text(fast_css, encoding='utf-8')
+css_path.write_text(css.rstrip() + '\n\n' + fast_css, encoding='utf-8')
 (ROOT / 'lib' / 'design' / 'fast-fonts.json').write_text(
     json.dumps({'home': '/fonts/' + home_file, 'course': '/fonts/' + course_file,
-                'site': '/fonts/' + site_file}, indent=2) + '\n',
+                'site': '/fonts/' + site_file, 'fallback': '/fonts/' + fallback_file}, indent=2) + '\n',
     encoding='utf-8',
 )

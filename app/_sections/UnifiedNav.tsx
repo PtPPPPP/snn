@@ -11,6 +11,7 @@ export function Nav(){
  const path=(usePathname()||'/').replace(/\/$/,'')||'/';
  const lab=path.startsWith('/play/rocket');
  const [open,setOpen]=useState(false);const shell=useRef<HTMLElement>(null),toggle=useRef<HTMLButtonElement>(null);
+ useEffect(()=>{const link=document.getElementById('snn-font-fallback');if(!(link instanceof HTMLLinkElement))return;const enable=()=>{link.media='all';};if(link.sheet)enable();else link.addEventListener('load',enable,{once:true});return()=>link.removeEventListener('load',enable);},[]);
  useEffect(()=>{if(!open)return;const outside=(e:PointerEvent)=>{if(e.target instanceof Node&&!shell.current?.contains(e.target))setOpen(false);};const escape=(e:KeyboardEvent)=>{if(e.key==='Escape'){setOpen(false);toggle.current?.focus();}};document.addEventListener('pointerdown',outside);document.addEventListener('keydown',escape);return()=>{document.removeEventListener('pointerdown',outside);document.removeEventListener('keydown',escape);};},[open]);
  return <header ref={shell} className={s.shell} data-site-shell data-lab={lab}>
   <div className={s.bar}>

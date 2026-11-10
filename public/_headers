@@ -21,6 +21,9 @@
 /fonts/snn-grid-home-*.woff2
   Cache-Control: public, max-age=31536000, immutable
 
+/fonts/snn-grid-fallback-*.css
+  Cache-Control: public, max-age=31536000, immutable
+
 /fonts/snn-grid-course-*.woff2
   Cache-Control: public, max-age=31536000, immutable
 

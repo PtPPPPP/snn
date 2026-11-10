@@ -14,6 +14,7 @@ const common = ['virtual:vinext-app-browser-entry', 'app/_sections/UnifiedNav.ts
 const clientDir = path.resolve(process.env.SNN_PERF_CLIENT_DIR || 'dist/client');
 const manifest = JSON.parse(await readFile(path.join(clientDir, '.vite/manifest.json'), 'utf8'));
 const fontPaths = JSON.parse(await readFile('lib/design/fast-fonts.json', 'utf8'));
+if (!fontPaths.fallback) throw new Error('Missing the asynchronous fallback-font stylesheet.');
 const siteSource = await readFile('lib/site.ts', 'utf8');
 const logo = siteSource.match(/export const BRAND_LOGO\s*=\s*\{[^}]*?src:\s*["']([^"']+)["']/s)?.[1];
 if (!logo) throw new Error('Cannot identify BRAND_LOGO for the performance budget.');
@@ -36,7 +37,7 @@ async function transferSize(file) {
 let exceeded = false;
 for (const budget of budgets) {
   const visited = new Set();
-  const files = new Set([...globalCss, logo]);
+  const files = new Set([...globalCss, logo, fontPaths.fallback]);
   function visit(key) {
     if (visited.has(key)) return;
     visited.add(key);

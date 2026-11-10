@@ -1,5 +1,6 @@
 {
   "home": "/fonts/snn-grid-home-bd47b5aa4420.woff2",
   "course": "/fonts/snn-grid-course-58e84144a6a0.woff2",
-  "site": "/fonts/snn-grid-site-1337866792a1.woff2"
+  "site": "/fonts/snn-grid-site-1337866792a1.woff2",
+  "fallback": "/fonts/snn-grid-fallback-0807f8de5fb4.css"
 }

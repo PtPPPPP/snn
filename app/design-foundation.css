@@ -43,8 +43,8 @@
   --type-body: var(--snn-type-body);
   --type-label: var(--snn-type-body);
   --type-caption: var(--snn-type-meta);
-  --font-geist-sans: "SNN Grid",monospace;
-  --font-geist-mono: "SNN Grid",monospace;
+  --font-geist-sans: "SNN Grid","SNN Grid Fallback",monospace;
+  --font-geist-mono: "SNN Grid","SNN Grid Fallback",monospace;
   --motion-fast: 0ms;
   --motion-panel: 0ms;
   --motion-entrance: 0ms;

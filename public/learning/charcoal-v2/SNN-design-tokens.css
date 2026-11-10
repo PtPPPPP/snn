@@ -1,9 +1,9 @@
 /* Generated from lib/design/charcoal-v2.json v3.3.7. Run node scripts/generate-design-tokens.mjs. */
 :root,.snn-theme{
   color-scheme:dark;
-  --snn-font-body: "SNN Grid",monospace;
-  --snn-font-mono: "SNN Grid",monospace;
-  --snn-font-canvas: "SNN Grid",monospace;
+  --snn-font-body: "SNN Grid","SNN Grid Fallback",monospace;
+  --snn-font-mono: "SNN Grid","SNN Grid Fallback",monospace;
+  --snn-font-canvas: "SNN Grid","SNN Grid Fallback",monospace;
   --snn-font-size-glyph: 8px;
   --snn-font-size-meta: 12px;
   --snn-font-size-caption: 12px;
