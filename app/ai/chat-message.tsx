@@ -1,4 +1,4 @@
-import MarkdownContent from "../_components/markdown-content.mjs";
+import MarkdownContent from "../_components/lazy-markdown-content";
 import styles from "./ai-chat.module.css";
 
 export type ChatRole = "assistant" | "user";

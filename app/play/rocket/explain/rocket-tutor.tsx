@@ -1,7 +1,7 @@
 "use client";
 import {useEffect,useRef,useState} from 'react';
 import {streamChatMessage,type AiChatMessage} from '../../../../lib/ai-client';
-import MarkdownContent from '../../../_components/markdown-content.mjs';
+import MarkdownContent from '../../../_components/lazy-markdown-content';
 import styles from './lesson.module.css';
 export type TutorSnapshot={time:number;selection:string;context:string;timeLabel?:string};
 type Turn={question:string;answer:string;label:string;context:string;complete:boolean};

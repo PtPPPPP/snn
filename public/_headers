@@ -15,6 +15,9 @@
 /assets/*.ttf
   Cache-Control: public, max-age=31536000, immutable
 
+/assets/snn-logo-128-*.webp
+  Cache-Control: public, max-age=31536000, immutable
+
 /fonts/snn-grid-home-*.woff2
   Cache-Control: public, max-age=31536000, immutable
 

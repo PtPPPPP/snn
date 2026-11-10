@@ -2,7 +2,7 @@
 
 import {useCallback,useEffect,useId,useRef,useState} from 'react';
 import {AiClientError,getAiStatus,streamChatMessage,type AiChatMessage} from '../../../lib/ai-client';
-import MarkdownContent from '../../_components/markdown-content.mjs';
+import MarkdownContent from '../../_components/lazy-markdown-content';
 import styles from './lesson-assistant.module.css';
 
 export type LessonAssistantContext={id:string;title:string;text:string;snapshot?:unknown};
