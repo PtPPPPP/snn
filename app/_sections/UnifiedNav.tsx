@@ -14,13 +14,13 @@ export function Nav(){
  useEffect(()=>{if(!open)return;const outside=(e:PointerEvent)=>{if(e.target instanceof Node&&!shell.current?.contains(e.target))setOpen(false);};const escape=(e:KeyboardEvent)=>{if(e.key==='Escape'){setOpen(false);toggle.current?.focus();}};document.addEventListener('pointerdown',outside);document.addEventListener('keydown',escape);return()=>{document.removeEventListener('pointerdown',outside);document.removeEventListener('keydown',escape);};},[open]);
  return <header ref={shell} className={s.shell} data-site-shell data-lab={lab}>
   <div className={s.bar}>
-   <Link className={s.brand} href="/" aria-label="SNN 首页"><img src={BRAND_LOGO.src} alt="" width="32" height="32"/><span><b>SNN</b><small>SMART NEURAL NETWORK</small></span></Link>
+   <Link className={s.brand} href="/" prefetch={false} aria-label="SNN 首页"><img src={BRAND_LOGO.src} alt="" width="32" height="32"/><span><b>SNN</b><small>SMART NEURAL NETWORK</small></span></Link>
    <button ref={toggle} className={s.toggle} aria-expanded={open} aria-controls="site-navigation" onClick={()=>setOpen(!open)}>{open?'[ 关闭 ]':'[ 导航 ]'}</button>
    <nav id="site-navigation" aria-label="主导航" className={`${s.links} ${open?s.open:''}`}>{links.map(([href,label])=>{
     const active=href==='/'?path==='/':href==='/learn/neural-networks'?path.startsWith('/learn/'):href==='/play/rocket'?lab:!href.includes('#')&&path===href;
-    return <Link href={href} key={href} aria-current={active?'page':undefined} onClick={()=>setOpen(false)}>{label}</Link>;
+    return <Link href={href} key={href} prefetch={false} aria-current={active?'page':undefined} onClick={()=>setOpen(false)}>{label}</Link>;
    })}</nav>
   </div>
-  {lab&&<div className={s.labBar}><span>学习实验室 / 火箭回收</span><nav aria-label="火箭实验导航">{labs.map(([href,label])=><Link key={href} href={href} aria-current={path===href?'page':undefined}>{label}</Link>)}</nav></div>}
+  {lab&&<div className={s.labBar}><span>学习实验室 / 火箭回收</span><nav aria-label="火箭实验导航">{labs.map(([href,label])=><Link key={href} href={href} prefetch={false} aria-current={path===href?'page':undefined}>{label}</Link>)}</nav></div>}
  </header>;
 }
