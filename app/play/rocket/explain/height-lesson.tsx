@@ -46,7 +46,9 @@ export default function HeightLesson(){
   animation=requestAnimationFrame(tick);
   return()=>cancelAnimationFrame(animation);
  },[playing,speed,data]);
- if(!data)return <main className={styles.page}><p>{error||'正在生成真实策略的飞行轨迹…'}</p></main>;
+ const introduction=<><div className={styles.pageIntro}><span>网络怎样推理</span><small>选择时刻与神经元，观察真实决策</small></div>
+   <p className={styles.quickGuide}><b>本页目标</b> 看高度、速度等 7 个飞行状态怎样逐层算出油门。<span>入门：选计算步骤 → 点神经元 → 单步看下一刻。</span></p></>;
+ if(!data)return <main className={styles.page}>{introduction}<p role="status">{error||'正在生成真实策略的飞行轨迹…'}</p></main>;
  const {model,frames}=data,frame=frames[index],previous=frames[Math.max(0,index-1)];
  const state=frame.state,t=frame.trace,old=previous.trace,total=frames.at(-1)!.state.t;
  const layer=Math.max(0,stage-1),neuron=stage===3||stage===0?0:picked;
@@ -57,8 +59,7 @@ export default function HeightLesson(){
  const tutorSnapshot={time:frame.observed.t,selection:stage===0?names[picked]:stage===3?'输出神经元':`第${stage}组第${neuron+1}号神经元`,context:JSON.stringify({model:'Energy PPO 7-128-128-1',observed:frame.observed,displayedState:state,throttle:t.throttle,selectedLayer:stage,selectedNeuron:stage===0?picked+1:neuron+1,inputNames:names,networkInputs:t.inputs,calculation:stage===0?null:{sum:calc.sum,bias:calc.bias,output:calc.output,terms:calc.terms.map(v=>[v.index+1,...[v.input,v.weight,v.product].map(n=>Number(n.toFixed(5)))])},termColumns:['序号','输入','系数','贡献'],rule:'隐藏层所有贡献相加加b后Tanh；输出层线性求和后限制[-1,1]，(值+1)/2变成油门；速度负数为下降'})};
  function seek(i:number){const next=Math.max(0,Math.min(frames.length-1,Math.round(i)));playhead.current=frames[next].state.t;setIndex(next);setPlaying(false);}
  return <main className={styles.page} data-realtime="true">
-  <div className={styles.pageIntro}><span>网络怎样推理</span><small>选择时刻与神经元，观察真实决策</small></div>
-  <p className={styles.quickGuide}><b>本页目标</b> 看高度、速度等 7 个飞行状态怎样逐层算出油门。<span>入门：选计算步骤 → 点神经元 → 单步看下一刻。</span></p>
+  {introduction}
   <NeuronPlayground/>
   <div className={styles.workspace}>
    <section className={styles.diagram}>

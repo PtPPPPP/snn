@@ -1,6 +1,6 @@
 "use client";
 
-import Link from 'next/link';
+import Link from '../../_sections/IntentLink';
 import {useEffect,useRef,useState,type ReactNode} from 'react';
 import {LessonFlowProvider,useLessonFlow} from './lesson-flow';
 import GeometryActivity from './geometry-activity';

@@ -1,11 +1,17 @@
 import path from "node:path";
+import { readFile } from "node:fs/promises";
+import { compatibilityDate as supportedDate } from "workerd";
 import { unstable_dev } from "wrangler";
 
 // The bundle imports cloudflare:workers. Use local workerd so tests exercise
 // the real Workers module loader and request bindings.
 export async function startBuiltWorker({ root = process.cwd(), vars = {} } = {}) {
+  const config = path.join(root, "dist/server/wrangler.json");
+  const {compatibility_date: deployedDate} = JSON.parse(await readFile(config, "utf8"));
   const worker = await unstable_dev(path.join(root, "dist/server/index.js"), {
-    config: path.join(root, "dist/server/wrangler.json"),
+    config,
+    // Local rendering uses the pinned binary. Deployment uses its own config.
+    compatibilityDate: deployedDate > supportedDate ? supportedDate : deployedDate,
     local: true,
     bundle: false,
     ip: "127.0.0.1",

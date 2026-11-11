@@ -41,6 +41,13 @@ export const metadata: Metadata = {
 };
 
 import { Nav } from './_sections/UnifiedNav';
+import { DocumentNavigationStatus } from './_sections/IntentLink';
+
+// Browsers may warm a public document on hover or touch. Prefetch downloads
+// only HTML, so it cannot start a simulation or initialize an AI session.
+const navigationRules = JSON.stringify({
+  prefetch: [{ where: { selector_matches: 'a[data-snn-document]' }, eagerness: 'moderate' }],
+});
 
 export default function RootLayout({
   children,
@@ -53,11 +60,13 @@ export default function RootLayout({
         <link rel="preload" href={fastFonts.home} as="font" type="font/woff2" crossOrigin="anonymous" />
         <link id="snn-font-fallback" rel="stylesheet" href={fastFonts.fallback} media="print" />
         <noscript><link rel="stylesheet" href={fastFonts.fallback} /></noscript>
+        <script type="speculationrules" dangerouslySetInnerHTML={{ __html: navigationRules }} />
       </head>
       <body
         className="antialiased"
       >
         <Nav />
+        <DocumentNavigationStatus />
         {children}
         {/* The public config stays the single source of truth. Inlining it
             removes a blocking round trip while preserving execution order. */}

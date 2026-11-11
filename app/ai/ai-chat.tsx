@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import Link from "next/link";
+import Link from "../_sections/IntentLink";
 import { AiClientError, getAiStatus, streamChatMessage } from "../../lib/ai-client";
 import type { AiChatMessage } from "../../lib/ai-client";
 import {

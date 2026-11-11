@@ -4,7 +4,7 @@ import handler from "vinext/server/app-router-entry";
 import {interviewAPI} from './interview-api';
 import {isInterviewReviewer,type InterviewEnv} from '../lib/interview/database';
 import {cloudflareReviewerRequest} from './reviewer-auth';
-import {canCachePublicPage, publicPageCacheCopy, publicPageCacheKey, publicPageResponse} from './public-page-cache.mjs';
+import {canCachePublicPage, publicDocumentFor, publicPageCacheCopy, publicPageCacheKey, publicPageResponse, readPublicDocument} from './public-page-cache.mjs';
 
 interface Env extends InterviewEnv {
   SNN_VERSION_METADATA?: { id: string };
@@ -74,8 +74,14 @@ const worker = {
       }, allowedWidths);
     }
 
-    // Cache only two anonymous public HTML pages; API, RSC and personalized
-    // requests never enter the shared cache.
+    const asset = publicDocumentFor(request);
+    if (asset && env.ASSETS) {
+      try {
+        const document = await readPublicDocument(request, asset, env.ASSETS);
+        if (document) return document;
+      } catch (error) { console.warn('Public document lookup failed', error); }
+    }
+    // A preview or an unavailable asset can still use the existing SSR path.
     const pageKey=publicPageCacheKey(request,env.SNN_VERSION_METADATA?.id);
     let pageCache: Cache | undefined;
     if(pageKey && typeof caches !== 'undefined'){

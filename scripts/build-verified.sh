@@ -27,3 +27,5 @@ timeout \
 
 echo "Checking initial asset budgets..."
 node "${script_dir}/performance-budget.mjs"
+
+node "${script_dir}/build-public-documents.mjs"
