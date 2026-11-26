@@ -16,6 +16,7 @@
     "test:ai-node": "npm --prefix ai-node test",
     "test:ai-gateway": "npm --prefix cloudflare-ai-gateway test",
     "test:neural-foundations": "node --test tests/neural-foundations.test.mjs tests/neural-inline-experiments.test.mjs tests/neural-hidden-space.test.mjs tests/neural-linear-fit.test.mjs tests/neural-local-feedback.test.mjs tests/opening-demo.test.mjs tests/ascii-fold.test.mjs tests/three-opening-geometry.test.mjs tests/classifier-lesson.test.mjs tests/score-plane.test.mjs tests/nonlinear-space.test.mjs",
+    "test:rocket": "node --test tests/rocket.test.mjs tests/rocket-replay.test.mjs tests/rocket-experience.test.mjs tests/rocket-decision.test.mjs tests/network-learning.test.mjs tests/ppo-training-record.test.mjs tests/ppo-heatmap-record.test.mjs tests/training-studio-model.test.mjs tests/update-demo.test.mjs tests/value-color.test.mjs",
     "test:ai-state": "node --test tests/ai-conversation-state.test.mjs tests/ai-responsive-contract.test.mjs",
     "test:production-readiness": "node --test tests/production-readiness.test.mjs",
     "test:interview": "node --test tests/interview-api.test.mjs",
@@ -29,7 +30,7 @@
     "test:real-model-acceptance": "node --test tests/workspace-edit-real-model.test.mjs tests/workspace-agent-nl-real-model.test.mjs",
     "preflight:production": "npm run test:production-artifact && node scripts/check-production-readiness.mjs",
     "deploy:production": "npm run build:production && npm run test:production-artifact && wrangler deploy --config dist/server/wrangler.json",
-    "verify": "npm run lint && npm run test:neural-foundations && npm run test:ai-state && npm run test:ai-node && npm run test:ai-gateway && npm run build && npm run test:artifact && npm run test:production-artifact && npm run test:production-readiness && npm run test:rendered-html",
+    "verify": "npm run lint && npm run test:neural-foundations && npm run test:rocket && npm run test:ai-state && npm run test:ai-node && npm run test:ai-gateway && npm run build && npm run test:artifact && npm run test:production-artifact && npm run test:production-readiness && npm run test:rendered-html",
     "test": "npm run verify",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .preview"
   },

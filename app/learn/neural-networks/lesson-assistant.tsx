@@ -1,6 +1,6 @@
 "use client";
 
-import {useCallback,useEffect,useId,useRef,useState} from 'react';
+import {useCallback,useEffect,useId,useRef,useState,useSyncExternalStore} from 'react';
 import {AiClientError,getAiStatus,streamChatMessage,type AiChatMessage} from '../../../lib/ai-client';
 import MarkdownContent from '../../_components/lazy-markdown-content';
 import styles from './lesson-assistant.module.css';
@@ -54,12 +54,15 @@ function currentSnapshot(context:LessonAssistantContext,getSnapshot?:()=>unknown
  try{return getSnapshot();}catch{return undefined;}
 }
 
+function subscribeNoop(){return()=>{};}
+function isLocalHostname(){return typeof window!=='undefined'&&['localhost','127.0.0.1','[::1]','::1'].includes(window.location.hostname);}
+
 /** Context is copied only on Send. Scrolling never changes an in-flight question. */
 export default function LessonAssistant({context,selectedText,getSnapshot,className}:LessonAssistantProps){
  const inputId=useId();
  const [draft,setDraft]=useState(''),[turns,setTurns]=useState<Turn[]>([]);
  const [connection,setConnection]=useState<Connection>('checking'),[model,setModel]=useState<string|null>(null);
- const [localPreview,setLocalPreview]=useState(false);
+ const localPreview=useSyncExternalStore(subscribeNoop,isLocalHostname,()=>false);
  const [busy,setBusy]=useState(false),[reasoning,setReasoning]=useState(false);
  const [ignoredSelection,setIgnoredSelection]=useState(''),[followAnswer,setFollowAnswer]=useState(true);
  const request=useRef<ActiveRequest|null>(null),mounted=useRef(false),turnId=useRef(0);
@@ -75,16 +78,16 @@ export default function LessonAssistant({context,selectedText,getSnapshot,classN
  },[]);
 
  useEffect(()=>{
-  setLocalPreview(['localhost','127.0.0.1','[::1]','::1'].includes(window.location.hostname));
-  mounted.current=true;void checkConnection();
-  return()=>{mounted.current=false;statusVersion.current++;request.current?.controller.abort();};
+  const versionRef=statusVersion;
+  mounted.current=true;
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- checkConnection polls external status endpoint on mount
+  void checkConnection();
+  return()=>{mounted.current=false;versionRef.current++;request.current?.controller.abort();};
  },[checkConnection]);
 
  useEffect(()=>{
   if(followAnswer&&transcript.current)transcript.current.scrollTop=transcript.current.scrollHeight;
  },[turns,reasoning,followAnswer]);
-
- useEffect(()=>{setIgnoredSelection('');},[selectedText]);
 
  async function send(question=draft,retry?:Turn){
   const cleanQuestion=question.trim().slice(0,1000);

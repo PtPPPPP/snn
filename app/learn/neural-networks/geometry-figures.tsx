@@ -1,17 +1,16 @@
 "use client";
 
-import {useEffect,useRef,useState,type PointerEvent} from 'react';
-import {coordinate,fmt,grid,shownPoint,snap,trace,type CourseModel,type Point,type Sample} from '../../../lib/learning/geometry-course';
-import {valueColor} from '../../../lib/design/value-color';
+import {useCallback,useEffect,useRef,useState,type PointerEvent} from 'react';
+import {coordinate,fmt,grid,snap,trace,type CourseModel,type Point,type Sample} from '../../../lib/learning/geometry-course';
 import s from './geometry-course.module.css';
 
 const RED='#FF5F65',GREEN='#79FF8B',WHITE='#E8E8E2',DIM='#62625e',FAINT='#383835';
 function useCanvas(draw:(ctx:CanvasRenderingContext2D,width:number,height:number)=>void){
- const canvas=useRef<HTMLCanvasElement>(null),paint=useRef(draw),near=useRef(false),frame=useRef(0);paint.current=draw;
- const render=()=>{const el=canvas.current;if(!el)return;const box=el.getBoundingClientRect(),ratio=Math.min(devicePixelRatio||1,2);if(!box.width||!box.height)return;el.width=Math.round(box.width*ratio);el.height=Math.round(box.height*ratio);const ctx=el.getContext('2d');if(!ctx)return;ctx.scale(ratio,ratio);ctx.font='11px "Courier New", monospace';ctx.textAlign='center';ctx.textBaseline='middle';paint.current(ctx,box.width,box.height);};
- const schedule=()=>{if(!near.current||frame.current)return;frame.current=requestAnimationFrame(()=>{frame.current=0;render();});};
- useEffect(()=>{const el=canvas.current;if(!el)return;const observer=new ResizeObserver(schedule),visible=new IntersectionObserver(([entry])=>{near.current=entry.isIntersecting;if(near.current)schedule();else if(frame.current){cancelAnimationFrame(frame.current);frame.current=0;}},{rootMargin:'600px 0px'});observer.observe(el);visible.observe(el);return()=>{near.current=false;observer.disconnect();visible.disconnect();if(frame.current)cancelAnimationFrame(frame.current);frame.current=0;};},[]);
- useEffect(()=>{schedule();});
+ const canvas=useRef<HTMLCanvasElement>(null),paint=useRef(draw),near=useRef(false),frame=useRef(0);
+ const render=useCallback(()=>{const el=canvas.current;if(!el)return;const box=el.getBoundingClientRect(),ratio=Math.min(devicePixelRatio||1,2);if(!box.width||!box.height)return;el.width=Math.round(box.width*ratio);el.height=Math.round(box.height*ratio);const ctx=el.getContext('2d');if(!ctx)return;ctx.scale(ratio,ratio);ctx.font='11px "Courier New", monospace';ctx.textAlign='center';ctx.textBaseline='middle';paint.current(ctx,box.width,box.height);},[]);
+ const schedule=useCallback(()=>{if(!near.current||frame.current)return;frame.current=requestAnimationFrame(()=>{frame.current=0;render();});},[render]);
+ useEffect(()=>{const el=canvas.current;if(!el)return;const observer=new ResizeObserver(schedule),visible=new IntersectionObserver(([entry])=>{near.current=entry.isIntersecting;if(near.current)schedule();else if(frame.current){cancelAnimationFrame(frame.current);frame.current=0;}},{rootMargin:'600px 0px'});observer.observe(el);visible.observe(el);return()=>{near.current=false;observer.disconnect();visible.disconnect();if(frame.current)cancelAnimationFrame(frame.current);frame.current=0;};},[schedule]);
+ useEffect(()=>{paint.current=draw;schedule();});
  return canvas;
 }
 export function PointField({model,input,data,onPick,onLine,sides=false,unoriented=false,selected=true}:{model:CourseModel;input:Point;data:Sample[];onPick:(point:Point)=>void;onLine?:(point:Point)=>void;sides?:boolean;unoriented?:boolean;selected?:boolean}){

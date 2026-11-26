@@ -2,6 +2,7 @@
 import {useCallback,useEffect,useState,type FormEvent} from 'react';
 import {CASES,COMMON_IDS,OBJECTIVE_IDS,OBJECTIVE_SECTIONS,PAPER_QUESTION_COUNT,QUESTION_BANK_VERSION,QUESTIONS,QUESTION_TYPE_LABELS,TRACKS,isObjectiveQuestion,type InterviewQuestion} from '../../../lib/interview/questions';
 import type {InterviewAnswer} from '../../../lib/interview/assessment';
+import {clearInterviewDraft,loadInterviewDraft,saveInterviewDraft} from '../../../lib/interview/draft';
 import type {InterviewProfile,InterviewReceipt,InterviewSession} from '../../../lib/interview/session';
 import QuestionBrief from './question-brief';
 import AnswerTimer from './answer-timer';
@@ -18,6 +19,22 @@ export default function InterviewForm(){
  const [session,setSession]=useState<InterviewSession|null>(null),[loading,setLoading]=useState(true),[blocked,setBlocked]=useState(false),[confirmed,setConfirmed]=useState(false);
  const [track,setTrack]=useState(''),[scenario,setScenario]=useState(''),[answers,setAnswers]=useState<Record<string,InterviewAnswer>>({}),[busy,setBusy]=useState(false),[error,setError]=useState(''),[receipt,setReceipt]=useState<InterviewReceipt|null>(null);
  const [timing,setTiming]=useState<{startedAt:string;serverTime:string}|null>(null),[timingError,setTimingError]=useState(''),[timingAttempt,setTimingAttempt]=useState(0);
+ const [draftRestoredFor,setDraftRestoredFor]=useState<string|null>(null);
+ const identityId=session?.identity?.id,receiptId=receipt?.id;
+ if(identityId&&!receiptId&&draftRestoredFor!==identityId){
+  setDraftRestoredFor(identityId);
+  const draft=loadInterviewDraft(identityId,QUESTION_BANK_VERSION);
+  if(draft){
+   setTrack(draft.track);
+   setScenario(draft.scenario);
+   setAnswers(draft.answers);
+  }
+ }
+ useEffect(()=>{
+  if(!identityId||receiptId||draftRestoredFor!==identityId)return;
+  saveInterviewDraft(identityId,QUESTION_BANK_VERSION,{track,scenario,answers});
+ },[identityId,receiptId,draftRestoredFor,track,scenario,answers]);
+ const hasDraftContent=Boolean(track||scenario||Object.keys(answers).length>0);
  const objective=OBJECTIVE_IDS.map(id=>QUESTIONS.find(q=>q.id===id)!),common=COMMON_IDS.map(id=>QUESTIONS.find(q=>q.id===id)!),direction=QUESTIONS.find(q=>q.id===track),caseQuestion=QUESTIONS.find(q=>q.id===scenario),chosen=[...objective,...common,...direction?[direction]:[],...caseQuestion?[caseQuestion]:[]];
  function hasAnswer(question:InterviewQuestion){
   const value=answers[question.id];
@@ -33,7 +50,6 @@ export default function InterviewForm(){
   }catch(error){setError(error instanceof Error?error.message:'无法读取身份状态。');setBlocked(true);}
   finally{setLoading(false);}
  },[]);
- const identityId=session?.identity?.id,receiptId=receipt?.id;
  useEffect(()=>{
   if(!identityId||receiptId)return;
   const controller=new AbortController();
@@ -66,6 +82,7 @@ export default function InterviewForm(){
   setError('');setBusy(true);
   try{
    const data=await api<{receipt:InterviewReceipt}>('/api/interview/submissions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identityId:session.identity.id,questionBankVersion:QUESTION_BANK_VERSION,track,scenario,answers:Object.fromEntries(chosen.map(q=>[q.id,answers[q.id]]))})});
+   clearInterviewDraft(session.identity.id,QUESTION_BANK_VERSION);
    setReceipt(data.receipt);
   }catch(error){setError(error instanceof Error?error.message:'提交失败，请稍后重试。');}
   finally{setBusy(false);}
@@ -106,7 +123,7 @@ export default function InterviewForm(){
  if(!timing)return <section className={s.accessGate}><h2>{timingError?'暂时无法开始计时':'正在开始笔试…'}</h2>{timingError?<><p className={s.error} role="alert">{timingError}</p><button type="button" onClick={()=>{setTimingError('');setTimingAttempt(value=>value+1);}}>[ 重试计时 ]</button><button type="button" onClick={()=>void loadSession()}>[ 刷新笔试状态 ]</button></>:<p>开始时间将由服务器记录。</p>}</section>;
  return <form onSubmit={submit}>
  <AnswerTimer startedAt={timing.startedAt} serverTime={timing.serverTime}/>
- <section className={s.identitySummary}><div><p className={s.eyebrow}>IDENTITY BOUND</p><strong>{profile.name} · {profile.studentId}</strong><p>{[profile.department,profile.year].filter(Boolean).join(' / ')||'本轮笔试身份已绑定'}</p></div><span className={s.boundLabel}>身份已锁定</span></section>
+ <section className={s.identitySummary}><div><p className={s.eyebrow}>IDENTITY BOUND</p><strong>{profile.name} · {profile.studentId}</strong><p>{[profile.department,profile.year].filter(Boolean).join(' / ')||'本轮笔试身份已绑定'}</p></div><span className={s.boundLabel}>{hasDraftContent?'草稿已自动保存':'身份已锁定'}</span></section>
  <p className={s.answerInstructions}>先完成 8 道基础客观题，再写 2 道简答，并各选 1 道方向题和情景题。案例均为虚构；主观题只按给定材料回答，无需运行代码或实际使用 AI 工具。</p>
  <fieldset className={s.formFields} disabled={busy}>
  <section className={s.section}><div className={s.sectionHeading}><div><p className={s.eyebrow}>FOUNDATIONS</p><h2>基础知识</h2></div><p>8 题 · 40 分 · 后台自动计分</p></div>{OBJECTIVE_SECTIONS.map(group=><div className={s.objectiveSection} key={group.label}><h3>{group.label}</h3><p className={s.muted}>{group.hint}</p>{group.ids.map(id=>answerQuestion(QUESTIONS.find(q=>q.id===id)!,OBJECTIVE_IDS.indexOf(id)+1))}</div>)}</section>

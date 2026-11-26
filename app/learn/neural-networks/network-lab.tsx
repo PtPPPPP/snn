@@ -29,7 +29,7 @@ export default function NetworkLab({mode,id}:{mode:Mode;id:string}){
  const [last,setLast]=useState<{before:number;gradient:number;after:number}|null>(null);
  const training=mode==='learn-linear'||mode==='learn-xor'||mode==='learn-relu',full=mode.includes('relu'),hasBias=!['design','stuck-center'].includes(mode);
  const initialize=useCallback(()=>{if(entry.current)return current.current;const next=entryState(mode);entry.current=clone(next);current.current=next;setState(next);flow.publish(id,next);setHistory([evaluate(next.model,learningSamples(next)).loss]);return next;},[flow,id,mode]);
- const change=(next:CourseState)=>{current.current=next;setState(next);flow.publish(id,next);};
+ const change=useCallback((next:CourseState)=>{current.current=next;setState(next);flow.publish(id,next);},[flow,id]);
  useEffect(()=>{const el=root.current;if(!el)return;const stop=onNotebookEntry(el,initialize),observer=new IntersectionObserver(([item])=>{visible.current=item.isIntersecting;if(!item.isIntersecting){setAuto(false);setPlaying(false);}},{threshold:0});observer.observe(el);return()=>{stop();observer.disconnect();};},[initialize]);
  useEffect(()=>{if(!playing)return;const timer=window.setTimeout(()=>{if(document.hidden||!visible.current){setPlaying(false);return;}if(phase===4){setPlaying(false);return;}setPhase(v=>v+1);},500);return()=>clearTimeout(timer);},[playing,phase]);
  useEffect(()=>{if(!auto)return;const timer=window.setInterval(()=>{
@@ -38,7 +38,7 @@ export default function NetworkLab({mode,id}:{mode:Mode;id:string}){
   let added=0,lastGradient:number[]=[];
   for(let i=0;i<5;i++){const data=learningSamples(next),g=gradient(next.model,data);lastGradient=g;const model=update(next.model,g,rate),value=evaluate(model,data).loss;if(!Number.isFinite(value)){setAuto(false);return;}next.model=model;losses.push(value);added++;if(Math.max(...g.map(Math.abs))<.0001){setAuto(false);setSettled(true);break;}}
   setLast({before,gradient:lastGradient[tracked],after:parameters(next.model)[tracked]});change(next);setSteps(n=>n+added);setHistory(values=>[...values,...losses]);setPhase(4);
- },160);return()=>clearInterval(timer);},[auto,rate,tracked]);
+ },160);return()=>clearInterval(timer);},[auto,rate,tracked,change]);
  function setParameter(index:number,value:number){const old=initialize(),next=clone(old),values=parameters(next.model);values[index]=value;next.model=fromParameters(values,next.model.activation);change(next);setPending(null);setLast(null);setAuto(false);setPlaying(false);setPhase(4);setSettled(false);}
  function pick(point:Point){const next=clone(initialize());next.input=[snap(point[0]),snap(point[1])];change(next);setPhase(4);setPlaying(false);}
  function reset(){const next=clone(entry.current??initialize());change(next);setAuto(false);setPlaying(false);setPending(null);setLast(null);setPhase(4);setSteps(0);setSettled(false);setHistory([evaluate(next.model,learningSamples(next)).loss]);}

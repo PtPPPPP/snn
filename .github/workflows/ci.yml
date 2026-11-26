@@ -26,6 +26,9 @@ jobs:
       - name: Test ai conversation state
         run: npm run test:ai-state
 
+      - name: Test rocket and training studio models
+        run: npm run test:rocket
+
       - name: Test ai-gateway
         run: npm run test:ai-gateway
 

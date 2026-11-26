@@ -7,7 +7,7 @@ import s from './geometry-course.module.css';
 
 type Hit={x:number;y:number;index:number};
 export default function NetworkGlyphs({model,input,phase,onSelect,bias}:{model:CourseModel;input:Point;phase:number;onSelect:(index:number)=>void;bias:boolean}){
- const canvas=useRef<HTMLCanvasElement>(null),hits=useRef<Hit[]>([]),latest=useRef({model,input,phase,bias}),scheduleRef=useRef<()=>void>(()=>{});latest.current={model,input,phase,bias};
+ const canvas=useRef<HTMLCanvasElement>(null),hits=useRef<Hit[]>([]),latest=useRef({model,input,phase,bias}),scheduleRef=useRef<()=>void>(()=>{});
  useEffect(()=>{
   const element=canvas.current;if(!element)return;
   const paint=()=>{
@@ -35,6 +35,6 @@ export default function NetworkGlyphs({model,input,phase,onSelect,bias}:{model:C
   const observer=new ResizeObserver(schedule),visible=new IntersectionObserver(([entry])=>{near=entry.isIntersecting;if(near)schedule();else if(frame){cancelAnimationFrame(frame);frame=0;}},{rootMargin:'600px 0px'});
   observer.observe(element);visible.observe(element);return()=>{near=false;observer.disconnect();visible.disconnect();if(frame)cancelAnimationFrame(frame);scheduleRef.current=()=>{};};
  },[]);
- useEffect(()=>{scheduleRef.current();},[model,input,phase,bias]);
+ useEffect(()=>{latest.current={model,input,phase,bias};scheduleRef.current();},[model,input,phase,bias]);
  return <canvas ref={canvas} className={s.networkCanvas} role="img" aria-label={`${model.activation==='relu'?'带 ReLU 的 2→3→1':'两个输入到一个 Linear 输出的'}字符网络，输入 (${input.map(coordinate).map(fmt).join(', ')})，当前分数 ${fmt(trace(model,input).s)}。点击球体或连接选择对应参数。`} onClick={event=>{const box=event.currentTarget.getBoundingClientRect(),x=event.clientX-box.left,y=event.clientY-box.top,hit=hits.current.map(p=>({...p,d:(p.x-x)**2+(p.y-y)**2})).sort((a,b)=>a.d-b.d)[0];if(hit&&hit.d<1600)onSelect(hit.index);}}/>;
 }

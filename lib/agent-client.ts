@@ -1,3 +1,5 @@
+import { DOCUMENT_PREVIEW_EXTENSIONS, TEXT_EXTENSIONS } from "../shared/agent-files.mjs";
+
 export type AgentSession = {
   sessionId: string;
   createdAt?: string;
@@ -45,17 +47,13 @@ export type AgentRuntimeReadiness = {
   modelToolCalling: { lastVerifiedAt: string; model: string; tool: string } | null;
 };
 
-// Client-side mirror of the server preview whitelist (bff.mjs); the server
-// remains authoritative and rejects anything outside it.
-const PREVIEW_TEXT_EXTENSIONS = new Set([
-  "txt", "md", "markdown", "csv", "json", "log", "xml", "yml", "yaml", "html", "htm",
-  "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "java", "c", "h", "cpp", "hpp", "go", "rs",
-  "rb", "sh", "sql", "ini", "toml", "css",
-]);
+// Client-side reuse of the shared preview whitelist (shared/agent-files.mjs);
+// the server remains authoritative and rejects anything outside it.
+const PREVIEW_TEXT_EXTENSIONS = TEXT_EXTENSIONS;
 
 export function isPreviewableAgentFile(file: AgentFile): boolean {
   const extension = /\.([a-z0-9]+)$/i.exec(file.originalName)?.[1]?.toLowerCase();
-  if (extension === "docx" || extension === "xlsx") return true;
+  if (extension !== undefined && DOCUMENT_PREVIEW_EXTENSIONS.has(extension)) return true;
   if (file.kind !== "text") return false;
   return extension === undefined || PREVIEW_TEXT_EXTENSIONS.has(extension);
 }
@@ -188,15 +186,11 @@ export async function previewAgentFile(sessionId: string, fileId: string): Promi
   return data;
 }
 
-// Direct user editing mirror of the server's TEXT_EXTENSIONS editable-text
-// whitelist (file-ingestion-service isEditableTextPath). Files outside this
-// set (PDF/DOCX/XLSX/binary) never show an Edit button, matching the
+// Direct user editing reuse of the shared TEXT_EXTENSIONS editable-text
+// whitelist (shared/agent-files.mjs). Files outside this set
+// (PDF/DOCX/XLSX/binary) never show an Edit button, matching the
 // server's 415 before the user can hit it.
-export const AGENT_DIRECT_EDIT_EXTENSIONS = new Set([
-  "txt", "md", "markdown", "csv", "json", "log", "xml", "yml", "yaml", "html", "htm",
-  "ts", "tsx", "js", "mjs", "cjs", "py", "java", "c", "h", "cpp", "go", "rs",
-  "rb", "sh", "sql", "ini", "toml",
-]);
+export const AGENT_DIRECT_EDIT_EXTENSIONS = TEXT_EXTENSIONS;
 
 export function isDirectEditableFileName(name: string): boolean {
   const extension = /\.([a-z0-9]+)$/i.exec(name)?.[1]?.toLowerCase();

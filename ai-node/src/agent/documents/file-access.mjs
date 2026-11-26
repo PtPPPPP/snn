@@ -2,6 +2,7 @@ import { DocumentParserRegistry } from "./document-parser-registry.mjs";
 import { pdfParser } from "./parsers/pdf-parser.mjs";
 import { docxParser } from "./parsers/docx-parser.mjs";
 import { xlsxParser } from "./parsers/xlsx-parser.mjs";
+import { TEXT_EXTENSIONS } from "../../../../shared/agent-files.mjs";
 
 /**
  * Server-owned file access classification shared by the attachment resolver
@@ -9,15 +10,7 @@ import { xlsxParser } from "./parsers/xlsx-parser.mjs";
  * layers always agree on what a stored file may be opened as.
  */
 
-/**
- * The single authoritative plain-text extension registry. Upload kind sniffing,
- * browser preview, direct text edit, agent native read/edit, attachment
- * classification, and the document layer all consult this one set, so a given
- * extension can never be previewable yet unattachable (the `.css` contradiction
- * this list previously had). Plain-text extensions stay with bounded text reads;
- * the document layer refuses them.
- */
-export const TEXT_EXTENSIONS = Object.freeze(new Set(["txt", "md", "markdown", "csv", "json", "log", "xml", "yml", "yaml", "html", "htm", "css", "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "java", "c", "h", "cpp", "hpp", "go", "rs", "rb", "sh", "sql", "ini", "toml"]));
+export { TEXT_EXTENSIONS };
 
 export function createDefaultDocumentParserRegistry() {
   const registry = new DocumentParserRegistry();

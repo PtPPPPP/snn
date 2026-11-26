@@ -2,6 +2,7 @@ import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { TEXT_EXTENSIONS, createDefaultDocumentParserRegistry } from "../documents/file-access.mjs";
+import { DOCUMENT_PREVIEW_EXTENSIONS } from "../../../../shared/agent-files.mjs";
 import { DEFAULT_DOCUMENT_LIMITS } from "../documents/limits.mjs";
 import { FILE_LIMITS } from "../documents/file-limits.mjs";
 import { isEditableTextFile } from "../workspace/file-ingestion-service.mjs";
@@ -21,7 +22,6 @@ const PREVIEW_EXTENSIONS = TEXT_EXTENSIONS;
 // All size bounds come from the one authoritative FILE_LIMITS registry so the
 // public HTTP layer and production ingestion can never drift apart.
 const MAX_PREVIEW_BYTES = FILE_LIMITS.previewMaxBytes;
-const DOCUMENT_PREVIEW_EXTENSIONS = new Set(["docx", "xlsx"]);
 const documentParsers = createDefaultDocumentParserRegistry();
 // Direct user editing reuses the preview envelope: a file is editable exactly
 // when it loads as preview (UTF-8 text within this bound). Keeping both limits

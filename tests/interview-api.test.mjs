@@ -7,6 +7,7 @@ import {isInterviewReviewer} from '../lib/interview/database.ts';
 import {CASES,COMMON_IDS,FORM_VERSION,OBJECTIVE_IDS,QUESTION_BANK_VERSION,QUESTIONS,TRACKS,isObjectiveQuestion} from '../lib/interview/questions.ts';
 import {RUBRICS} from '../lib/interview/rubrics.ts';
 import {LEGACY_BANK_VERSION,LEGACY_COMMON_IDS,LEGACY_QUESTIONS,LEGACY_RUBRICS} from '../lib/interview/legacy-bank.ts';
+import {clearInterviewDraft,interviewDraftKey,loadInterviewDraft,saveInterviewDraft} from '../lib/interview/draft.ts';
 const origin='https://interview.example.test';
 const admin={id:'reviewer-a',email:'reviewer@example.test'};
 const ordinaryUser={id:'ordinary-user',email:'ordinary@example.test'};
@@ -295,4 +296,51 @@ test('criterion marks are constrained, server summed, and partial progress survi
  const saved=await s.request(path,{actor:admin,method:'PUT',data:{revision:1,grades}});assert.equal(saved.status,200);assert.equal(saved.data.totalScore,70);assert.equal(saved.data.grades.q01.score,5);assert.equal(saved.data.complete,true);
  const zero=fullGrades(detail.data.submission.questions,0);
  const savedZero=await s.request(path,{actor:admin,method:'PUT',data:{revision:2,grades:zero}});assert.equal(savedZero.status,200);assert.equal(savedZero.data.totalScore,40);
+});
+
+test('candidate draft auto-save persists bounded answers per identity and bank version, and clears cleanly',()=>{
+ const map=new Map();
+ const storage={
+  getItem:key=>map.get(key)??null,
+  setItem:(key,value)=>{map.set(key,value);},
+  removeItem:key=>{map.delete(key);},
+ };
+ const id='candidate-123';
+ assert.equal(loadInterviewDraft(id,QUESTION_BANK_VERSION,storage),null);
+ assert.equal(saveInterviewDraft(id,QUESTION_BANK_VERSION,{track:'',scenario:'',answers:{}},storage),null);
+ assert.equal(map.size,0);
+
+ const saved=saveInterviewDraft(id,QUESTION_BANK_VERSION,{
+  track:'q09',
+  scenario:'invalid-scenario',
+  answers:{
+   b01:'B',
+   b05:['A','C','A','INVALID'],
+   q01:{p1:'第一步草稿',p2:'汉'.repeat(500),extra:'ignored'},
+   unknown:'ignored',
+  },
+ },storage);
+ assert.ok(saved);
+ assert.equal(saved.track,'q09');
+ assert.equal(saved.scenario,'');
+ assert.equal(saved.answers.b01,'B');
+ assert.deepEqual(saved.answers.b05,['A','C']);
+ const q01Max=QUESTIONS.find(q=>q.id==='q01').parts.find(p=>p.id==='p2').maxLength;
+ assert.equal(saved.answers.q01.p1,'第一步草稿');
+ assert.equal(saved.answers.q01.p2.length,q01Max);
+ assert.equal(saved.answers.q01.extra,undefined);
+ assert.equal(saved.answers.unknown,undefined);
+
+ const loaded=loadInterviewDraft(id,QUESTION_BANK_VERSION,storage);
+ assert.deepEqual(loaded,saved);
+ assert.equal(loadInterviewDraft('other-id',QUESTION_BANK_VERSION,storage),null);
+ assert.equal(loadInterviewDraft(id,'other-bank',storage),null);
+
+ storage.setItem(interviewDraftKey(id,QUESTION_BANK_VERSION),'{corrupt json');
+ assert.equal(loadInterviewDraft(id,QUESTION_BANK_VERSION,storage),null);
+
+ saveInterviewDraft(id,QUESTION_BANK_VERSION,{track:'q09',scenario:'q13',answers:{}},storage);
+ assert.ok(loadInterviewDraft(id,QUESTION_BANK_VERSION,storage));
+ clearInterviewDraft(id,QUESTION_BANK_VERSION,storage);
+ assert.equal(loadInterviewDraft(id,QUESTION_BANK_VERSION,storage),null);
 });
