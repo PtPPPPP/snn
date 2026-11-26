@@ -44,6 +44,20 @@ async function loadProductionStore() {
   return import(`data:text/javascript,${encodeURIComponent(compiled)}`);
 }
 
+async function loadAgentSessionStore() {
+  const storeSource = readFileSync(new URL("../lib/ai-conversation-store.ts", import.meta.url), "utf8");
+  const queueUrl = new URL("../lib/ai-conversation-queue.mjs", import.meta.url).href;
+  const compiledStore = ts.transpileModule(storeSource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
+    .replace("./ai-conversation-queue.mjs", queueUrl);
+  const storeDataUrl = `data:text/javascript,${encodeURIComponent(compiledStore)}`;
+
+  const agentSource = readFileSync(new URL("../lib/agent-session-store.ts", import.meta.url), "utf8");
+  const compiledAgent = ts.transpileModule(agentSource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
+    .replace("./ai-conversation-queue.mjs", queueUrl)
+    .replace("./ai-conversation-store", storeDataUrl);
+  return import(`data:text/javascript,${encodeURIComponent(compiledAgent)}`);
+}
+
 test("last chunk is included in the durable snapshot", () => {
   const snapshot = buildConversationSnapshot(base, [user], assistant, "Hello!");
   assert.equal(snapshot.messages.at(-1).content, "Hello!");
@@ -249,4 +263,75 @@ test("production save lifecycle exposes failure and clears it on recovery", asyn
   assert.equal(notice, "本次对话未保存");
   assert.equal(await saveConversationWithNotice({ conversation: base, saveConversation: save, setNotice: (value) => { notice = value; } }), true);
   assert.equal(notice, null);
+});
+
+test("agent session store persists messages, auto-generates title from first message or attachment, and deletes cleanly", async () => {
+  const agentStore = await loadAgentSessionStore();
+  const map = new Map();
+  const storage = {
+    getItem: (key) => map.get(key) ?? null,
+    setItem: (key, value) => { map.set(key, value); },
+    removeItem: (key) => { map.delete(key); },
+  };
+  const sessionId = "snn-agent-12345678-1234-4234-8234-1234567890ab";
+  assert.equal(agentStore.defaultAgentTitle(sessionId), "Agent 7890ab");
+  assert.equal(agentStore.loadAgentSessionHistory(sessionId, storage), null);
+
+  const saved = await agentStore.saveAgentSessionHistory(
+    sessionId,
+    [
+      {
+        id: "u-1",
+        role: "user",
+        content: "请帮我检查实验数据表并更新第二列",
+        attachments: [{ fileId: "f-1", originalName: "data.xlsx", size: 120, kind: "xlsx" }],
+      },
+      {
+        id: "a-1",
+        role: "assistant",
+        content: "已更新第二列数据。",
+      },
+    ],
+    undefined,
+    storage,
+  );
+  assert.ok(saved);
+  assert.equal(saved.title, "请帮我检查实验数据表并更新第二列");
+  assert.equal(saved.messages.length, 2);
+  assert.equal(saved.messages[0].attachments[0].originalName, "data.xlsx");
+
+  const loaded = agentStore.loadAgentSessionHistory(sessionId, storage);
+  assert.deepEqual(loaded, saved);
+
+  // Attachment-only first message derives title from filename
+  const sid2 = "snn-agent-22222222-2222-4222-8222-222222222222";
+  const saved2 = await agentStore.saveAgentSessionHistory(
+    sid2,
+    [{ id: "u-2", role: "user", content: "", attachments: [{ fileId: "f-2", originalName: "实验报告初稿.docx", size: 200, kind: "docx" }] }],
+    undefined,
+    storage,
+  );
+  assert.equal(saved2.title, "实验报告初稿.docx");
+
+  await agentStore.deleteAgentSessionHistory(sessionId, storage);
+  assert.equal(agentStore.loadAgentSessionHistory(sessionId, storage), null);
+});
+
+test("xlsx extracted text parser structures workbook sheets and cells in coordinate order", async () => {
+  const source = readFileSync(new URL("../lib/xlsx-preview-table.ts", import.meta.url), "utf8");
+  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const { parseExtractedWorkbook } = await import(`data:text/javascript,${encodeURIComponent(compiled)}`);
+
+  const text = `Workbook\n\n[Sheet: 实验数据]\nB1: 速度\nA1: 时间\nA2: 0.5\nB2: -4.9\n\n[Sheet: 汇总]\nA1: 总计\nB1: 42\n\n[TRUNCATED] Extraction stopped at the server limit.`;
+  const sheets = parseExtractedWorkbook(text);
+  assert.equal(sheets.length, 2);
+  assert.equal(sheets[0].name, "实验数据");
+  assert.deepEqual(sheets[0].columns, ["A", "B"]);
+  assert.equal(sheets[0].rows.length, 2);
+  assert.equal(sheets[0].rows[0].rowNumber, 1);
+  assert.equal(sheets[0].rows[0].cells.A.value, "时间");
+  assert.equal(sheets[0].rows[0].cells.B.value, "速度");
+  assert.equal(sheets[0].rows[1].cells.B.value, "-4.9");
+  assert.equal(sheets[1].name, "汇总");
+  assert.equal(sheets[1].rows[0].cells.B.value, "42");
 });

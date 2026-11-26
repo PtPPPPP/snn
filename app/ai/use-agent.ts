@@ -17,6 +17,13 @@ import {
   type AgentRuntimeReadiness,
   type AgentSession,
 } from "../../lib/agent-client";
+import {
+  defaultAgentTitle,
+  deleteAgentSessionHistory,
+  deriveAgentSessionTitle,
+  loadAgentSessionHistory,
+  saveAgentSessionHistory,
+} from "../../lib/agent-session-store";
 
 export type AgentAttachment = AgentFile;
 
@@ -83,6 +90,7 @@ function nowId(role: string) {
 
 export function useAgent() {
   const [sessions, setSessions] = useState<AgentSession[]>([]);
+  const [sessionTitles, setSessionTitles] = useState<Record<string, string>>({});
   const [activeSessionId, setActiveSessionId] = useState<string | null>(() => {
     try { return localStorage.getItem(LOCAL_ACTIVE_KEY); } catch { return null; }
   });
@@ -117,6 +125,29 @@ export function useAgent() {
   const workspaceSnapshotRef = useRef<Map<string, Map<string, { updatedAt: number; name: string }>>>(new Map());
   const changesBySessionRef = useRef<Map<string, WorkspaceChange[]>>(new Map());
   const activityBySessionRef = useRef<Map<string, ToolActivity[]>>(new Map());
+  const messagesBySessionRef = useRef<Map<string, AgentMessage[]>>(new Map());
+  const titlesBySessionRef = useRef<Map<string, string>>(new Map());
+
+  const readSessionMessages = useCallback((sessionId: string): AgentMessage[] => {
+    const cached = messagesBySessionRef.current.get(sessionId);
+    if (cached) return cached;
+    const stored = loadAgentSessionHistory(sessionId);
+    if (stored) {
+      messagesBySessionRef.current.set(sessionId, stored.messages);
+      titlesBySessionRef.current.set(sessionId, stored.title);
+      return stored.messages;
+    }
+    return [];
+  }, []);
+
+  const persistSessionMessages = useCallback((sessionId: string, nextMessages: AgentMessage[]) => {
+    messagesBySessionRef.current.set(sessionId, nextMessages);
+    const existingTitle = titlesBySessionRef.current.get(sessionId);
+    const title = deriveAgentSessionTitle(sessionId, nextMessages, existingTitle);
+    titlesBySessionRef.current.set(sessionId, title);
+    setSessionTitles((prev) => (prev[sessionId] === title ? prev : { ...prev, [sessionId]: title }));
+    void saveAgentSessionHistory(sessionId, nextMessages, title);
+  }, []);
 
   useEffect(() => { activeSessionIdRef.current = activeSessionId; try { if (activeSessionId) localStorage.setItem(LOCAL_ACTIVE_KEY, activeSessionId); else localStorage.removeItem(LOCAL_ACTIVE_KEY); } catch {} }, [activeSessionId]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
@@ -131,7 +162,22 @@ export function useAgent() {
     const sessionIdAtRequest = activeSessionIdRef.current;
     try {
       const list = await listAgentSessions();
-      setSessions(list.sort((a, b) => (b.lastAccessAt ?? "").localeCompare(a.lastAccessAt ?? "")));
+      const sorted = list.sort((a, b) => (b.lastAccessAt ?? "").localeCompare(a.lastAccessAt ?? ""));
+      setSessions(sorted);
+      const nextTitles: Record<string, string> = {};
+      for (const s of sorted) {
+        const stored = loadAgentSessionHistory(s.sessionId);
+        if (stored) {
+          if (!messagesBySessionRef.current.has(s.sessionId)) {
+            messagesBySessionRef.current.set(s.sessionId, stored.messages);
+          }
+          titlesBySessionRef.current.set(s.sessionId, stored.title);
+          nextTitles[s.sessionId] = stored.title;
+        } else {
+          nextTitles[s.sessionId] = titlesBySessionRef.current.get(s.sessionId) ?? defaultAgentTitle(s.sessionId);
+        }
+      }
+      setSessionTitles((prev) => ({ ...prev, ...nextTitles }));
       // if active session no longer exists, clear
       if (sessionIdAtRequest && activeSessionIdRef.current === sessionIdAtRequest && !list.find((s) => s.sessionId === sessionIdAtRequest)) {
         sessionGenerationRef.current += 1;
@@ -141,15 +187,15 @@ export function useAgent() {
         setMessages([]);
         setFiles([]);
         replacePendingAttachments([]);
-      } else if (!activeSessionIdRef.current && list.length > 0) {
-        // do not auto-select, let user choose
+      } else if (sessionIdAtRequest && activeSessionIdRef.current === sessionIdAtRequest) {
+        setMessages((cur) => (cur.length > 0 ? cur : readSessionMessages(sessionIdAtRequest)));
       }
       setLoaded(true);
     } catch (e) {
       if ((e as AgentClientError).code === "auth") setSessions([]);
       setLoaded(true);
     }
-  }, [replacePendingAttachments]);
+  }, [replacePendingAttachments, readSessionMessages]);
 
   const recordWorkspaceChanges = useCallback((sessionId: string, entries: WorkspaceChange[]) => {
     if (entries.length === 0) return;
@@ -282,7 +328,7 @@ export function useAgent() {
     activeSessionIdRef.current = id;
     filesRevisionRef.current += 1;
     setActiveSessionId(id);
-    setMessages([]);
+    setMessages(readSessionMessages(id));
     // Stale-state guard: never let the previous session's files flash as the
     // authoritative list of the newly selected session.
     setFiles([]);
@@ -294,7 +340,7 @@ export function useAgent() {
     setRunState("idle");
     setUploadState({});
     void refreshFiles(id);
-  }, [refreshFiles, replacePendingAttachments]);
+  }, [refreshFiles, replacePendingAttachments, readSessionMessages]);
 
   const startNewSession = useCallback(() => {
     runAbortRef.current?.abort();
@@ -320,6 +366,15 @@ export function useAgent() {
     workspaceSnapshotRef.current.delete(id);
     changesBySessionRef.current.delete(id);
     activityBySessionRef.current.delete(id);
+    messagesBySessionRef.current.delete(id);
+    titlesBySessionRef.current.delete(id);
+    setSessionTitles((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    void deleteAgentSessionHistory(id);
     if (activeSessionIdRef.current === id) {
       generationRef.current += 1;
       sessionGenerationRef.current += 1;
@@ -457,8 +512,10 @@ export function useAgent() {
     const attachments = attachmentsSnapshot.map((file) => file.fileId);
     const userMsg: AgentMessage = { id: nowId("user"), role: "user", content: content.trim(), attachments: [...attachmentsSnapshot] };
     const assistantMsg: AgentMessage = { id: nowId("assistant"), role: "assistant", content: "" };
-    const nextMessages = [...messagesRef.current, userMsg, assistantMsg];
+    const baseMessages = [...messagesRef.current, userMsg];
+    const nextMessages = [...baseMessages, assistantMsg];
     setMessages(nextMessages);
+    persistSessionMessages(sid, baseMessages);
     replacePendingAttachments([]);
     setToolActivity([]);
     setError(null);
@@ -525,6 +582,10 @@ export function useAgent() {
         if (err.code === "not_found") void refreshSessions();
       }
     } finally {
+      const completedMessages = assistantContent.trim().length > 0
+        ? [...baseMessages, { ...assistantMsg, content: assistantContent }]
+        : baseMessages;
+      persistSessionMessages(sid, completedMessages);
       if (generationRef.current === gen && activeSessionIdRef.current === sid) {
         runAbortRef.current = null;
         currentRunIdRef.current = null;
@@ -536,7 +597,7 @@ export function useAgent() {
         void refreshSessions();
       }
     }
-  }, [runState, ensureSession, refreshFiles, refreshSessions, replacePendingAttachments, recordWorkspaceActivity]);
+  }, [runState, ensureSession, refreshFiles, refreshSessions, replacePendingAttachments, recordWorkspaceActivity, persistSessionMessages]);
 
   const cancelRun = useCallback(async () => {
     if (runState !== "streaming" && runState !== "starting") return;
@@ -559,6 +620,7 @@ export function useAgent() {
 
   return {
     sessions,
+    sessionTitles,
     activeSessionId,
     files,
     filesLoading,

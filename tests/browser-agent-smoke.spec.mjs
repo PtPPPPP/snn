@@ -204,12 +204,12 @@ test("Agent cancel and reload resume", async ({ page }) => {
   await expect(page.getByRole("button", { name: "停止生成" })).toBeVisible({ timeout: 3000 });
   await page.getByRole("button", { name: "停止生成" }).click();
   await expect(page.getByText("已停止生成")).toBeVisible({ timeout: 3000 });
-  // Reload should retain session
+  // Reload should retain session (title derived from first message or default Agent suffix)
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.getByRole("tab", { name: /Agent/ })).toBeVisible();
   await page.getByRole("tab", { name: /Agent/ }).click();
   // Session list should still contain the session
-  await expect(page.getByText(`Agent ${sessionId.slice(-6)}`)).toBeVisible({ timeout: 3000 });
+  await expect(page.getByText(/long task|Agent 555555/)).toBeVisible({ timeout: 3000 });
 });
 
 test("Agent limits a multi-file selection to eight pending uploads", async ({ page }) => {

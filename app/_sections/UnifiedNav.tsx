@@ -6,7 +6,7 @@ import IntentLink from './IntentLink';
 import s from './UnifiedNav.module.css';
 
 const links=[['/','首页'],['/#projects','项目'],['/#activities','活动'],['/learn/neural-networks','学习'],['/play/rocket','实验'],['/ai','SNN AI'],['/#join','加入'],['/join/interview','入社面试']];
-const labs=[['/play/rocket','回收挑战'],['/play/rocket/explain','怎样推理'],['/play/rocket/train','怎样学习']];
+const labs=[['/learn/neural-networks','01 神经网络基础'],['/play/rocket','02 回收挑战'],['/play/rocket/explain','03 怎样推理'],['/play/rocket/train','04 怎样学习']];
 export function Nav(){
  const path=(usePathname()||'/').replace(/\/$/,'')||'/';
  const lab=path.startsWith('/play/rocket');

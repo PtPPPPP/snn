@@ -87,7 +87,7 @@ function NotebookPage(){
 
    <Note index={14}><p>最后再让数据调整参数。本节独立从尚未解好的初值开始，不带入前节手动接好的答案。数据还是刚才四个点，改变的是网络结构：现在可以调三个组合系数与输出偏置，以及 ReLU 前的两个权重和偏置，共 7 个参数。观察学习怎样同时调整折痕与两侧的面。</p><NetworkLab mode="learn-relu" id="course-relu-learning"/><p className={s.observation}>先判断结构能否表达任务需要的形状，再让学习去寻找参数。训练点分对以后，还要用新数据检验这套规则。</p></Note>
 
-   <footer className={s.footer}><p>只转动 → 加平移 → 手动找面 → 让数据学习 → 发现结构局限 → 加入 ReLU</p><span>每次增加一个新办法，都为了解决前一步实际遇到的问题。</span></footer>
+   <footer className={s.footer}><p>只转动 → 加平移 → 手动找面 → 让数据学习 → 发现结构局限 → 加入 ReLU</p><span>每次增加一个新办法，都为了解决前一步实际遇到的问题。</span><div className={s.nextLab}><Link href="/play/rocket">下一课：02 / 火箭回收挑战 →</Link></div></footer>
   </main>
   <aside className={s.assistant} aria-label="笔记 AI 问答"><LessonAssistant context={context} selectedText={selectedText} getSnapshot={questionSnapshot}/></aside>
  </div>;

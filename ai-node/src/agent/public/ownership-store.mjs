@@ -24,12 +24,38 @@ export function equalHashes(a, b) {
   }
 }
 
-/** Server-owned browser ownership bindings. */
+/** Server-owned browser ownership bindings with a write-through in-memory index. */
 export class PublicAgentOwnershipStore {
-  #root;
+  #cache = new Map();
+  #seeded = false;
   constructor(root) {
     if (typeof root !== "string" || root.length === 0) throw new TypeError("ownership root is required");
     this.root = root;
+  }
+
+  async #ensureSeeded() {
+    if (this.#seeded) return;
+    try {
+      const files = await readdir(this.root);
+      for (const file of files) {
+        if (!file.endsWith(".json")) continue;
+        const sessionId = file.replace(/\.json$/, "");
+        if (!SESSION_ID.test(sessionId) || this.#cache.has(sessionId)) continue;
+        try {
+          const text = await readFile(join(this.root, file), "utf8");
+          this.#cache.set(sessionId, normalize(JSON.parse(text)));
+        } catch {
+          // corrupt files remain uncached and are handled by get()/sweepExpired()
+        }
+      }
+      this.#seeded = true;
+    } catch (error) {
+      if (error?.code === "ENOENT") {
+        this.#seeded = true;
+        return;
+      }
+      throw error;
+    }
   }
 
   async create(sessionId, ownerTokenHash) {
@@ -61,6 +87,7 @@ export class PublicAgentOwnershipStore {
       if (error?.code === "AGENT_OWNERSHIP_EXISTS") throw error;
       throw error;
     }
+    this.#cache.set(sessionId, record);
     return record;
   }
 
@@ -69,11 +96,17 @@ export class PublicAgentOwnershipStore {
     let text;
     try { text = await readFile(this.#path(sessionId), "utf8"); }
     catch (error) {
+      this.#cache.delete(sessionId);
       if (error?.code === "ENOENT") throw Object.assign(new Error("Ownership not found"), { code: "AGENT_SESSION_NOT_FOUND" });
       throw error;
     }
-    try { return normalize(JSON.parse(text)); }
+    try {
+      const record = normalize(JSON.parse(text));
+      this.#cache.set(sessionId, record);
+      return record;
+    }
     catch (error) {
+      this.#cache.delete(sessionId);
       if (error?.code?.startsWith("AGENT_")) throw error;
       throw Object.assign(new Error("Ownership record is invalid"), { code: "AGENT_OWNERSHIP_CORRUPT" });
     }
@@ -106,16 +139,19 @@ export class PublicAgentOwnershipStore {
 
   async touch(sessionId) {
     assertSessionId(sessionId);
-    let record;
-    try { record = await this.get(sessionId); }
-    catch { return; }
-    const updated = { ...record, lastAccessAt: new Date().toISOString() };
+    let record = this.#cache.get(sessionId);
+    if (!record) {
+      try { record = await this.get(sessionId); }
+      catch { return; }
+    }
+    const updated = normalize({ ...record, lastAccessAt: new Date().toISOString() });
     // Atomic write: temp file + rename so concurrent readers never see a partial file.
     const target = this.#path(sessionId);
     const tmp = `${target}.${process.pid}.${Date.now()}.touch.tmp`;
     try {
       await writeFile(tmp, JSON.stringify(updated), { encoding: "utf8" });
       await rename(tmp, target);
+      this.#cache.set(sessionId, updated);
     } catch {
       await rm(tmp, { force: true }).catch(() => {});
     }
@@ -123,65 +159,36 @@ export class PublicAgentOwnershipStore {
 
   async delete(sessionId) {
     assertSessionId(sessionId);
+    this.#cache.delete(sessionId);
     await rm(this.#path(sessionId), { force: true });
   }
 
   async countAll() {
-    try {
-      const files = await readdir(this.root);
-      return files.filter((f) => f.endsWith(".json")).length;
-    } catch (error) {
-      if (error?.code === "ENOENT") return 0;
-      throw error;
-    }
+    await this.#ensureSeeded();
+    return this.#cache.size;
   }
 
   async listAllIds() {
-    try {
-      const files = await readdir(this.root);
-      return files.filter((f) => f.endsWith(".json")).map((f) => f.replace(/\.json$/, "")).filter((id) => SESSION_ID.test(id));
-    } catch (error) {
-      if (error?.code === "ENOENT") return [];
-      throw error;
-    }
+    await this.#ensureSeeded();
+    return [...this.#cache.keys()];
   }
 
   async countByOwner(ownerTokenHash) {
     if (typeof ownerTokenHash !== "string" || !/^[a-f0-9]{64}$/.test(ownerTokenHash)) return 0;
-    try {
-      const files = await readdir(this.root);
-      let count = 0;
-      for (const file of files) {
-        if (!file.endsWith(".json")) continue;
-        try {
-          const text = await readFile(join(this.root, file), "utf8");
-          const rec = normalize(JSON.parse(text));
-          if (equalHashes(rec.ownerTokenHash, ownerTokenHash)) count += 1;
-        } catch {
-          // corrupt file is counted as not belonging to anyone, but will be swept
-        }
-      }
-      return count;
-    } catch (error) {
-      if (error?.code === "ENOENT") return 0;
-      throw error;
+    await this.#ensureSeeded();
+    let count = 0;
+    for (const rec of this.#cache.values()) {
+      if (equalHashes(rec.ownerTokenHash, ownerTokenHash)) count += 1;
     }
+    return count;
   }
 
   async listByOwner(ownerTokenHash) {
+    if (typeof ownerTokenHash !== "string" || !/^[a-f0-9]{64}$/.test(ownerTokenHash)) return [];
+    await this.#ensureSeeded();
     const out = [];
-    try {
-      const files = await readdir(this.root);
-      for (const file of files) {
-        if (!file.endsWith(".json")) continue;
-        try {
-          const text = await readFile(join(this.root, file), "utf8");
-          const rec = normalize(JSON.parse(text));
-          if (equalHashes(rec.ownerTokenHash, ownerTokenHash)) out.push(rec);
-        } catch {}
-      }
-    } catch (error) {
-      if (error?.code !== "ENOENT") throw error;
+    for (const rec of this.#cache.values()) {
+      if (equalHashes(rec.ownerTokenHash, ownerTokenHash)) out.push(rec);
     }
     return out;
   }
@@ -193,16 +200,19 @@ export class PublicAgentOwnershipStore {
       for (const file of files) {
         if (!file.endsWith(".json")) continue;
         const full = join(this.root, file);
+        const sessionId = file.replace(/\.json$/, "");
         try {
           const text = await readFile(full, "utf8");
           const rec = normalize(JSON.parse(text));
+          this.#cache.set(rec.sessionId, rec);
           const last = Date.parse(rec.lastAccessAt);
           if (!Number.isFinite(last) || (Number.isFinite(ttlMs) && ttlMs > 0 && nowMs - last > ttlMs)) {
             expired.push(rec.sessionId);
+            this.#cache.delete(rec.sessionId);
           }
         } catch {
           // corrupt records are considered expired for cleanup
-          const sessionId = file.replace(/\.json$/, "");
+          this.#cache.delete(sessionId);
           if (SESSION_ID.test(sessionId)) expired.push(sessionId);
         }
       }

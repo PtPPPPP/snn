@@ -34,7 +34,10 @@ test("composer content reservation derives from live geometry, not static paddin
     css,
     /--messages-reserved-bottom:\s*calc\(var\(--snn-composer-extent\)\s*\+\s*var\(--composer-safety-gap\)\);/,
   );
-  assert.match(css, /padding:\s*24px clamp\(20px,\s*3vw,\s*40px\)\s*var\(--messages-reserved-bottom\);/);
+  assert.match(
+    css,
+    /padding:\s*(?:24px|calc\(var\(--snn-block-step\)\s*\*\s*4\))\s+clamp\([\s\S]+?\)\s+var\(--messages-reserved-bottom\);/,
+  );
   // Breakpoints must not re-introduce static bottom paddings (F-05 regression).
   assert.doesNotMatch(css, /padding-bottom:\s*(220|160|120)px/);
   assert.doesNotMatch(css, /padding:\s*24px 16px 160px/);

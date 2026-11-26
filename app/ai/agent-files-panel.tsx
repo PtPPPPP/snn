@@ -12,6 +12,7 @@ import {
   type AgentFilePreview,
 } from "../../lib/agent-client";
 import type { ToolActivity, WorkspaceChange } from "./use-agent";
+import { parseExtractedWorkbook } from "../../lib/xlsx-preview-table";
 import styles from "./ai-chat.module.css";
 import { useDrawerFocus } from "./use-drawer-focus";
 
@@ -190,6 +191,16 @@ export default function AgentWorkspacePanel({
     !activePreview.data.truncated &&
     activePreview.data.content.length <= 256 * 1024 &&
     isDirectEditableFileName(activePreview.file.originalName);
+  const isXlsxPreview =
+    activePreview?.status === "ready" &&
+    /\.xlsx$/i.test(activePreview.file.originalName) &&
+    typeof activePreview.data?.content === "string";
+  const parsedSheets = isXlsxPreview && activePreview?.data?.content
+    ? parseExtractedWorkbook(activePreview.data.content)
+    : [];
+  const recentlyModifiedInSession = activePreview
+    ? recentChanges.some((c) => c.fileId === activePreview.file.fileId && c.type === "modified")
+    : false;
 
   return (
     <aside
@@ -302,6 +313,11 @@ export default function AgentWorkspacePanel({
           </div>
           <div className={styles.workspacePreviewName} title={activePreview.file.originalName}>
             {activePreview.file.originalName}
+            {recentlyModifiedInSession ? (
+              <span className={`${styles.workspaceChangeBadge} ${styles.changeModified}`} style={{ marginLeft: 8 }}>
+                本轮已修改
+              </span>
+            ) : null}
           </div>
           {previewStale ? (
             <p className={styles.workspacePreviewNotice}>
@@ -323,6 +339,42 @@ export default function AgentWorkspacePanel({
               ) : null}
               {activePreview.data?.truncated ? (
                 <p className={styles.workspacePreviewTruncated}>文件较大，仅显示前部分内容。</p>
+              ) : null}
+              {parsedSheets.length > 0 ? (
+                <div className={styles.workspaceSheetList} data-testid="xlsx-table-preview">
+                  {parsedSheets.map((sheet) => (
+                    <div key={sheet.name} className={styles.workspaceSheetBlock}>
+                      <div className={styles.workspaceSheetTitle}>工作表：{sheet.name}</div>
+                      <div className={styles.workspaceSheetScroll}>
+                        <table className={styles.workspaceSheetTable}>
+                          <thead>
+                            <tr>
+                              <th>行</th>
+                              {sheet.columns.map((col) => (
+                                <th key={col}>{col}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sheet.rows.map((row) => (
+                              <tr key={row.rowNumber}>
+                                <th scope="row">{row.rowNumber}</th>
+                                {sheet.columns.map((col) => {
+                                  const cell = row.cells[col];
+                                  return (
+                                    <td key={col} title={cell ? `${cell.ref}: ${cell.value}` : undefined}>
+                                      {cell ? cell.value : ""}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : null}
               {/* Read-only and XSS-safe: content renders as text, never HTML. */}
               <pre className={styles.workspacePreviewContent}>{activePreview.data?.content}</pre>

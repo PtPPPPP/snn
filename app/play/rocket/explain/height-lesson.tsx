@@ -1,5 +1,6 @@
 "use client";
 import {useEffect,useState,useRef} from 'react';
+import Link from '../../../_sections/IntentLink';
 import {initialState,type Policy} from '../../../../lib/rocket/physics.mjs';
 import {flightReplay,type ReplayFrame} from '../../../../lib/rocket/replay.mjs';
 import {nodeCalculation} from '../../../../lib/rocket/decision-lesson.mjs';
@@ -95,6 +96,6 @@ export default function HeightLesson(){
    </div>
   </div>
 
-  <footer>这段飞行由真实 Energy PPO 模型和游戏物理计算产生：每 0.01 秒更新运动，每 0.05 秒计算一次油门。从 {frames[0].state.h.toFixed(1)} 米静止释放，5 kg 燃料。时间轴回放已计算的轨迹，不是实时训练；拖动不会重新设定高度或速度。</footer>
+  <footer>这段飞行由真实 Energy PPO 模型和游戏物理计算产生：每 0.01 秒更新运动，每 0.05 秒计算一次油门。从 {frames[0].state.h.toFixed(1)} 米静止释放，5 kg 燃料。时间轴回放已计算的轨迹，不是实时训练；拖动不会重新设定高度或速度。<nav aria-label="课程衔接" style={{marginTop:12,display:'flex',flexWrap:'wrap',gap:16}}><Link href="/play/rocket">← 上一课：02 回收挑战</Link><Link href="/play/rocket/train">下一课：04 怎样学习 →</Link></nav></footer>
  </main>;
 }

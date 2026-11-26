@@ -84,6 +84,15 @@ test("ownership store counts and sweeps with TTL without leaking raw tokens", as
   // never store raw token
   const raw = await store.get(s1).then((r) => JSON.stringify(r));
   assert.doesNotMatch(raw, new RegExp(tokenA.slice(0, 10)));
+  // delete updates in-memory index immediately
+  await store.delete(s2);
+  assert.equal(await store.countAll(), 2);
+  assert.equal(await store.countByOwner(hashA), 1);
+  // a fresh store instance seeds its cache from disk
+  const reloadedStore = new PublicAgentOwnershipStore(root);
+  assert.equal(await reloadedStore.countAll(), 2);
+  assert.equal(await reloadedStore.countByOwner(hashA), 1);
+  assert.equal(await reloadedStore.countByOwner(hashB), 1);
 });
 
 test("cookie utilities generate and parse with expected flags", () => {

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from '../../../_sections/IntentLink';
 import { loadPPORecord, traceNormalized, type PPORecord } from '../../../../lib/rocket/ppo-record';
 import StudioNetwork from './studio-network';
 import UpdatePlayground from './update-playground';
@@ -83,6 +84,6 @@ function Studio({data}:{data:PPORecord}) {
       </aside>
     </div>
 
-    <footer className={s.footer}><details><summary>真实记录与教学回放说明</summary><p>全图保留 17,408 个连接权重。色彩经过平滑显示，准确值以选中格为准；逐格扫描与流动线是解释顺序，不是优化器的实际执行顺序。输入为标准化数值，权重初始化并不相等。</p><p>从初始化开始的 {data.rounds.length} 轮 PPO 训练，每轮 {round.steps.toLocaleString()} 个采样步，种子 {data.source.seed}。策略网络完整展示；独立价值网络参与训练但未画在此图。网页循环播放保存的记录，不在浏览器内训练，也不保证这段早期记录已经学会降落。</p></details></footer>
+    <footer className={s.footer}><details><summary>真实记录与教学回放说明</summary><p>全图保留 17,408 个连接权重。色彩经过平滑显示，准确值以选中格为准；逐格扫描与流动线是解释顺序，不是优化器的实际执行顺序。输入为标准化数值，权重初始化并不相等。</p><p>从初始化开始的 {data.rounds.length} 轮 PPO 训练，每轮 {round.steps.toLocaleString()} 个采样步，种子 {data.source.seed}。策略网络完整展示；独立价值网络参与训练但未画在此图。网页循环播放保存的记录，不在浏览器内训练，也不保证这段早期记录已经学会降落。</p></details><nav aria-label="课程衔接" style={{marginTop:12,display:'flex',flexWrap:'wrap',gap:16}}><Link href="/play/rocket/explain">← 上一课：03 怎样推理</Link><Link href="/ai">前往 SNN AI 工作台 →</Link></nav></footer>
   </main>;
 }

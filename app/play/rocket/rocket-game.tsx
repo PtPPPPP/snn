@@ -1,5 +1,6 @@
 "use client";
 import {useEffect,useRef,useState} from 'react';
+import Link from '../../_sections/IntentLink';
 import {DT,initialState,step,policyThrottle,type Policy} from '../../../lib/rocket/physics.mjs';
 import FlightScene from './flight-scene';
 import {resetRound,cameraTarget,firstBurn} from '../../../lib/rocket/experience.mjs';
@@ -87,6 +88,6 @@ export default function RocketGame(){
   </div>
   </div>
 
-  <footer className={styles.footer}>源自 ycy 的 DRL Rocket Landing Control · 浏览器实时运行公开 PPO 权重，非录像。<br/>基于原项目物理，积分步长 0.01 秒，策略每 0.05 秒决策，安全辅助关闭。双方独立缩放高度坐标，屏幕位置不能直接比较高度；提示为忽略阻力及燃料约束的制动估计，不保证安全。30 / 80 米超出默认训练初始范围。人类与 AI 都使用连续油门。这是互动体验，不是算法性能评测。</footer>
+  <footer className={styles.footer}>源自 ycy 的 DRL Rocket Landing Control · 浏览器实时运行公开 PPO 权重，非录像。<br/>基于原项目物理，积分步长 0.01 秒，策略每 0.05 秒决策，安全辅助关闭。双方独立缩放高度坐标，屏幕位置不能直接比较高度；提示为忽略阻力及燃料约束的制动估计，不保证安全。30 / 80 米超出默认训练初始范围。人类与 AI 都使用连续油门。这是互动体验，不是算法性能评测。<nav aria-label="课程衔接" style={{marginTop:12,display:'flex',flexWrap:'wrap',gap:16}}><Link href="/learn/neural-networks">← 上一课：01 神经网络基础</Link><Link href="/play/rocket/explain">下一课：03 怎样推理 →</Link></nav></footer>
  </main>;
 }
