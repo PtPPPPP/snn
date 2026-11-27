@@ -4,17 +4,23 @@ import {useCallback,useEffect,useRef,useState,type PointerEvent} from 'react';
 import {coordinate,fmt,grid,snap,trace,type CourseModel,type Point,type Sample} from '../../../lib/learning/geometry-course';
 import s from './geometry-course.module.css';
 
-const RED='#FF5F65',GREEN='#79FF8B',WHITE='#E8E8E2',DIM='#62625e',FAINT='#383835';
+function palette(){
+ const dark=typeof document!=='undefined'&&document.documentElement.dataset.theme==='dark';
+ return dark
+  ? {RED:'#FF5F65',GREEN:'#79FF8B',WHITE:'#E8E8E2',DIM:'#62625e',FAINT:'#383835'}
+  : {RED:'#c23942',GREEN:'#237a4b',WHITE:'#202630',DIM:'#606b7b',FAINT:'#bcc5d1'};
+}
 function useCanvas(draw:(ctx:CanvasRenderingContext2D,width:number,height:number)=>void){
  const canvas=useRef<HTMLCanvasElement>(null),paint=useRef(draw),near=useRef(false),frame=useRef(0);
  const render=useCallback(()=>{const el=canvas.current;if(!el)return;const box=el.getBoundingClientRect(),ratio=Math.min(devicePixelRatio||1,2);if(!box.width||!box.height)return;el.width=Math.round(box.width*ratio);el.height=Math.round(box.height*ratio);const ctx=el.getContext('2d');if(!ctx)return;ctx.scale(ratio,ratio);ctx.font='11px "Courier New", monospace';ctx.textAlign='center';ctx.textBaseline='middle';paint.current(ctx,box.width,box.height);},[]);
  const schedule=useCallback(()=>{if(!near.current||frame.current)return;frame.current=requestAnimationFrame(()=>{frame.current=0;render();});},[render]);
- useEffect(()=>{const el=canvas.current;if(!el)return;const observer=new ResizeObserver(schedule),visible=new IntersectionObserver(([entry])=>{near.current=entry.isIntersecting;if(near.current)schedule();else if(frame.current){cancelAnimationFrame(frame.current);frame.current=0;}},{rootMargin:'600px 0px'});observer.observe(el);visible.observe(el);return()=>{near.current=false;observer.disconnect();visible.disconnect();if(frame.current)cancelAnimationFrame(frame.current);frame.current=0;};},[schedule]);
+ useEffect(()=>{const el=canvas.current;if(!el)return;const observer=new ResizeObserver(schedule),visible=new IntersectionObserver(([entry])=>{near.current=entry.isIntersecting;if(near.current)schedule();else if(frame.current){cancelAnimationFrame(frame.current);frame.current=0;}},{rootMargin:'600px 0px'});observer.observe(el);visible.observe(el);window.addEventListener('snn-theme-change',schedule);return()=>{near.current=false;observer.disconnect();visible.disconnect();window.removeEventListener('snn-theme-change',schedule);if(frame.current)cancelAnimationFrame(frame.current);frame.current=0;};},[schedule]);
  useEffect(()=>{paint.current=draw;schedule();});
  return canvas;
 }
 export function PointField({model,input,data,onPick,onLine,sides=false,unoriented=false,selected=true}:{model:CourseModel;input:Point;data:Sample[];onPick:(point:Point)=>void;onLine?:(point:Point)=>void;sides?:boolean;unoriented?:boolean;selected?:boolean}){
  const dragging=useRef(false),canvas=useCanvas((ctx,width,height)=>{
+  const {RED,GREEN,WHITE,DIM,FAINT}=palette();
   const left=30,top=20,w=width-55,h=height-45;
   const xy=(p:Point)=>[left+p[0]*w,top+(1-p[1])*h];
   const score=(p:Point)=>trace(model,p).s;
@@ -38,6 +44,7 @@ type Hit={x:number;y:number;point:Point};
 export function ScoreSurface({model,input,onPick,count=81,hidden=false,neutral=false,axisLabel,samples=[],showSelection=true}:{model:CourseModel;input:Point;onPick:(point:Point)=>void;count?:number;hidden?:boolean;neutral?:boolean;axisLabel?:string;samples?:Sample[];showSelection?:boolean}){
  const [camera,setCamera]=useState({yaw:-.65,pitch:.65}),drag=useRef<{x:number;y:number;distance:number}|null>(null),hits=useRef<Hit[]>([]);
  const canvas=useCanvas((ctx,width,height)=>{
+  const {RED,GREEN,WHITE,DIM,FAINT}=palette();
   const value=(p:Point)=>hidden?trace(model,p).h:trace(model,p).s;
   const amplitude=Math.max(.5,...grid.map(p=>Math.abs(value(p)))),scale=Math.min(width*.3,height*.42/(1+amplitude*.45)),cx=width*.5,cy=height*.55;
   // Zoom all axes together; never normalize only z, which would hide a changed slope.

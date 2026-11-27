@@ -6,7 +6,7 @@
 .header { position:sticky; top:0; z-index:30; background:var(--bg); border-bottom:1px solid var(--border-default); }
 .headerInner { max-width:1440px; min-height:var(--preview-header); margin:auto; padding:0 32px; display:flex; align-items:center; gap:24px; }
 .brand { display:flex; align-items:center; gap:10px; border:0; padding:0; background:none; text-align:left; color:var(--text-primary); }
-.brand img { width:32px; height:32px; object-fit:contain; filter:grayscale(1) brightness(0) invert(.82); }
+.brand img { width:32px; height:32px; object-fit:contain; filter:var(--logo-filter,none); }
 .brand span { display:flex; flex-direction:column; line-height:1.25; }
 .brand b { font-size:17px; font-weight:500; }
 .brand small { margin-top:3px; font-size:8px; color:var(--text-muted); white-space:nowrap; }
@@ -24,9 +24,9 @@
 .hero h1 { font-size:clamp(29px,3vw,42px); line-height:1.45; letter-spacing:0; margin:0 0 22px; font-weight:400; }
 .intro { color:var(--text-secondary); font-size:14px; line-height:2; margin:0; }
 .heroActions { display:flex; align-items:center; gap:28px; margin-top:32px; flex-wrap:wrap; }
-.primaryAction,.textAction { display:inline-flex; min-height:44px; align-items:center; justify-content:space-between; gap:28px; padding:0 16px; border:1px solid var(--border-active); border-radius:var(--radius-2); background:var(--surface-2); color:var(--text-primary); font-size:12px; transition:background var(--motion-fast) var(--ease), border-color var(--motion-fast) var(--ease); }
-.primaryAction:hover { background:var(--surface-3); border-color:var(--text-primary); }
-.textAction { padding:0; background:none; border:0; border-radius:0; color:var(--text-secondary); }
+.primaryAction,.textAction { display:inline-flex; min-height:44px; align-items:center; justify-content:space-between; gap:28px; padding:0 18px; border:1px solid transparent; border-radius:var(--radius-2); background:var(--snn-control); color:var(--snn-control-text); box-shadow:var(--shadow-button); font-size:12px; transition:background var(--motion-fast) var(--ease), border-color var(--motion-fast) var(--ease); }
+.primaryAction:hover { background:var(--snn-control-hover); border-color:transparent; }
+.textAction { padding:0; background:none; border:0; border-radius:0; box-shadow:none; color:var(--text-secondary); }
 .textAction:hover { color:var(--text-primary); }
 .heroFigure { min-width:0; border:1px solid var(--border-default); border-radius:var(--radius-3); padding:18px 20px 12px; background:var(--surface-1); }
 .figureHeading,.figureCaption { display:flex; align-items:center; justify-content:space-between; gap:12px; color:var(--text-muted); font-size:11px; }

@@ -2,6 +2,13 @@
 import charcoal from './charcoal-v2.json' with { type: 'json' };
 
 export const material = {
+  background: '#f7f8fa', surface: '#fcfcfd', raised: '#f0f2f5', elevated: '#e7ebf0',
+  ink: '#202630', secondary: '#505b6b', muted: '#606b7b', rule: 'rgb(26 42 62 / 14%)',
+  wire: '#8796aa', grid: 'rgb(26 42 62 / 7%)', highlight: '#416582',
+  class0: '#c23942', class1: '#237a4b', region0: '#f0f2f5', region1: '#e7ebf0',
+} as const;
+
+export const darkMaterial = {
   background: charcoal.color.background, surface: '#1d1d1c', raised: '#252524', elevated: '#30302e',
   ink: charcoal.color.text.primary, secondary: charcoal.color.text.secondary, muted: charcoal.color.text.muted, rule: charcoal.color.border.default,
   wire: '#8d8d84', grid: '#343432', highlight: '#ffffff',
@@ -15,11 +22,11 @@ export const foundation = {
   'surface-3': material.elevated, 'text-primary': material.ink,
   'text-secondary': material.secondary, 'text-muted': material.muted,
   'border-subtle': material.grid, 'border-default': material.rule, 'border-active': material.wire,
-  'accent': material.ink, 'accent-soft': material.elevated,
-  'control-fill': material.ink, 'control-hover': material.highlight, 'control-ink': material.background,
-  'status-success': material.ink, 'status-success-soft': material.raised,
-  'status-error': '#e4afa7', 'status-error-soft': '#332725',
-  'status-warning': '#e2cc72', 'status-warning-soft': '#332e20',
+  'accent': '#416582', 'accent-soft': '#e5edf4',
+  'control-fill': '#263241', 'control-hover': '#36475c', 'control-ink': '#fcfcfd',
+  'status-success': '#326b4f', 'status-success-soft': '#eaf2ed',
+  'status-error': '#a13e3e', 'status-error-soft': '#f8eeee',
+  'status-warning': '#91612d', 'status-warning-soft': '#f7f0e4',
   'radius-1': '6px', 'radius-2': '10px', 'radius-3': '16px', 'radius-4': '24px',
   'space-1': 'calc(var(--snn-cw) * .5)', 'space-2': 'var(--snn-cw)',
   'space-3': 'calc(var(--snn-cw) * 1.5)', 'space-4': 'calc(var(--snn-cw) * 2)',
@@ -33,8 +40,10 @@ export const foundation = {
   'font-geist-sans': charcoal.font.body, 'font-geist-mono': charcoal.font.mono,
   'motion-fast': '150ms', 'motion-panel': '220ms', 'motion-entrance': '420ms',
   'ease': 'cubic-bezier(.2,.7,.2,1)',
-  'shadow-button': 'none', 'shadow-surface': 'none', 'shadow-panel': '0 12px 32px rgb(0 0 0 / 36%)',
-  'overlay-scrim': 'rgb(0 0 0 / 65%)',
+  'shadow-button': 'inset 0 1px 0 rgb(255 255 255 / 12%), 0 1px 3px rgb(26 42 62 / 8%)',
+  'shadow-surface': 'inset 0 1px 0 rgb(255 255 255 / 80%), 0 2px 4px rgb(26 42 62 / 3%), 0 24px 64px rgb(26 42 62 / 6%)',
+  'shadow-panel': 'inset 0 1px 0 rgb(255 255 255 / 80%), 0 4px 12px rgb(26 42 62 / 6%), 0 24px 64px rgb(26 42 62 / 12%)',
+  'overlay-scrim': 'rgb(26 42 62 / 32%)',
   'opening-bg': material.background, 'opening-surface': material.surface, 'opening-ink': material.ink,
   'opening-secondary': material.secondary, 'opening-muted': material.muted,
   'opening-rule': material.rule, 'opening-wire': material.wire,
@@ -49,4 +58,25 @@ export const foundation = {
   'opening-heading': 'var(--snn-type-display)', 'opening-line-height': 'var(--snn-leading)',
   'graph-stroke': '1px', 'graph-selection-stroke': '2px', 'graph-glyph-size': 'var(--snn-type-glyph)',
   'graph-zero': VALUE_COLOR_STOPS[2].color,
+  'logo-filter': 'none',
+} as const;
+
+export const darkFoundation = {
+  'bg': darkMaterial.background, 'surface-1': darkMaterial.surface, 'surface-2': darkMaterial.raised,
+  'surface-3': darkMaterial.elevated, 'text-primary': darkMaterial.ink,
+  'text-secondary': darkMaterial.secondary, 'text-muted': darkMaterial.muted,
+  'border-subtle': darkMaterial.grid, 'border-default': darkMaterial.rule, 'border-active': darkMaterial.wire,
+  'accent': darkMaterial.ink, 'accent-soft': darkMaterial.elevated,
+  'control-fill': darkMaterial.ink, 'control-hover': darkMaterial.highlight, 'control-ink': darkMaterial.background,
+  'status-success': '#7ecb91', 'status-success-soft': '#1f2e23',
+  'status-error': '#e4afa7', 'status-error-soft': '#332725',
+  'status-warning': '#e2cc72', 'status-warning-soft': '#332e20',
+  'shadow-button': 'none', 'shadow-surface': 'none', 'shadow-panel': '0 12px 32px rgb(0 0 0 / 36%)',
+  'overlay-scrim': 'rgb(0 0 0 / 65%)',
+  'opening-bg': darkMaterial.background, 'opening-surface': darkMaterial.surface, 'opening-ink': darkMaterial.ink,
+  'opening-secondary': darkMaterial.secondary, 'opening-muted': darkMaterial.muted,
+  'opening-rule': darkMaterial.rule, 'opening-wire': darkMaterial.wire,
+  'opening-class-0': darkMaterial.class0, 'opening-class-1': darkMaterial.class1,
+  'opening-region-0': darkMaterial.region0, 'opening-region-1': darkMaterial.region1,
+  'logo-filter': 'grayscale(1) brightness(0) invert(.82)',
 } as const;

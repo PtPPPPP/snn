@@ -57,6 +57,7 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <head>
+        <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('snn-theme');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t;}catch(e){}` }} />
         <link rel="preload" href={fastFonts.home} as="font" type="font/woff2" crossOrigin="anonymous" />
         <link id="snn-font-fallback" rel="stylesheet" href={fastFonts.fallback} media="print" />
         <noscript><link rel="stylesheet" href={fastFonts.fallback} /></noscript>

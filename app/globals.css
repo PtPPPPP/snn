@@ -2,7 +2,8 @@
 @import "./design-tokens.css";
 
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; background: var(--bg); color-scheme: dark; }
+html { scroll-behavior: smooth; background: var(--bg); color-scheme: light; }
+html[data-theme="dark"] { color-scheme: dark; }
 body {
   margin: 0;
   background: var(--bg);
@@ -64,8 +65,8 @@ body { font-kerning: none; font-variant-ligatures: none; font-synthesis: none; l
 button, input, select, textarea, pre, code, output { font-family: var(--snn-font-mono); font-variant-ligatures: none; letter-spacing: 0; }
 pre { tab-size: 2; }
 .button { min-height: var(--snn-control-size); padding-inline: calc(var(--snn-cw) * 3); }
-.button-primary { background: transparent; color: var(--text-primary); border-color: var(--border-active); }
-.button-primary:hover { background: var(--surface-2); }
-.button:active { transform: none; }
+.button-primary { background: var(--snn-control); color: var(--snn-control-text); border-color: transparent; box-shadow: var(--shadow-button); }
+.button-primary:hover { background: var(--snn-control-hover); }
+.button:active { transform: translateY(1px); }
 @media(max-width:640px) { :root { --type-display: var(--snn-type-heading); } }
 @media(max-width:760px) { :root { --snn-shell-height:64px; } body:has([data-site-shell][data-lab=true]) { --snn-shell-height:112px; } }
