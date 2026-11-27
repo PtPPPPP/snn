@@ -85,8 +85,8 @@
   .menuToggle { display:block; border:0; padding:8px 0; background:none; color:var(--text-primary); font-size:12px; }
   .nav { display:none; position:absolute; top:100%; left:0; right:0; min-height:0; margin:0; padding:8px 20px 16px; background:var(--bg); border-bottom:1px solid var(--border-default); grid-template-columns:repeat(2,minmax(0,1fr)); }
   .navOpen { display:grid; }.nav button { min-height:42px; padding:0 8px; text-align:left; }.nav button[aria-current]::after { left:8px; right:auto; width:18px; }
-  .home { padding:0 20px; }.breadcrumb { min-height:48px; }.breadcrumb span { display:none; }
-  .hero { grid-template-columns:1fr; gap:32px; padding:44px 0 48px; }.hero h1 { font-size:30px; }.heroFigure { padding:14px 14px 8px; }.heroFigure :global(canvas) { height:280px; }
+  .home { padding:0 16px; }.breadcrumb { min-height:48px; }.breadcrumb span { display:none; }
+  .hero { grid-template-columns:1fr; gap:28px; padding:32px 0 40px; }.hero h1 { font-size:28px; }.heroFigure { padding:14px 12px 8px; }.heroFigure :global(canvas) { height:260px; }.figureHeading,.figureCaption { flex-wrap:wrap; gap:6px 12px; }
   .section { padding:40px 0; }.sectionHeading { display:block; margin-bottom:24px; }.sectionHeading h2 { font-size:20px; margin:10px 0; }.sectionHeading p { max-width:48ch; }
   .entries { grid-template-columns:1fr; }.entries :is(button,a),.entries :is(button,a):first-child { min-height:0; padding:20px 0; border-right:0; border-bottom:1px solid var(--border-default); gap:8px; }.entries :is(button,a):last-child { border-bottom:0; }.entries :is(button,a) b { margin-top:4px; }
   .rows a { grid-template-columns:32px minmax(0,1fr) auto; gap:12px; }.rows a .projectBody,.rows a>p { grid-column:2 / 4; grid-row:2; }.activities { grid-template-columns:1fr; gap:24px; }.join { align-items:flex-start; flex-direction:column; gap:32px; }.join h2 { font-size:24px; }.footer { flex-wrap:wrap; padding:20px 0; }.footer a { margin-left:0; }

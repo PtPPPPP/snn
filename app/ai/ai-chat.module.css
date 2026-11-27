@@ -48,8 +48,8 @@
 .modalConfirm { color: var(--snn-error); background: var(--snn-error-soft); }
 .modalCancel:hover, .modalConfirm:hover { border-color: var(--border-active); }
 .chatPanel {
-  position: relative; display: grid; min-width: 0; min-height: 0;
-  grid-template-rows: minmax(0, 1fr); background: var(--bg); isolation: isolate;
+  position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0;
+  background: var(--bg); isolation: isolate;
   /* ResizeObserver keeps this in sync with the live form, including multiline input. */
   --snn-composer-extent: 128px;
   --composer-safety-gap: 28px;
@@ -57,7 +57,7 @@
 }
 .panelHeader { display: none; }
 .messages {
-  min-height: 0; min-width: 0; max-width: 100%; width: 100%; box-sizing: border-box;
+  flex: 1 1 auto; min-height: 0; min-width: 0; max-width: 100%; width: 100%; box-sizing: border-box;
   overflow-x: hidden; overflow-y: auto;
   padding: calc(var(--snn-block-step) * 4) clamp(calc(var(--snn-inline-step) * 5), 3vw, calc(var(--snn-inline-step) * 10)) var(--messages-reserved-bottom);
 }
@@ -304,16 +304,16 @@
 .agentFilesList { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
 .agentFilesItem {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 4px 8px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
   padding: 8px 10px;
   border: 1px solid var(--snn-border-soft);
   border-radius: var(--snn-radius-md);
   background: var(--snn-bg);
 }
 .agentFilesName { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
-.agentFilesMeta { grid-column: 1; color: var(--snn-text-muted); font-family: var(--font-geist-mono), monospace; font-size: 11px; }
-.agentFilesActions { display: flex; gap: 6px; align-items: center; }
+.agentFilesMeta { color: var(--snn-text-muted); font-family: var(--font-geist-mono), monospace; font-size: 11px; }
+.agentFilesActions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .agentFilesAttach, .agentFilesDownload, .agentFilesDelete {
   padding: 4px 10px;
   border: 1px solid var(--snn-border-soft);
@@ -780,20 +780,24 @@
 
 /* SNN Harness Preset & Skill Selector Toolbar */
 .harnessToolbar {
+  flex: 0 0 auto;
   display: grid;
   gap: 8px;
   padding: 10px 16px;
   border-bottom: 1px solid var(--snn-border-soft);
   background: var(--snn-surface-muted);
+  min-width: 0;
 }
 
 .harnessPresetPills {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  min-width: 0;
 }
 
 .harnessPresetPill {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -806,6 +810,59 @@
   font-weight: 600;
   cursor: pointer;
   transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+@media (max-width: 680px) {
+  .harnessToolbar {
+    padding: 8px 12px;
+    gap: 6px;
+  }
+  .harnessPresetPills {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .harnessPresetPills::-webkit-scrollbar {
+    display: none;
+  }
+  .harnessPresetPill {
+    padding: 4px 9px;
+    font-size: 11px;
+  }
+  .harnessSkillLabel {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  .harnessSkillSelect {
+    min-width: 0;
+    max-width: 100%;
+    flex: 1 1 auto;
+    text-overflow: ellipsis;
+  }
+}
+
+@media (max-width: 480px) {
+  .header > .workspaceTitle {
+    display: none;
+  }
+  .headerRight {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .modeButton {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+  .workspaceToggle {
+    padding: 6px 10px;
+    min-height: 36px;
+    font-size: 11px;
+  }
+  .harnessToolSummary {
+    display: none;
+  }
 }
 
 .harnessPresetPill:hover {

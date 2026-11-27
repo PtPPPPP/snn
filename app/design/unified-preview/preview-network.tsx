@@ -25,7 +25,7 @@ export default function NetworkGlyphs({model,input,phase,onSelect,bias}:{model:C
     for(let i=0;i<18;i++){const f=i/17,px=start+(end-start)*f,py=ay+(by-ay)*(f*f*(3-2*f));ctx.fillText(i%3===1?'.':by<ay?'/':by>ay?'\\':'-',px,py);if(phase===1&&i===10)ctx.fillText('>',px,py);}
     const mx=(start+end)/2,my=(ay+by)/2;ctx.font='10px "Courier New", monospace';ctx.fillStyle=ready?sub:dim;ctx.fillText(`${name} ${fmt(weight)}`,mx,my+(by>ay?-12:12));hits.current.push({x:mx,y:my,index});
    };
-   const inputX=full?width*.12:width*.17,outX=full?(compact?Math.min(width*.76,width-radius-45):width*.83):width*.68,inY1=height*.28,inY2=height*.72,outY=height*.5;
+   const inputX=full?width*.12:width*.17,outX=full?(compact?Math.min(width*.72,width-radius-48):width*.83):(compact?Math.min(width*.66,width-radius-48):width*.68),inY1=height*.28,inY2=height*.72,outY=height*.5;
    if(full){
     const hx=width*(compact?.43:.47),ys=[height*.18,height*.5,height*.82];route(inputX,inY1,hx,ys[0],1,'',0,phase>=1);route(inputX,inY2,hx,ys[1],1,'',1,phase>=1);route(inputX,inY1,hx,ys[2],model.hinge[0],'w₁',3,phase>=1);route(inputX,inY2,hx,ys[2],model.hinge[1],'w₂',4,phase>=1);
     [x,y,t.h].forEach((v,i)=>{route(hx,ys[i],outX,outY,i===2?model.gain:model.linear[i],`v${i+1}`,i===2?6:i,phase>=3);ball(hx,ys[i],i===2?t.a:v,i===2?'a':'h'+(i+1),i===2?5:i,phase>=1);ctx.font='9px "Courier New", monospace';ctx.fillStyle=phase>=2?sub:dim;const opX=compact?hx:hx+radius+26;ctx.fillText(i===2?'[ReLU]':'[Linear]',opX,compact?ys[i]+radius+9:ys[i]-9);ctx.fillText(i===2?'h='+fmt(t.h):'h='+fmt(v),opX,compact?ys[i]+radius+19:ys[i]+5);});
