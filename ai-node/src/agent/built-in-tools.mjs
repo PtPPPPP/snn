@@ -15,6 +15,9 @@ export const BUILT_IN_TOOL_METADATA = Object.freeze([
   defineToolMetadata({ name: "workspace.word.patch", displayName: "Modify Word document", risk: "WRITE", approvalPolicy: "none", category: "document" }),
   defineToolMetadata({ name: "workspace.execute", displayName: "Execute command", risk: "EXEC", approvalPolicy: "none", category: "process" }),
   defineToolMetadata({ name: "workspace.fetch", displayName: "Fetch URL", risk: "EXTERNAL", approvalPolicy: "none", category: "network" }),
+  defineToolMetadata({ name: "workspace.diff", displayName: "Compare workspace diff", risk: "READ", approvalPolicy: "none", category: "workspace" }),
+  defineToolMetadata({ name: "snn.sim.rocket", displayName: "Simulate rocket landing", risk: "READ", approvalPolicy: "none", category: "simulation" }),
+  defineToolMetadata({ name: "snn.lab.network", displayName: "Evaluate neural network", risk: "READ", approvalPolicy: "none", category: "simulation" }),
 ]);
 
 export function builtInToolMetadataFor(name) {

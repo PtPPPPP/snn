@@ -42,6 +42,7 @@ async function createWorkspaceBridgeConfig(agentConfig) {
   const filesystemPluginPath = fileURLToPath(new URL("./workspace/dsh-workspace-fs-plugin.mjs", import.meta.url));
   const spreadsheetPluginPath = fileURLToPath(new URL("./workspace/dsh-workspace-spreadsheet-plugin.mjs", import.meta.url));
   const wordPluginPath = fileURLToPath(new URL("./workspace/dsh-workspace-word-plugin.mjs", import.meta.url));
+  const labPluginPath = fileURLToPath(new URL("./workspace/dsh-snn-lab-plugin.mjs", import.meta.url));
   const configPath = join(directory, "cordis.yml");
   const quoted = (value) => JSON.stringify(value);
   // Document limits are server-owned constants serialized into the overlay;
@@ -82,6 +83,10 @@ async function createWorkspaceBridgeConfig(agentConfig) {
     `              workspaceRoot: ${quoted(agentConfig.runtimeCwd)}`,
     "          - id: snn-workspace-word",
     `            name: ${quoted(pathToFileURL(wordPluginPath).href)}`,
+    "            config:",
+    `              workspaceRoot: ${quoted(agentConfig.runtimeCwd)}`,
+    "          - id: snn-workspace-lab",
+    `            name: ${quoted(pathToFileURL(labPluginPath).href)}`,
     "            config:",
     `              workspaceRoot: ${quoted(agentConfig.runtimeCwd)}`,
     "",

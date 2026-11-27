@@ -777,3 +777,252 @@
   font-weight: 600;
   width: 32px;
 }
+
+/* SNN Harness Preset & Skill Selector Toolbar */
+.harnessToolbar {
+  display: grid;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--snn-border-soft);
+  background: var(--snn-surface-muted);
+}
+
+.harnessPresetPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.harnessPresetPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--snn-border-soft);
+  border-radius: var(--snn-radius-pill);
+  background: var(--snn-surface);
+  color: var(--snn-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+.harnessPresetPill:hover {
+  border-color: var(--snn-accent);
+  color: var(--snn-text);
+}
+
+.harnessPresetPillActive {
+  border-color: var(--snn-accent);
+  background: var(--snn-surface-active);
+  color: var(--snn-text);
+}
+
+.harnessPresetBadge {
+  padding: 1px 6px;
+  border-radius: var(--snn-radius-sm);
+  background: var(--snn-surface-muted);
+  color: var(--snn-accent);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.harnessSkillBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.harnessSkillLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-geist-mono), monospace;
+  font-weight: 700;
+  color: var(--snn-text-muted);
+}
+
+.harnessSkillSelect {
+  padding: 3px 8px;
+  border: 1px solid var(--snn-border-soft);
+  border-radius: var(--snn-radius-sm);
+  background: var(--snn-surface);
+  color: var(--snn-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.harnessToolSummary {
+  font-family: var(--font-geist-mono), monospace;
+  color: var(--snn-text-muted);
+}
+
+/* Transparent Agent Loop: Reasoning, Expandable Tool Call Cards & Artifact Shortcuts */
+.reasoningCard {
+  margin-bottom: 8px;
+  border: 1px solid var(--snn-border-soft);
+  border-radius: var(--snn-radius-md);
+  background: var(--snn-surface-muted);
+  overflow: hidden;
+}
+
+.reasoningSummary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--snn-text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.reasoningBadge {
+  padding: 1px 6px;
+  border-radius: var(--snn-radius-sm);
+  background: var(--snn-surface);
+  border: 1px solid var(--snn-border-soft);
+  color: var(--snn-accent);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.reasoningContent {
+  margin: 0;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--snn-border-soft);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--snn-text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.toolActivityHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.toolActivityCount {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  color: var(--snn-text-muted);
+}
+
+.toolCallCard {
+  border: 1px solid var(--snn-border-soft);
+  border-radius: var(--snn-radius-sm);
+  background: var(--snn-surface);
+  overflow: hidden;
+}
+
+.toolCallCard summary {
+  cursor: pointer;
+  padding: 5px 8px;
+  list-style: none;
+}
+
+.toolCallCard summary::-webkit-details-marker {
+  display: none;
+}
+
+.toolStepIndex {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  color: var(--snn-text-muted);
+}
+
+.toolCategoryBadge {
+  padding: 1px 5px;
+  border-radius: var(--snn-radius-sm);
+  background: var(--snn-surface-muted);
+  color: var(--snn-accent);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.toolDuration {
+  margin-left: auto;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  color: var(--snn-text-muted);
+}
+
+.toolCallDetail {
+  padding: 6px 10px 8px;
+  border-top: 1px solid var(--snn-border-soft);
+  background: var(--snn-surface-muted);
+  font-size: 11.5px;
+  color: var(--snn-text-secondary);
+}
+
+.toolCallMetaRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+}
+
+.toolCallSummary {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.artifactCardList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.artifactShortcutCard {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 1px solid var(--snn-border-soft);
+  border-radius: var(--snn-radius-md);
+  background: var(--snn-surface);
+  color: var(--snn-text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.artifactShortcutCard:hover {
+  border-color: var(--snn-accent);
+  background: var(--snn-surface-active);
+}
+
+.artifactShortcutName {
+  font-family: var(--font-geist-mono), monospace;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artifactShortcutAction {
+  color: var(--snn-accent);
+  font-size: 11px;
+}
+

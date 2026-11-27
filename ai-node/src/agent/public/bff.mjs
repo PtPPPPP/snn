@@ -75,7 +75,7 @@ export function createPublicAgentBff({
   }
 
   function isPublicAgentPath(path) {
-    return path === "/api/agent/sessions" || path.startsWith("/api/agent/sessions/");
+    return path === "/api/agent/catalog" || path === "/api/agent/sessions" || path.startsWith("/api/agent/sessions/");
   }
 
   function corsHeaders(origin, allowed) {
@@ -119,7 +119,7 @@ export function createPublicAgentBff({
   function publicErrorStatus(code) {
     if (["AGENT_SESSION_NOT_FOUND", "AGENT_ATTACHMENT_NOT_FOUND", "AGENT_FILE_NOT_FOUND", "AGENT_UPLOAD_NOT_FOUND"].includes(code)) return 404;
     if (["AGENT_FILE_MUTATED", "AGENT_FILE_STALE", "AGENT_FILE_EDIT_CONFLICT", "AGENT_UPLOAD_INCOMPLETE", "AGENT_UPLOAD_ALREADY_FINALIZED", "AGENT_CHUNK_CONFLICT"].includes(code)) return 409;
-    if (["AGENT_FILE_INVALID", "AGENT_FILE_REQUIRED", "AGENT_FILE_CONFLICT", "AGENT_ATTACHMENT_UNSUPPORTED", "AGENT_CHUNK_INVALID"].includes(code)) return 400;
+    if (["AGENT_FILE_INVALID", "AGENT_FILE_REQUIRED", "AGENT_FILE_CONFLICT", "AGENT_ATTACHMENT_UNSUPPORTED", "AGENT_CHUNK_INVALID", "AGENT_SKILL_NOT_FOUND"].includes(code)) return 400;
     if (["AGENT_FILE_TOO_LARGE", "AGENT_WORKSPACE_QUOTA_EXCEEDED", "REQUEST_TOO_LARGE", "AGENT_PREVIEW_TOO_LARGE", "AGENT_CHUNK_TOO_LARGE"].includes(code)) return 413;
     if (code === "AGENT_UPLOAD_LIMIT") return 429;
     if (code === "AGENT_PREVIEW_UNSUPPORTED") return 415;
@@ -265,6 +265,17 @@ export function createPublicAgentBff({
       return true;
     }
 
+    // GET /api/agent/catalog
+    if (path === "/api/agent/catalog" && method === "GET") {
+      if (!originInfo.missing && !originInfo.allowed) {
+        sendJson(response, 403, { error: { code: "FORBIDDEN_ORIGIN", message: "Origin is not allowed" } }, originInfo);
+        return true;
+      }
+      const catalog = typeof controller.catalog === "function" ? controller.catalog() : { presets: [], skills: [], tools: [] };
+      sendJson(response, 200, catalog, originInfo);
+      return true;
+    }
+
     // POST /api/agent/sessions
     if (path === "/api/agent/sessions" && method === "POST") {
       if (!originInfo.allowed) { sendJson(response, 403, { error: { code: "FORBIDDEN_ORIGIN", message: "Origin is not allowed" } }, originInfo); return true; }
@@ -277,9 +288,20 @@ export function createPublicAgentBff({
 
       let body;
       try { body = await readJsonBody(request, config.agent.maxBodyBytes); } catch (e) { sendError(response, e, originInfo, path); return true; }
-      if (body !== undefined && (typeof body !== "object" || Array.isArray(body) || Object.keys(body).length !== 0)) {
-        sendError(response, Object.assign(new Error("Invalid request"), { status: 400, code: "INVALID_REQUEST" }), originInfo, path);
-        return true;
+      if (body !== undefined) {
+        if (typeof body !== "object" || body === null || Array.isArray(body)) {
+          sendError(response, Object.assign(new Error("Invalid request"), { status: 400, code: "INVALID_REQUEST" }), originInfo, path);
+          return true;
+        }
+        const allowedKeys = new Set(["presetId", "skillId"]);
+        if (
+          Object.keys(body).some((k) => !allowedKeys.has(k)) ||
+          (body.presetId !== undefined && (typeof body.presetId !== "string" || body.presetId.length === 0)) ||
+          (body.skillId !== undefined && (typeof body.skillId !== "string" || body.skillId.length === 0))
+        ) {
+          sendError(response, Object.assign(new Error("Invalid request"), { status: 400, code: "INVALID_REQUEST" }), originInfo, path);
+          return true;
+        }
       }
 
       let newWorkspaceId;
@@ -290,7 +312,9 @@ export function createPublicAgentBff({
         await mkdir(workspaceRoot, { recursive: true });
         await workspaceManager.register(workspaceRoot, { id: workspaceId });
         newWorkspaceId = workspaceId;
-        const result = await controller.createSession({ workspaceId, skillId: "workspace-editor" });
+        const requestedPresetId = body?.presetId;
+        const requestedSkillId = body?.skillId ?? (requestedPresetId ? undefined : "workspace-editor");
+        const result = await controller.createSession({ workspaceId, skillId: requestedSkillId, presetId: requestedPresetId });
         createdSessionId = result.sessionId;
         await ownershipStore.create(createdSessionId, ownerHash);
         await ownershipStore.touch(createdSessionId);
@@ -300,7 +324,12 @@ export function createPublicAgentBff({
             "cache-control": "no-store",
             ...corsHeaders(originInfo.origin, originInfo.allowed),
           });
-          response.end(JSON.stringify({ sessionId: createdSessionId, status: "created" }));
+          response.end(JSON.stringify({
+            sessionId: createdSessionId,
+            status: "created",
+            ...(result.presetId ? { presetId: result.presetId } : {}),
+            ...(result.skillId ? { skillId: result.skillId } : {}),
+          }));
         }
       } catch (error) {
         if (createdSessionId) {
@@ -597,7 +626,12 @@ export function createPublicAgentBff({
             return true;
           }
           const keys = Object.keys(body);
-          if (keys.some(k => k !== "message" && k !== "attachments")) {
+          const allowedRunKeys = new Set(["message", "attachments", "presetId", "skillId"]);
+          if (
+            keys.some(k => !allowedRunKeys.has(k)) ||
+            (body.presetId !== undefined && (typeof body.presetId !== "string" || body.presetId.length === 0)) ||
+            (body.skillId !== undefined && (typeof body.skillId !== "string" || body.skillId.length === 0))
+          ) {
             sendError(response, Object.assign(new Error("Invalid request"), { status: 400, code: "INVALID_REQUEST" }), originInfo, path);
             return true;
           }
@@ -609,7 +643,12 @@ export function createPublicAgentBff({
           } catch (e) { sendError(response, e, originInfo, path); return true; }
 
           try {
-            const run = await controller.startRun(sessionId, { message: body.message, attachments: body.attachments });
+            const run = await controller.startRun(sessionId, {
+              message: body.message,
+              attachments: body.attachments,
+              ...(body.presetId ? { presetId: body.presetId } : {}),
+              ...(body.skillId ? { skillId: body.skillId } : {}),
+            });
             await proxySse(request, response, controller, sessionId, run, originInfo);
           } catch (e) { sendError(response, e, originInfo, path); }
           return true;
@@ -764,13 +803,30 @@ export function createPublicAgentBff({
     };
     if (event.type === "run.incomplete") return { ...out, payload: { reason: typeof event.payload?.reason === "string" ? event.payload.reason : "max_tokens" } };
     if (event.type === "run.failed") return { ...out, error: { code: "AGENT_RUN_FAILED", message: "Agent run failed" } };
-    if (event.type === "tool.failed") return { ...out, error: { code: "TOOL_EXECUTION_FAILED", message: "Tool execution failed" } };
+    if (event.type === "tool.failed") {
+      const p = event.payload;
+      return {
+        ...out,
+        ...(p && typeof p === "object"
+          ? {
+              payload: {
+                ...(typeof p.name === "string" ? { name: p.name } : {}),
+                ...(typeof p.displayName === "string" ? { displayName: p.displayName } : {}),
+                ...(typeof p.risk === "string" ? { risk: p.risk } : {}),
+                ...(typeof p.category === "string" ? { category: p.category } : {}),
+                ...(typeof p.policy === "string" ? { policy: p.policy } : {}),
+              },
+            }
+          : {}),
+        error: { code: "TOOL_EXECUTION_FAILED", message: "Tool execution failed" },
+      };
+    }
     if (event.type === "message.delta" || event.type === "reasoning.delta") {
       return typeof event.payload?.text === "string" ? { ...out, payload: { text: event.payload.text } } : out;
     }
     if (event.type === "tool.started" || event.type === "tool.completed") {
       const p = event.payload;
-      return p && typeof p === "object" ? { ...out, payload: { ...(typeof p.name === "string" ? { name: p.name } : {}), ...(typeof p.displayName === "string" ? { displayName: p.displayName } : {}), ...(typeof p.risk === "string" ? { risk: p.risk } : {}), ...(typeof p.policy === "string" ? { policy: p.policy } : {}) } } : out;
+      return p && typeof p === "object" ? { ...out, payload: { ...(typeof p.name === "string" ? { name: p.name } : {}), ...(typeof p.displayName === "string" ? { displayName: p.displayName } : {}), ...(typeof p.risk === "string" ? { risk: p.risk } : {}), ...(typeof p.category === "string" ? { category: p.category } : {}), ...(typeof p.policy === "string" ? { policy: p.policy } : {}) } } : out;
     }
     return out;
   }

@@ -8,6 +8,7 @@ import {
   createAgentSession,
   deleteAgentFile,
   deleteAgentSession,
+  getAgentCatalog,
   getAgentStatus,
   listAgentFiles,
   listAgentSessions,
@@ -16,7 +17,14 @@ import {
   type AgentFile,
   type AgentRuntimeReadiness,
   type AgentSession,
+  type SnnHarnessCatalog,
 } from "../../lib/agent-client";
+import {
+  SNN_HARNESS_PRESETS,
+  SNN_HARNESS_SKILLS,
+  SNN_HARNESS_TOOLS,
+  findHarnessPreset,
+} from "../../shared/snn-harness-catalog.mjs";
 import {
   defaultAgentTitle,
   deleteAgentSessionHistory,
@@ -32,8 +40,13 @@ export type AgentMessage = {
   role: "user" | "assistant";
   content: string;
   attachments?: AgentAttachment[];
+  reasoningText?: string;
   isThinking?: boolean;
   thinkingSeconds?: number;
+  toolCalls?: ToolActivity[];
+  artifacts?: WorkspaceChange[];
+  presetId?: string;
+  skillId?: string;
 };
 
 export type AgentRunState = "idle" | "starting" | "streaming" | "cancelling" | "completed" | "incomplete" | "failed" | "cancelled";
@@ -41,8 +54,13 @@ export type AgentRunState = "idle" | "starting" | "streaming" | "cancelling" | "
 export type ToolActivity = {
   id: string;
   name: string;
+  displayName?: string;
+  category?: string;
+  risk?: string;
   status: "started" | "completed" | "failed";
   timestamp: string;
+  startedAtMs?: number;
+  durationMs?: number;
 };
 
 export type WorkspaceChange = {
@@ -57,6 +75,8 @@ const MAX_ATTACHMENTS = 8;
 const MAX_WORKSPACE_CHANGES = 20;
 const MAX_WORKSPACE_ACTIVITY = 20;
 const LOCAL_ACTIVE_KEY = "snn-agent-active-session";
+const LOCAL_PRESET_KEY = "snn-agent-selected-preset";
+const LOCAL_SKILL_KEY = "snn-agent-selected-skill";
 
 function uploadErrorMessage(error: AgentClientError): string {
   if (error.detail === "AGENT_ATTACHMENT_LIMIT") return `最多只能附加 ${MAX_ATTACHMENTS} 个文件`;
@@ -109,6 +129,32 @@ export function useAgent() {
   const [isAgentAvailable, setIsAgentAvailable] = useState<boolean | null>(null);
   const [agentReadiness, setAgentReadiness] = useState<AgentRuntimeReadiness | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [catalog, setCatalog] = useState<SnnHarnessCatalog>(() => ({
+    presets: SNN_HARNESS_PRESETS,
+    skills: SNN_HARNESS_SKILLS,
+    tools: SNN_HARNESS_TOOLS,
+  }));
+  const [selectedPresetId, setSelectedPresetIdState] = useState<string>(() => {
+    try { return localStorage.getItem(LOCAL_PRESET_KEY) || "snn-general"; } catch { return "snn-general"; }
+  });
+  const [selectedSkillId, setSelectedSkillIdState] = useState<string>(() => {
+    try { return localStorage.getItem(LOCAL_SKILL_KEY) || "snn-general-assistant"; } catch { return "snn-general-assistant"; }
+  });
+
+  const setSelectedPresetId = useCallback((presetId: string) => {
+    setSelectedPresetIdState(presetId);
+    try { localStorage.setItem(LOCAL_PRESET_KEY, presetId); } catch {}
+    const preset = findHarnessPreset(presetId);
+    if (preset) {
+      setSelectedSkillIdState(preset.defaultSkillId);
+      try { localStorage.setItem(LOCAL_SKILL_KEY, preset.defaultSkillId); } catch {}
+    }
+  }, []);
+
+  const setSelectedSkillId = useCallback((skillId: string) => {
+    setSelectedSkillIdState(skillId);
+    try { localStorage.setItem(LOCAL_SKILL_KEY, skillId); } catch {}
+  }, []);
 
   const activeSessionIdRef = useRef<string | null>(null);
   const runAbortRef = useRef<AbortController | null>(null);
@@ -230,7 +276,7 @@ export function useAgent() {
     if (activeSessionIdRef.current === sessionId) setWorkspaceActivity(next);
   }, []);
 
-  const refreshFiles = useCallback(async (sessionId: string) => {
+  const refreshFiles = useCallback(async (sessionId: string): Promise<WorkspaceChange[]> => {
     const sessionGeneration = sessionGenerationRef.current;
     const filesRevision = filesRevisionRef.current;
     if (activeSessionIdRef.current === sessionId) {
@@ -243,7 +289,7 @@ export function useAgent() {
         activeSessionIdRef.current === sessionId &&
         sessionGenerationRef.current === sessionGeneration &&
         filesRevisionRef.current === filesRevision;
-      if (!isCurrentSnapshot) return;
+      if (!isCurrentSnapshot) return [];
       setFiles(list);
       setFilesLoading(false);
       // Diff against the previous authoritative manifest snapshot. The first
@@ -263,13 +309,16 @@ export function useAgent() {
           if (!nextSnapshot.has(fileId)) entries.push({ id: `${fileId}-deleted-${Date.now()}`, fileId, name: seen.name, type: "deleted", at: Date.now() });
         }
         recordWorkspaceChanges(sessionId, entries);
+        return entries;
       }
+      return [];
     } catch {
       if (activeSessionIdRef.current === sessionId && sessionGenerationRef.current === sessionGeneration) {
         setFiles([]);
         setFilesLoading(false);
         setFilesError(true);
       }
+      return [];
     }
   }, [recordWorkspaceChanges]);
 
@@ -294,6 +343,7 @@ export function useAgent() {
     if (isAgentAvailable) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- sessions are external BFF state
       void refreshSessions();
+      void getAgentCatalog().then(setCatalog);
     } else if (isAgentAvailable === false) {
       setLoaded(true);
     }
@@ -310,15 +360,15 @@ export function useAgent() {
 
   const ensureSession = useCallback(async (): Promise<string> => {
     if (activeSessionIdRef.current) return activeSessionIdRef.current;
-    const created = await createAgentSession();
+    const created = await createAgentSession({ presetId: selectedPresetId, skillId: selectedSkillId });
     const sid = created.sessionId;
-    setSessions((prev) => [{ sessionId: sid, createdAt: new Date().toISOString(), lastAccessAt: new Date().toISOString() }, ...prev]);
+    setSessions((prev) => [{ sessionId: sid, createdAt: new Date().toISOString(), lastAccessAt: new Date().toISOString(), presetId: selectedPresetId, skillId: selectedSkillId }, ...prev]);
     activeSessionIdRef.current = sid;
     sessionGenerationRef.current += 1;
     setActiveSessionId(sid);
     // title will be derived from first message locally
     return sid;
-  }, []);
+  }, [selectedPresetId, selectedSkillId]);
 
   const selectSession = useCallback((id: string) => {
     if (id === activeSessionIdRef.current) return;
@@ -510,8 +560,21 @@ export function useAgent() {
     if (runState === "streaming" || runState === "starting") return;
     const sid = await ensureSession();
     const attachments = attachmentsSnapshot.map((file) => file.fileId);
-    const userMsg: AgentMessage = { id: nowId("user"), role: "user", content: content.trim(), attachments: [...attachmentsSnapshot] };
-    const assistantMsg: AgentMessage = { id: nowId("assistant"), role: "assistant", content: "" };
+    const userMsg: AgentMessage = {
+      id: nowId("user"),
+      role: "user",
+      content: content.trim(),
+      attachments: [...attachmentsSnapshot],
+      presetId: selectedPresetId,
+      skillId: selectedSkillId,
+    };
+    const assistantMsg: AgentMessage = {
+      id: nowId("assistant"),
+      role: "assistant",
+      content: "",
+      presetId: selectedPresetId,
+      skillId: selectedSkillId,
+    };
     const baseMessages = [...messagesRef.current, userMsg];
     const nextMessages = [...baseMessages, assistantMsg];
     setMessages(nextMessages);
@@ -524,28 +587,100 @@ export function useAgent() {
     runAbortRef.current = controller;
     const gen = ++generationRef.current;
     let assistantContent = "";
+    let reasoningContent = "";
+    let reasoningStartedAt: number | null = null;
+    let thinkingSeconds: number | undefined;
+    let runTools: ToolActivity[] = [];
 
     try {
       await streamAgentRun(sid, content.trim(), attachments, {
         signal: controller.signal,
+        onReasoning: (ev) => {
+          if (generationRef.current !== gen) return;
+          if (ev.type === "reasoning.started") {
+            if (reasoningStartedAt === null) reasoningStartedAt = performance.now();
+            setMessages((cur) => cur.map((m) => m.id === assistantMsg.id ? { ...m, isThinking: true } : m));
+          } else if (ev.type === "reasoning.delta" && ev.text) {
+            if (reasoningStartedAt === null) reasoningStartedAt = performance.now();
+            reasoningContent += ev.text;
+            setMessages((cur) => cur.map((m) => m.id === assistantMsg.id ? { ...m, isThinking: true, reasoningText: reasoningContent } : m));
+            setRunState("streaming");
+          } else if (ev.type === "reasoning.completed") {
+            if (reasoningStartedAt !== null) {
+              thinkingSeconds = (performance.now() - reasoningStartedAt) / 1000;
+              reasoningStartedAt = null;
+            }
+            setMessages((cur) =>
+              cur.map((m) =>
+                m.id === assistantMsg.id
+                  ? { ...m, isThinking: false, ...(thinkingSeconds !== undefined ? { thinkingSeconds } : {}), ...(reasoningContent ? { reasoningText: reasoningContent } : {}) }
+                  : m,
+              ),
+            );
+          }
+        },
         onDelta: (text) => {
           if (generationRef.current !== gen) return;
           assistantContent += text;
-          setMessages((cur) => cur.map((m) => m.id === assistantMsg.id ? { ...m, content: assistantContent } : m));
+          if (reasoningStartedAt !== null) {
+            thinkingSeconds = (performance.now() - reasoningStartedAt) / 1000;
+            reasoningStartedAt = null;
+          }
+          setMessages((cur) =>
+            cur.map((m) =>
+              m.id === assistantMsg.id
+                ? {
+                    ...m,
+                    content: assistantContent,
+                    isThinking: false,
+                    ...(thinkingSeconds !== undefined ? { thinkingSeconds } : {}),
+                    ...(reasoningContent ? { reasoningText: reasoningContent } : {}),
+                  }
+                : m,
+            ),
+          );
           setRunState("streaming");
         },
         onTool: (ev) => {
           if (generationRef.current !== gen) return;
           const name = ev.name ?? "workspace.open";
-          // Never display raw args/output, only safe name/status
+          const nowMs = Date.now();
           setToolActivity((prev) => {
-            const existing = prev.find((t) => t.name === name && t.status === "started");
-            if (ev.status === "started" && !existing) return [...prev, { id: `${name}-${Date.now()}`, name, status: "started", timestamp: new Date().toISOString() }];
-            if (ev.status === "completed" || ev.status === "failed") {
-              return prev.map((t) => t.name === name && t.status === "started" ? { ...t, status: ev.status as "completed" | "failed" } : t);
+            let updated = prev;
+            if (ev.status === "started") {
+              const existing = ev.toolCallId
+                ? prev.find((t) => t.id === ev.toolCallId)
+                : prev.find((t) => t.name === name && t.status === "started");
+              if (!existing) {
+                updated = [
+                  ...prev,
+                  {
+                    id: ev.toolCallId ?? `${name}-${nowMs}`,
+                    name,
+                    displayName: ev.displayName,
+                    category: ev.category,
+                    risk: ev.risk,
+                    status: "started",
+                    timestamp: new Date(nowMs).toISOString(),
+                    startedAtMs: nowMs,
+                  },
+                ];
+              }
+            } else if (ev.status === "completed" || ev.status === "failed") {
+              updated = prev.map((t) => {
+                const match = ev.toolCallId ? t.id === ev.toolCallId : t.name === name && t.status === "started";
+                if (!match) return t;
+                return {
+                  ...t,
+                  status: ev.status as "completed" | "failed",
+                  durationMs: t.startedAtMs ? Math.max(1, nowMs - t.startedAtMs) : undefined,
+                };
+              });
             }
-            return prev;
+            runTools = updated;
+            return updated;
           });
+          setMessages((cur) => cur.map((m) => m.id === assistantMsg.id ? { ...m, toolCalls: runTools } : m));
           // Session-scoped activity for the Workspace panel, keyed by the real
           // toolCallId so parallel calls of the same tool stay distinct.
           const activityStatus: "started" | "completed" | "failed" = ev.status === "completed" ? "completed" : ev.status === "failed" ? "failed" : "started";
@@ -562,7 +697,7 @@ export function useAgent() {
           if (generationRef.current !== gen) return;
           setError(msg);
         },
-      }).then((res) => { currentRunIdRef.current = res.runId; });
+      }, { presetId: selectedPresetId, skillId: selectedSkillId }).then((res) => { currentRunIdRef.current = res.runId; });
       // Wait for stream to complete, runState already set via onDone
       if (generationRef.current === gen && activeSessionIdRef.current === sid) {
         setRunState((prev) => (prev === "streaming" || prev === "starting" ? "completed" : prev));
@@ -582,10 +717,7 @@ export function useAgent() {
         if (err.code === "not_found") void refreshSessions();
       }
     } finally {
-      const completedMessages = assistantContent.trim().length > 0
-        ? [...baseMessages, { ...assistantMsg, content: assistantContent }]
-        : baseMessages;
-      persistSessionMessages(sid, completedMessages);
+      let changedArtifacts: WorkspaceChange[] = [];
       if (generationRef.current === gen && activeSessionIdRef.current === sid) {
         runAbortRef.current = null;
         currentRunIdRef.current = null;
@@ -593,11 +725,28 @@ export function useAgent() {
           if (generationRef.current === gen && activeSessionIdRef.current === sid) setRunState("idle");
         }, 1500);
         // refresh files list as session lastAccess updated
-        void refreshFiles(sid);
+        changedArtifacts = (await refreshFiles(sid)).filter((c) => c.type !== "deleted");
         void refreshSessions();
       }
+      const finalAssistantMsg: AgentMessage = {
+        ...assistantMsg,
+        content: assistantContent,
+        isThinking: false,
+        ...(reasoningContent ? { reasoningText: reasoningContent } : {}),
+        ...(thinkingSeconds !== undefined ? { thinkingSeconds } : {}),
+        ...(runTools.length > 0 ? { toolCalls: runTools } : {}),
+        ...(changedArtifacts.length > 0 ? { artifacts: changedArtifacts } : {}),
+      };
+      if (generationRef.current === gen && activeSessionIdRef.current === sid && changedArtifacts.length > 0) {
+        setMessages((cur) => cur.map((m) => (m.id === assistantMsg.id ? finalAssistantMsg : m)));
+      }
+      const completedMessages =
+        assistantContent.trim().length > 0 || runTools.length > 0 || changedArtifacts.length > 0
+          ? [...baseMessages, finalAssistantMsg]
+          : baseMessages;
+      persistSessionMessages(sid, completedMessages);
     }
-  }, [runState, ensureSession, refreshFiles, refreshSessions, replacePendingAttachments, recordWorkspaceActivity, persistSessionMessages]);
+  }, [runState, ensureSession, refreshFiles, refreshSessions, replacePendingAttachments, recordWorkspaceActivity, persistSessionMessages, selectedPresetId, selectedSkillId]);
 
   const cancelRun = useCallback(async () => {
     if (runState !== "streaming" && runState !== "starting") return;
@@ -637,6 +786,11 @@ export function useAgent() {
     isAgentAvailable,
     agentReadiness,
     loaded,
+    catalog,
+    selectedPresetId,
+    selectedSkillId,
+    setSelectedPresetId,
+    setSelectedSkillId,
     selectSession,
     startNewSession,
     deleteSession,

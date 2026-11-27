@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AgentClientError,
   getAgentFileUrl,
@@ -52,6 +52,7 @@ export default function AgentWorkspacePanel({
   pendingIds,
   recentChanges,
   activity,
+  requestedPreview,
   onClose,
 }: {
   id?: string;
@@ -66,12 +67,14 @@ export default function AgentWorkspacePanel({
   pendingIds: Set<string>;
   recentChanges: WorkspaceChange[];
   activity: ToolActivity[];
+  requestedPreview?: { fileId: string; seq: number } | null;
   onClose: () => void;
 }) {
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const drawerRef = useDrawerFocus(open, onClose);
   const [edit, setEdit] = useState<EditState | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const lastPreviewSeqRef = useRef<number | null>(null);
 
   // Preview is only valid for the session it was opened in and while the file
   // still exists in the authoritative manifest. Deriving it (rather than
@@ -109,6 +112,16 @@ export default function AgentWorkspacePanel({
       );
     }
   }
+
+  useEffect(() => {
+    if (!requestedPreview || !sessionId) return;
+    if (lastPreviewSeqRef.current === requestedPreview.seq) return;
+    const targetFile = files.find((f) => f.fileId === requestedPreview.fileId);
+    if (!targetFile) return;
+    lastPreviewSeqRef.current = requestedPreview.seq;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- user clicked inline artifact shortcut card
+    void openPreview(targetFile);
+  });
 
   function startEdit() {
     if (!activePreview?.data?.sha256 || !sessionId) return;
@@ -561,6 +574,9 @@ function toolLabel(name: string) {
   if (name === "workspace.word.inspect") return "读取 Word 文档";
   if (name === "workspace.word.patch") return "修改 Word 文档";
   if (name === "workspace.fetch") return "抓取网页";
+  if (name === "workspace.diff") return "计算文件 Diff";
+  if (name === "snn.sim.rocket") return "火箭物理仿真";
+  if (name === "snn.lab.network") return "神经网络实验";
   return name;
 }
 

@@ -1,9 +1,22 @@
 import { DOCUMENT_PREVIEW_EXTENSIONS, TEXT_EXTENSIONS } from "../shared/agent-files.mjs";
+import {
+  SNN_HARNESS_PRESETS,
+  SNN_HARNESS_SKILLS,
+  SNN_HARNESS_TOOLS,
+  type SnnHarnessCatalog,
+  type SnnHarnessPreset,
+  type SnnHarnessSkill,
+  type SnnHarnessToolMeta,
+} from "../shared/snn-harness-catalog.mjs";
+
+export type { SnnHarnessCatalog, SnnHarnessPreset, SnnHarnessSkill, SnnHarnessToolMeta };
 
 export type AgentSession = {
   sessionId: string;
   createdAt?: string;
   lastAccessAt?: string;
+  presetId?: string;
+  skillId?: string;
 };
 
 export type AgentFile = {
@@ -131,8 +144,32 @@ export async function getAgentStatus(): Promise<{ online: boolean; agent: boolea
   }
 }
 
-export async function createAgentSession(): Promise<AgentSession> {
-  const res = await agentFetch("/sessions", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+export async function getAgentCatalog(): Promise<SnnHarnessCatalog> {
+  try {
+    const res = await agentFetch("/catalog", { method: "GET" }, STATUS_TIMEOUT_MS);
+    if (!res.ok) {
+      return { presets: SNN_HARNESS_PRESETS, skills: SNN_HARNESS_SKILLS, tools: SNN_HARNESS_TOOLS };
+    }
+    const data = (await res.json()) as Partial<SnnHarnessCatalog>;
+    return {
+      presets: Array.isArray(data.presets) && data.presets.length > 0 ? data.presets : SNN_HARNESS_PRESETS,
+      skills: Array.isArray(data.skills) && data.skills.length > 0 ? data.skills : SNN_HARNESS_SKILLS,
+      tools: Array.isArray(data.tools) && data.tools.length > 0 ? data.tools : SNN_HARNESS_TOOLS,
+    };
+  } catch {
+    return { presets: SNN_HARNESS_PRESETS, skills: SNN_HARNESS_SKILLS, tools: SNN_HARNESS_TOOLS };
+  }
+}
+
+export async function createAgentSession(options?: { presetId?: string; skillId?: string }): Promise<AgentSession> {
+  const payload: Record<string, string> = {};
+  if (options?.presetId) payload.presetId = options.presetId;
+  if (options?.skillId) payload.skillId = options.skillId;
+  const res = await agentFetch("/sessions", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throwForStatus(res, body);
@@ -397,7 +434,16 @@ function parseSseEvent(block: string) {
 export type AgentStreamHandlers = {
   signal: AbortSignal;
   onDelta: (text: string) => void;
-  onTool: (ev: { type: string; name?: string; status: string; toolCallId?: string }) => void;
+  onReasoning?: (ev: { type: "reasoning.started" | "reasoning.delta" | "reasoning.completed"; text?: string }) => void;
+  onTool: (ev: {
+    type: string;
+    name?: string;
+    displayName?: string;
+    category?: string;
+    risk?: string;
+    status: string;
+    toolCallId?: string;
+  }) => void;
   onDone: (terminal: string) => void;
   onError: (msg: string) => void;
 };
@@ -407,11 +453,17 @@ export async function streamAgentRun(
   message: string,
   attachments: string[],
   handlers: AgentStreamHandlers,
+  options?: { presetId?: string; skillId?: string },
 ): Promise<{ runId: string }> {
   const res = await agentFetch(`/sessions/${encodeURIComponent(sessionId)}/runs`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ message, ...(attachments.length > 0 ? { attachments } : {}) }),
+    body: JSON.stringify({
+      message,
+      ...(attachments.length > 0 ? { attachments } : {}),
+      ...(options?.presetId ? { presetId: options.presetId } : {}),
+      ...(options?.skillId ? { skillId: options.skillId } : {}),
+    }),
     signal: handlers.signal,
   });
 
@@ -439,12 +491,23 @@ export async function streamAgentRun(
     const p = parsed.payload as Record<string, unknown>;
     if (!runId && typeof p.runId === "string") runId = p.runId;
     if (parsed.event === "run.started" && typeof p.runId === "string") runId = p.runId;
-    else if (parsed.event === "message.delta" && typeof (p.payload as { text?: unknown })?.text === "string") {
+    else if (parsed.event === "reasoning.started" || parsed.event === "reasoning.delta" || parsed.event === "reasoning.completed") {
+      const text = typeof (p.payload as { text?: unknown })?.text === "string" ? (p.payload as { text: string }).text : undefined;
+      handlers.onReasoning?.({ type: parsed.event, text });
+    } else if (parsed.event === "message.delta" && typeof (p.payload as { text?: unknown })?.text === "string") {
       handlers.onDelta((p.payload as { text: string }).text);
     } else if (parsed.event === "tool.started" || parsed.event === "tool.completed" || parsed.event === "tool.failed") {
-      const name = (p.payload as { name?: string })?.name;
+      const toolPayload = (p.payload ?? {}) as { name?: string; displayName?: string; category?: string; risk?: string };
       const toolCallId = typeof p.toolCallId === "string" ? p.toolCallId : undefined;
-      handlers.onTool({ type: parsed.event, name, status: parsed.event === "tool.failed" ? "failed" : parsed.event === "tool.completed" ? "completed" : "started", toolCallId });
+      handlers.onTool({
+        type: parsed.event,
+        name: toolPayload.name,
+        displayName: toolPayload.displayName,
+        category: toolPayload.category,
+        risk: toolPayload.risk,
+        status: parsed.event === "tool.failed" ? "failed" : parsed.event === "tool.completed" ? "completed" : "started",
+        toolCallId,
+      });
     } else if (parsed.event === "run.completed" || parsed.event === "run.incomplete" || parsed.event === "run.failed" || parsed.event === "run.cancelled") {
       terminal = parsed.event;
       handlers.onDone(terminal);

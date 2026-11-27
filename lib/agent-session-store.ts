@@ -11,11 +11,36 @@ export type StoredAgentAttachment = {
   updatedAt?: number;
 };
 
+export type StoredAgentToolCall = {
+  id: string;
+  name: string;
+  displayName?: string;
+  category?: string;
+  risk?: string;
+  status: "started" | "completed" | "failed";
+  timestamp: string;
+  durationMs?: number;
+};
+
+export type StoredAgentArtifact = {
+  id: string;
+  fileId: string;
+  name: string;
+  type: "created" | "modified" | "deleted";
+  at: number;
+};
+
 export type StoredAgentMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
   attachments?: StoredAgentAttachment[];
+  reasoningText?: string;
+  thinkingSeconds?: number;
+  toolCalls?: StoredAgentToolCall[];
+  artifacts?: StoredAgentArtifact[];
+  presetId?: string;
+  skillId?: string;
 };
 
 export type StoredAgentSessionHistory = {
@@ -23,6 +48,8 @@ export type StoredAgentSessionHistory = {
   title: string;
   updatedAt: number;
   messages: StoredAgentMessage[];
+  presetId?: string;
+  skillId?: string;
   version: 1;
 };
 
@@ -95,6 +122,12 @@ export function loadAgentSessionHistory(
         id: typeof m.id === "string" && m.id ? m.id : `${m.role}-${index}-${m.content.length}`,
         role: m.role,
         content: m.content,
+        ...(typeof m.reasoningText === "string" && m.reasoningText.length > 0 ? { reasoningText: m.reasoningText } : {}),
+        ...(typeof m.thinkingSeconds === "number" ? { thinkingSeconds: m.thinkingSeconds } : {}),
+        ...(typeof m.presetId === "string" ? { presetId: m.presetId } : {}),
+        ...(typeof m.skillId === "string" ? { skillId: m.skillId } : {}),
+        ...(Array.isArray(m.toolCalls) && m.toolCalls.length > 0 ? { toolCalls: m.toolCalls } : {}),
+        ...(Array.isArray(m.artifacts) && m.artifacts.length > 0 ? { artifacts: m.artifacts } : {}),
         ...(Array.isArray(m.attachments) && m.attachments.length > 0
           ? {
               attachments: m.attachments
@@ -149,6 +182,12 @@ export function saveAgentSessionHistory(
         id: m.id,
         role: m.role,
         content: m.content,
+        ...(m.reasoningText ? { reasoningText: m.reasoningText } : {}),
+        ...(typeof m.thinkingSeconds === "number" ? { thinkingSeconds: m.thinkingSeconds } : {}),
+        ...(m.presetId ? { presetId: m.presetId } : {}),
+        ...(m.skillId ? { skillId: m.skillId } : {}),
+        ...(m.toolCalls && m.toolCalls.length > 0 ? { toolCalls: m.toolCalls.map((t) => ({ ...t })) } : {}),
+        ...(m.artifacts && m.artifacts.length > 0 ? { artifacts: m.artifacts.map((a) => ({ ...a })) } : {}),
         ...(m.attachments && m.attachments.length > 0 ? { attachments: m.attachments.map((a) => ({ ...a })) } : {}),
       })),
       version: 1,

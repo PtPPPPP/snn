@@ -34,14 +34,25 @@ export class AgentSessionController {
     this.#attachmentContextResolver = attachmentContextResolver;
   }
 
-  async createSession({ workspaceId, skillId = this.#skillId } = {}) {
+  async createSession({ workspaceId, skillId, presetId } = {}) {
     const sessionId = `snn-agent-${randomUUID()}`;
-    const context = await this.#contextForCreate(workspaceId, skillId);
+    const context = await this.#contextForCreate(workspaceId, skillId, presetId);
     const runtime = await this.#runtimeFor(context.binding).then((manager) => manager.ensureReady());
     if (this.#metadataStore) await this.#metadataStore.create(sessionId, context.binding);
     try { await runtime.createSession({ sessionId, toolPolicy: context.capability.dshToolPolicy }); }
     catch (error) { if (this.#metadataStore) await this.#metadataStore.delete(sessionId); throw error; }
-    return { sessionId, status: "created" };
+    return {
+      sessionId,
+      status: "created",
+      ...(context.binding.presetId ? { presetId: context.binding.presetId } : {}),
+      ...(context.binding.skillId ? { skillId: context.binding.skillId } : {}),
+    };
+  }
+  catalog() {
+    if (this.#capabilityResolver && typeof this.#capabilityResolver.catalog === "function") {
+      return this.#capabilityResolver.catalog();
+    }
+    return { presets: [], skills: [], tools: [] };
   }
   async resumeSession(sessionId) {
     assertSessionId(sessionId);
@@ -63,7 +74,7 @@ export class AgentSessionController {
     if (typeof message !== "string" || message.length === 0 || message.length > this.#maxMessageLength) throw httpError(400, "INVALID_MESSAGE", "message must be a non-empty string within the allowed length");
     const fileIds = this.#normalizeAttachments(request.attachments);
     if (this.#active.has(sessionId)) throw httpError(409, "AGENT_RUN_CONFLICT", "session already has an active run");
-    const context = await this.#contextForSession(sessionId);
+    const context = await this.#contextForSession(sessionId, { skillId: request.skillId, presetId: request.presetId });
     // Attachment resolution fails closed against the CURRENT workspace manifest
     // before the runtime or model is ever involved.
     const attachmentContext = await this.#resolveAttachmentContext(context.binding.workspaceId, fileIds);
@@ -88,21 +99,37 @@ export class AgentSessionController {
       try { await this.cancel(sessionId, active.runId); } catch { /* The stream still publishes its true outcome. */ }
     }));
   }
-  async #contextForCreate(workspaceId, skillId = this.#skillId) {
+  async #contextForCreate(workspaceId, skillId, presetId) {
+    let resolvedSkillId = skillId;
+    if (!resolvedSkillId && presetId && this.#capabilityResolver?.hasPreset?.(presetId)) {
+      resolvedSkillId = this.#capabilityResolver.resolvePreset(presetId).defaultSkillId;
+    }
     const binding = {
       schemaVersion: 1,
       workspaceId: workspaceId ?? this.#workspace?.id,
-      skillId,
+      skillId: resolvedSkillId ?? this.#skillId,
+      ...(presetId ? { presetId } : {}),
     };
     return { binding, capability: await this.#resolve(binding) };
   }
-  async #contextForSession(sessionId) {
-    if (!this.#metadataStore) return this.#contextForCreate();
+  async #contextForSession(sessionId, overrides = {}) {
+    if (!this.#metadataStore) return this.#contextForCreate(undefined, overrides.skillId, overrides.presetId);
     let binding;
     try { binding = await this.#metadataStore.get(sessionId); }
     catch (error) {
       if (error?.code === "AGENT_SESSION_METADATA_NOT_FOUND") throw Object.assign(new Error("Agent session is not available in the current runtime"), { code: "AGENT_SESSION_NOT_FOUND" });
       throw error;
+    }
+    if (overrides.skillId || overrides.presetId) {
+      let nextSkillId = overrides.skillId ?? binding.skillId;
+      if (!overrides.skillId && overrides.presetId && this.#capabilityResolver?.hasPreset?.(overrides.presetId)) {
+        nextSkillId = this.#capabilityResolver.resolvePreset(overrides.presetId).defaultSkillId;
+      }
+      binding = {
+        ...binding,
+        skillId: nextSkillId,
+        ...(overrides.presetId ? { presetId: overrides.presetId } : {}),
+      };
     }
     return { binding, capability: await this.#resolve(binding) };
   }
@@ -110,9 +137,9 @@ export class AgentSessionController {
     if (!this.#capabilityResolver) return { dshToolPolicy: createDshToolPolicy(this.#toolMetadata), skill: undefined };
     try {
       const workspace = this.#workspaceManager ? this.#workspaceManager.resolve(binding.workspaceId) : this.#workspace;
-      return this.#capabilityResolver.resolve({ workspace, skillId: binding.skillId });
+      return this.#capabilityResolver.resolve({ workspace, skillId: binding.skillId, presetId: binding.presetId });
     } catch (error) {
-      throw Object.assign(new Error("Session capability binding is unavailable"), { code: error.code === "SNN_WORKSPACE_NOT_FOUND" ? "AGENT_WORKSPACE_NOT_FOUND" : error.code === "SNN_SKILL_NOT_FOUND" ? "AGENT_SKILL_NOT_FOUND" : "AGENT_SESSION_CAPABILITY_INVALID" });
+      throw Object.assign(new Error("Session capability binding is unavailable"), { code: error.code === "SNN_WORKSPACE_NOT_FOUND" ? "AGENT_WORKSPACE_NOT_FOUND" : error.code === "SNN_SKILL_NOT_FOUND" || error.code === "SNN_PRESET_NOT_FOUND" ? "AGENT_SKILL_NOT_FOUND" : "AGENT_SESSION_CAPABILITY_INVALID" });
     }
   }
   async #runtimeFor(binding) {

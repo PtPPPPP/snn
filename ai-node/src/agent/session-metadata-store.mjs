@@ -51,7 +51,13 @@ export class SessionMetadataStore {
 function normalize(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw invalid();
   if (value.schemaVersion !== VERSION || typeof value.workspaceId !== "string" || typeof value.skillId !== "string") throw invalid();
-  return Object.freeze({ schemaVersion: VERSION, workspaceId: value.workspaceId, skillId: value.skillId });
+  if (value.presetId !== undefined && typeof value.presetId !== "string") throw invalid();
+  return Object.freeze({
+    schemaVersion: VERSION,
+    workspaceId: value.workspaceId,
+    skillId: value.skillId,
+    ...(typeof value.presetId === "string" && value.presetId.length > 0 ? { presetId: value.presetId } : {}),
+  });
 }
 function invalid() { return Object.assign(new Error("Session capability metadata is invalid"), { code: "AGENT_SESSION_METADATA_INVALID" }); }
 function assertSessionId(sessionId) { if (!SESSION_ID.test(sessionId)) throw invalid(); }

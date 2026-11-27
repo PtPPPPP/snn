@@ -7,6 +7,11 @@ import { ToolRegistry } from "../src/agent/capabilities/tool-registry.mjs";
 import { SkillRegistry } from "../src/agent/skills/skill-registry.mjs";
 import { createDefaultCapabilityResolver } from "../src/agent/capabilities/built-ins.mjs";
 import { WorkspaceManager } from "../src/agent/workspace/workspace-manager.mjs";
+import {
+  computeWorkspaceTextDiff,
+  runNetworkLabSimulation,
+  runRocketSimulation,
+} from "../src/agent/workspace/snn-lab-tools.mjs";
 
 test("tool and skill registries reject duplicates and unknown dependencies", () => {
   const tools = new ToolRegistry([{ id: "workspace.read", name: "Read", description: "Read", category: "read", risk: "safe-read", dshToolName: "read", handlerId: "read", available: () => true }]);
@@ -89,4 +94,51 @@ test("workspace manager enforces canonical read boundary and resource limits", a
   } catch (error) {
     if (error?.code !== "EPERM") throw error;
   }
+});
+
+test("snn harness presets and skills resolve specialized tools while preserving NO-SHELL", async () => {
+  const root = await mkdtemp(join(tmpdir(), "snn-harness-preset-ws-"));
+  try {
+    const manager = new WorkspaceManager();
+    const workspace = await manager.register(root);
+    const resolver = createDefaultCapabilityResolver();
+    const catalog = resolver.catalog();
+    assert.equal(catalog.presets.length, 5);
+    assert.ok(catalog.skills.length >= 5);
+    assert.ok(catalog.tools.some((t) => t.id === "snn.sim.rocket"));
+    assert.ok(catalog.tools.some((t) => t.id === "snn.lab.network"));
+    assert.ok(catalog.tools.some((t) => t.id === "workspace.diff"));
+
+    const labCap = resolver.resolve({ workspace, presetId: "lab-simulator" });
+    assert.equal(labCap.presetId, "lab-simulator");
+    assert.equal(labCap.skillId, "snn-lab-simulator");
+    assert.ok(labCap.allowedToolIds.includes("snn.sim.rocket"));
+    assert.ok(labCap.allowedToolIds.includes("snn.lab.network"));
+    assert.equal(labCap.allowedToolIds.includes("workspace.execute"), false);
+
+    const codingCap = resolver.resolve({ workspace, presetId: "coding-auditor" });
+    assert.equal(codingCap.skillId, "snn-coding-auditor");
+    assert.ok(codingCap.allowedToolIds.includes("workspace.diff"));
+    assert.equal(codingCap.allowedToolIds.includes("workspace.execute"), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("snn lab tools run deterministic rocket physics, neural network training, and unified diff", async () => {
+  const rocketRes = await runRocketSimulation({ initial_height: 50, initial_fuel: 5, strategy: "energy_ppo" });
+  assert.equal(rocketRes.outcome, "success");
+  assert.equal(rocketRes.softLandingSuccess, true);
+  assert.ok(typeof rocketRes.terminalVelocityMps === "number" && Math.abs(rocketRes.terminalVelocityMps) <= 2);
+  assert.ok(Array.isArray(rocketRes.keyframes) && rocketRes.keyframes.length > 2);
+
+  const netRes = runNetworkLabSimulation({ dataset: "xor", activation: "tanh", steps: 80, learning_rate: 0.45 });
+  assert.equal(netRes.dataset, "xor");
+  assert.ok(netRes.finalLoss < netRes.initialLoss);
+  assert.equal(netRes.samplePredictions.length, 4);
+
+  const diffRes = computeWorkspaceTextDiff("line1\nline2\nline3", "line1\nline2-mod\nline3\nline4");
+  assert.equal(diffRes.identical, false);
+  assert.equal(diffRes.addedLines, 2);
+  assert.equal(diffRes.removedLines, 1);
 });

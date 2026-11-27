@@ -593,3 +593,37 @@ test("public run keeps a queued SSE stream alive with comment beats", async () =
     assert.equal([...body.matchAll(/^data: /gm)].length, 3);
   });
 });
+
+test("public catalog endpoint returns SNN Harness presets, skills, and tools and accepts presetId on session/run", async () => {
+  await withPublic({}, async ({ baseUrl, fakeRuntime }) => {
+    const origin = "https://snnai.cn";
+    const catRes = await fetch(`${baseUrl}/api/agent/catalog`, { method: "GET", headers: { origin } });
+    assert.equal(catRes.status, 200);
+    const catalog = await catRes.json();
+    assert.equal(Array.isArray(catalog.presets), true);
+    assert.equal(catalog.presets.length, 5);
+    assert.equal(Array.isArray(catalog.skills), true);
+    assert.equal(Array.isArray(catalog.tools), true);
+    assert.ok(catalog.tools.some((t) => t.id === "snn.sim.rocket"));
+
+    const created = await fetch(`${baseUrl}/api/agent/sessions`, {
+      method: "POST",
+      headers: { origin, "content-type": "application/json" },
+      body: JSON.stringify({ presetId: "lab-simulator", skillId: "snn-lab-simulator" }),
+    });
+    assert.equal(created.status, 201);
+    const sid = (await created.json()).sessionId;
+    const cookie = created.headers.get("set-cookie").split(";")[0];
+
+    const runRes = await fetch(`${baseUrl}/api/agent/sessions/${sid}/runs`, {
+      method: "POST",
+      headers: { origin, cookie, "content-type": "application/json" },
+      body: JSON.stringify({ message: "simulate landing", presetId: "lab-simulator" }),
+    });
+    assert.equal(runRes.status, 200);
+    await runRes.text();
+    const createCall = fakeRuntime.calls.find(([kind]) => kind === "create");
+    assert.ok(createCall);
+    assert.ok(createCall[1].toolPolicy.rules.some((r) => r.toolName === "snn.sim.rocket" && r.decision === "allow"));
+  });
+});

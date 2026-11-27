@@ -154,7 +154,12 @@ export default function AiChat() {
   const [webSearchAvailable, setWebSearchAvailable] = useState(false);
   const [isThinkingRequest, setIsThinkingRequest] = useState(false);
   const [mode, setMode] = useState<ChatMode>("chat");
+  const [requestedPreview, setRequestedPreview] = useState<{ fileId: string; seq: number } | null>(null);
   const agent = useAgent();
+  const activeHarnessPreset =
+    agent.catalog.presets.find((p) => p.id === agent.selectedPresetId) ?? agent.catalog.presets[0];
+  const activeHarnessSkill =
+    agent.catalog.skills.find((s) => s.id === agent.selectedSkillId) ?? agent.catalog.skills[0];
   const workspaceOpen = useSyncExternalStore(
     workspaceOpenPreference.subscribe,
     workspaceOpenPreference.getSnapshot,
@@ -651,17 +656,98 @@ export default function AiChat() {
           </div>
           {mode === "agent" ? (
             <>
+              <div className={styles.harnessToolbar} role="region" aria-label="SNN Harness Preset 与 Skill 选择器">
+                <div className={styles.harnessPresetPills} role="tablist" aria-label="SNN Agent Presets">
+                  {agent.catalog.presets.map((preset) => {
+                    const active = preset.id === agent.selectedPresetId;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={active}
+                        className={`${styles.harnessPresetPill} ${active ? styles.harnessPresetPillActive : ""}`}
+                        onClick={() => agent.setSelectedPresetId(preset.id)}
+                      >
+                        <span className={styles.harnessPresetBadge}>{preset.badge}</span>
+                        <span>{preset.title}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className={styles.harnessSkillBar}>
+                  <label className={styles.harnessSkillLabel}>
+                    <span>SKILL</span>
+                    <select
+                      className={styles.harnessSkillSelect}
+                      value={agent.selectedSkillId}
+                      onChange={(e) => agent.setSelectedSkillId(e.target.value)}
+                      aria-label="选择 SNN Skill"
+                    >
+                      {agent.catalog.skills.map((skill) => (
+                        <option key={skill.id} value={skill.id}>
+                          {skill.name}（{skill.requiredTools.length} 项工具）
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {activeHarnessSkill ? (
+                    <span className={styles.harnessToolSummary} title={activeHarnessSkill.requiredTools.join(", ")}>
+                      已挂载 {activeHarnessSkill.requiredTools.length} 个受控工具 · NO-SHELL
+                    </span>
+                  ) : null}
+                </div>
+              </div>
               <div className={styles.messages} ref={messagesRef} onScroll={handleMessagesScroll} aria-live="off">
                 <div className={styles.conversationRail}>
                   {!agent.loaded ? <div className={styles.loadingState} role="status" aria-label="正在加载工作区"><span /><span /><span /></div> : agent.messages.length === 0 ? (
                     <div className={styles.emptyState} data-testid="agent-empty">
-                      <span className={styles.emptyMark}>AGENT / WORKSPACE</span>
-                      <h2>让文件，成为思考的起点。</h2>
-                      <p>上传文本、PDF、DOCX 或 XLSX，让 Agent 帮你阅读资料、整理内容。可修改 Excel 数据单元格并保留公式，或润色 Word 正文并保留文档结构；修改后从工作区下载。PDF 支持读取与提取。</p>
-                      <p>修改后的文本可在工作区预览、编辑和下载。Agent 也可以读取公开网页。</p>
+                      <span className={styles.emptyMark}>
+                        AGENT / WORKSPACE · {activeHarnessPreset ? activeHarnessPreset.badge : "HARNESS"}
+                      </span>
+                      <h2>{activeHarnessPreset ? activeHarnessPreset.title : "让文件，成为思考的起点。"}</h2>
+                      <p>
+                        {activeHarnessPreset
+                          ? activeHarnessPreset.summary
+                          : "上传文本、PDF、DOCX 或 XLSX，让 Agent 帮你阅读资料、整理内容。"}
+                      </p>
+                      <p>支持工作区文本/Office/PDF 读写、结构化 Diff 对比、火箭回收物理仿真与神经网络实验，所有产出可直接在右侧工作区预览和下载。</p>
+                      {activeHarnessPreset && activeHarnessPreset.starterPrompts.length > 0 ? (
+                        <div className={styles.presetGrid} role="group" aria-label="当前 Preset 推荐指令">
+                          {activeHarnessPreset.starterPrompts.map((prompt, idx) => (
+                            <button
+                              key={`${activeHarnessPreset.id}-prompt-${idx}`}
+                              type="button"
+                              className={styles.presetCard}
+                              onClick={() => void agent.sendMessage(prompt)}
+                            >
+                              <span className={styles.presetCode}>
+                                {activeHarnessPreset.badge} · 0{idx + 1}
+                              </span>
+                              <span>{prompt}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   ) : (
-                    agent.messages.map((m) => <AgentMessage key={m.id} message={m} toolActivity={m.role === "assistant" && agent.toolActivity.length > 0 && m.id === agent.messages[agent.messages.length - 1].id ? agent.toolActivity : undefined} />)
+                    agent.messages.map((m) => (
+                      <AgentMessage
+                        key={m.id}
+                        message={m}
+                        toolActivity={
+                          m.role === "assistant" &&
+                          agent.toolActivity.length > 0 &&
+                          m.id === agent.messages[agent.messages.length - 1].id
+                            ? agent.toolActivity
+                            : undefined
+                        }
+                        onOpenArtifact={(fileId) => {
+                          workspaceOpenPreference.write(true);
+                          setRequestedPreview({ fileId, seq: now() });
+                        }}
+                      />
+                    ))
                   )}
                   {(agent.runState === "streaming" || agent.runState === "starting") ? (
                     <div className={styles.typing}><span>Agent 正在处理</span><i /><i /><i /></div>
@@ -790,6 +876,7 @@ export default function AiChat() {
             pendingIds={new Set(agent.pendingAttachments.map((file) => file.fileId))}
             recentChanges={agent.recentChanges}
             activity={agent.workspaceActivity}
+            requestedPreview={requestedPreview}
             onClose={() => workspaceOpenPreference.write(false)}
           />
         ) : null}
