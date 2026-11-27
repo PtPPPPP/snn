@@ -1,7 +1,8 @@
 "use client";
-import {useEffect,useRef,useSyncExternalStore} from 'react';
+import {useEffect,useRef,useState,useSyncExternalStore} from 'react';
 import {usePathname} from 'next/navigation';
 import {BRAND_LOGO} from '../../lib/site';
+import {markLabVisited} from '../../lib/ai-handoff';
 import IntentLink from './IntentLink';
 import s from './UnifiedNav.module.css';
 
@@ -27,10 +28,15 @@ export function Nav(){
  const lab=path.startsWith('/play/rocket');
  const shell=useRef<HTMLElement>(null),menu=useRef<HTMLDetailsElement>(null);
  const dark=useSyncExternalStore(subscribeTheme,getThemeSnapshot,()=>false);
+ const [visitedLabs,setVisitedLabs]=useState<string[]>([]);
  const closeMenu=()=>{if(menu.current)menu.current.open=false;};
  useEffect(()=>{
   document.documentElement.dataset.theme=dark?'dark':'light';
  },[dark]);
+ useEffect(()=>{
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- sync visited labs with localStorage on route change
+  setVisitedLabs(markLabVisited(path));
+ },[path]);
  const toggleTheme=()=>{
   const next=dark?'light':'dark';
   document.documentElement.dataset.theme=next;
@@ -65,6 +71,6 @@ export function Nav(){
     )}
    </button>
   </div>
-  {lab&&<div className={s.labBar}><span>学习实验室 / 火箭回收</span><nav aria-label="火箭实验导航">{labs.map(([href,label])=><IntentLink key={href} href={href} aria-current={path===href?'page':undefined}>{label}</IntentLink>)}</nav></div>}
+  {lab&&<div className={s.labBar}><span>学习实验室 / 火箭回收</span><nav aria-label="火箭实验导航">{labs.map(([href,label])=><IntentLink key={href} href={href} data-visited={visitedLabs.includes(href)||undefined} aria-current={path===href?'page':undefined}>{label}</IntentLink>)}</nav></div>}
  </header>;
 }

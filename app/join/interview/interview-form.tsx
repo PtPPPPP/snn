@@ -121,14 +121,35 @@ export default function InterviewForm(){
  <label>年级（选填）<select value={profile.year} onChange={e=>setProfile({...profile,year:e.target.value})}><option value="">请选择年级</option>{['大一','大二','大三','大四'].map(year=><option key={year} value={year}>{year}</option>)}</select></label>
  </div><label className={s.confirmIdentity}><input type="checkbox" required checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/><span>以上是我本人的信息，我将在当前浏览器完成本轮笔试。</span></label></fieldset>{error&&<p className={s.error} role="alert">{error}</p>}<button type="submit" disabled={busy||!confirmed}>[ {busy?'正在登记身份…':'确认信息，开始作答'} ]</button><p className={s.muted}>每个学号限提交一份答卷。需要更正信息或更换浏览器时，请联系招新负责人。</p></form>;
  if(!timing)return <section className={s.accessGate}><h2>{timingError?'暂时无法开始计时':'正在开始笔试…'}</h2>{timingError?<><p className={s.error} role="alert">{timingError}</p><button type="button" onClick={()=>{setTimingError('');setTimingAttempt(value=>value+1);}}>[ 重试计时 ]</button><button type="button" onClick={()=>void loadSession()}>[ 刷新笔试状态 ]</button></>:<p>开始时间将由服务器记录。</p>}</section>;
+ const navItems=Array.from({length:PAPER_QUESTION_COUNT},(_,idx)=>{
+  const number=idx+1;
+  if(idx<objective.length){
+   const q=objective[idx];
+   return {number,label:`Q${String(number).padStart(2,'0')}`,targetId:`question-${q.id}`,done:hasAnswer(q)};
+  }
+  if(idx<objective.length+common.length){
+   const q=common[idx-objective.length];
+   return {number,label:`Q${String(number).padStart(2,'0')}`,targetId:`question-${q.id}`,done:hasAnswer(q)};
+  }
+  if(idx===PAPER_QUESTION_COUNT-2){
+   return {number,label:`Q${String(number).padStart(2,'0')}`,targetId:direction?`question-${direction.id}`:'section-direction',done:direction?hasAnswer(direction):false};
+  }
+  return {number,label:`Q${String(number).padStart(2,'0')}`,targetId:caseQuestion?`question-${caseQuestion.id}`:'section-scenario',done:caseQuestion?hasAnswer(caseQuestion):false};
+ });
  return <form onSubmit={submit}>
  <AnswerTimer startedAt={timing.startedAt} serverTime={timing.serverTime}/>
  <section className={s.identitySummary}><div><p className={s.eyebrow}>IDENTITY BOUND</p><strong>{profile.name} · {profile.studentId}</strong><p>{[profile.department,profile.year].filter(Boolean).join(' / ')||'本轮笔试身份已绑定'}</p></div><span className={s.boundLabel}>{hasDraftContent?'草稿已自动保存':'身份已锁定'}</span></section>
+ <nav className={s.questionNav} aria-label="题目快速跳转">
+  <span className={s.questionNavTitle}>答题卡 · {answered}/{PAPER_QUESTION_COUNT}</span>
+  <div className={s.questionNavList}>
+   {navItems.map(item=><button key={item.number} type="button" className={s.questionNavPill} data-answered={item.done||undefined} aria-label={`跳转到第 ${item.number} 题（${item.done?'已答':'未答'}）`} onClick={()=>document.getElementById(item.targetId)?.scrollIntoView({behavior:'smooth',block:'start'})}>{item.label}</button>)}
+  </div>
+ </nav>
  <p className={s.answerInstructions}>先完成 8 道基础客观题，再写 2 道简答，并各选 1 道方向题和情景题。案例均为虚构；主观题只按给定材料回答，无需运行代码或实际使用 AI 工具。</p>
  <fieldset className={s.formFields} disabled={busy}>
  <section className={s.section}><div className={s.sectionHeading}><div><p className={s.eyebrow}>FOUNDATIONS</p><h2>基础知识</h2></div><p>8 题 · 40 分 · 后台自动计分</p></div>{OBJECTIVE_SECTIONS.map(group=><div className={s.objectiveSection} key={group.label}><h3>{group.label}</h3><p className={s.muted}>{group.hint}</p>{group.ids.map(id=>answerQuestion(QUESTIONS.find(q=>q.id===id)!,OBJECTIVE_IDS.indexOf(id)+1))}</div>)}</section>
  <section className={s.section}><div className={s.sectionHeading}><div><p className={s.eyebrow}>SHORT ANSWERS</p><h2>简答题</h2></div><p>2 题 · 每题 10 分 · 每题两步</p></div>{common.map((q,i)=>answerQuestion(q,OBJECTIVE_IDS.length+i+1))}</section>
- <section className={s.section}><div className={s.sectionHeading}><div><p className={s.eyebrow}>YOUR INTEREST</p><h2>方向选答</h2></div><p>4 选 1 · 20 分</p></div><label className={s.choiceLabel}>选择感兴趣的方向<select required value={track} onChange={e=>setTrack(e.target.value)}><option value="">请选择一个方向</option>{TRACKS.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select></label>{direction&&answerQuestion(direction,PAPER_QUESTION_COUNT-1)}</section>
- <section className={s.section}><div className={s.sectionHeading}><div><p className={s.eyebrow}>A SMALL SCENARIO</p><h2>情景选答</h2></div><p>4 选 1 · 20 分</p></div><label className={s.choiceLabel}>选择一个情景<select required value={scenario} onChange={e=>setScenario(e.target.value)}><option value="">请选择一个情景</option>{CASES.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select></label>{caseQuestion&&answerQuestion(caseQuestion,PAPER_QUESTION_COUNT)}</section>
+ <section className={s.section} id="section-direction"><div className={s.sectionHeading}><div><p className={s.eyebrow}>YOUR INTEREST</p><h2>方向选答</h2></div><p>4 选 1 · 20 分</p></div><label className={s.choiceLabel}>选择感兴趣的方向<select required value={track} onChange={e=>setTrack(e.target.value)}><option value="">请选择一个方向</option>{TRACKS.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select></label>{direction&&answerQuestion(direction,PAPER_QUESTION_COUNT-1)}</section>
+ <section className={s.section} id="section-scenario"><div className={s.sectionHeading}><div><p className={s.eyebrow}>A SMALL SCENARIO</p><h2>情景选答</h2></div><p>4 选 1 · 20 分</p></div><label className={s.choiceLabel}>选择一个情景<select required value={scenario} onChange={e=>setScenario(e.target.value)}><option value="">请选择一个情景</option>{CASES.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select></label>{caseQuestion&&answerQuestion(caseQuestion,PAPER_QUESTION_COUNT)}</section>
  </fieldset><div className={s.submitArea}><span>已回答 {answered} / {PAPER_QUESTION_COUNT} 题</span><progress max={PAPER_QUESTION_COUNT} value={answered} aria-label="答题进度"/><p>答卷将以 {profile.name} · {profile.studentId} 的身份提交。点击提交后，以提交成功提示为准。</p>{error&&<p className={s.error} role="alert">{error}</p>}<button disabled={busy} type="submit">[ {busy?'正在保存答卷…':'提交答卷'} ]</button></div></form>;
 }

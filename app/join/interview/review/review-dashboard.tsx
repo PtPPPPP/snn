@@ -1,7 +1,8 @@
 'use client';
-import {useCallback,useEffect,useState} from 'react';
+import {useCallback,useEffect,useMemo,useState} from 'react';
 import {isObjectiveQuestion,type InterviewQuestion} from '../../../../lib/interview/questions';
 import {criterionTotal,type InterviewAnswer,type InterviewGrade as Grade,type InterviewRubric} from '../../../../lib/interview/assessment';
+import {candidatesToCsv,filterCandidates,type ReviewFilterStatus} from '../../../../lib/interview/export-csv';
 import IdentityManagement from './identity-management';
 import QuestionBrief from '../question-brief';
 import RecruitmentResultPanel from './recruitment-result-panel';
@@ -16,6 +17,22 @@ async function api(path:string,init?:RequestInit){const response=await fetch(pat
 export default function ReviewDashboard({signInPath}:{signInPath:string}){
  const [conflict,setConflict]=useState(false),[denied,setDenied]=useState(false);
  const [stats,setStats]=useState<Stats|null>(null),[candidates,setCandidates]=useState<Candidate[]>([]),[page,setPage]=useState(1),[loading,setLoading]=useState(true),[sheet,setSheet]=useState<AnswerSheet|null>(null),[grades,setGrades]=useState<Record<string,Grade>>({}),[feedback,setFeedback]=useState(''),[busy,setBusy]=useState(false),[detailBusy,setDetailBusy]=useState(false),[dirty,setDirty]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
+ const [statusFilter,setStatusFilter]=useState<ReviewFilterStatus>('all'),[trackFilter,setTrackFilter]=useState('all'),[searchQuery,setSearchQuery]=useState('');
+ const availableTracks=useMemo(()=>Array.from(new Set(candidates.map(c=>c.track).filter(Boolean))),[candidates]);
+ const filteredCandidates=useMemo(()=>filterCandidates(candidates,{status:statusFilter,track:trackFilter,query:searchQuery}),[candidates,statusFilter,trackFilter,searchQuery]);
+ function exportCsv(){
+  if(!filteredCandidates.length)return;
+  const csv=candidatesToCsv(filteredCandidates);
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement('a');
+  link.href=url;
+  link.download=`snn-interview-scores-p${page}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+ }
  const loadList=useCallback(async()=>{try{const data=await api('/api/interview/submissions?page='+page);setStats(data.stats);setCandidates(data.submissions);}catch(error){setError(error instanceof Error?error.message:'无法读取答卷。');if(error instanceof APIError&&(error.status===401||error.status===403)){setDenied(true);setCandidates([]);setSheet(null);setGrades({});setFeedback('');setStats(null);}}finally{setLoading(false);}},[page]);
  useEffect(()=>{
   const controller=new AbortController();
@@ -41,8 +58,22 @@ export default function ReviewDashboard({signInPath}:{signInPath:string}){
    <div><span>已评分</span><strong>{stats?.graded??'...'}</strong></div>
   </div>
   <div className={s.reviewToolbar}>
-   <span>{stats?.inProgress??0} 份正在评分</span>
-   <button type="button" disabled={loading} onClick={()=>{setError('');setLoading(true);void loadList();}}>[ 刷新答卷 ]</button>
+   <span>{stats?.inProgress??0} 份正在评分 · 当前显示 {filteredCandidates.length} / {candidates.length} 份</span>
+   <div className={s.reviewFilters}>
+    <input type="search" aria-label="按姓名或学号搜索" placeholder="搜索姓名 / 学号…" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/>
+    <select aria-label="按评分状态筛选" value={statusFilter} onChange={e=>setStatusFilter(e.target.value as ReviewFilterStatus)}>
+     <option value="all">全部状态</option>
+     <option value="pending">待评分</option>
+     <option value="in_progress">评分中</option>
+     <option value="graded">已评分</option>
+    </select>
+    <select aria-label="按报考方向筛选" value={trackFilter} onChange={e=>setTrackFilter(e.target.value)}>
+     <option value="all">全部方向</option>
+     {availableTracks.map(t=><option key={t} value={t}>{t}</option>)}
+    </select>
+    <button type="button" disabled={!filteredCandidates.length} onClick={exportCsv}>[ 导出 CSV ]</button>
+    <button type="button" disabled={loading} onClick={()=>{setError('');setLoading(true);void loadList();}}>[ 刷新答卷 ]</button>
+   </div>
   </div>
   {error&&<p className={s.error} role="alert">{error}</p>}
   <div className={s.reviewLayout}>
@@ -50,7 +81,8 @@ export default function ReviewDashboard({signInPath}:{signInPath:string}){
     <h2>答卷列表</h2>
     {loading&&<p className={s.muted}>正在读取…</p>}
     {!loading&&stats?.total===0&&<p className={s.empty}>还没有同学提交笔试。有人提交后，姓名、学号和答卷会出现在这里。</p>}
-    {candidates.map(candidate=><button className={s.candidate} key={candidate.id} disabled={detailBusy||busy} aria-pressed={sheet?.id===candidate.id} onClick={()=>void openSheet(candidate.id)}>
+    {!loading&&(stats?.total??0)>0&&filteredCandidates.length===0&&<p className={s.empty}>没有符合当前筛选条件的答卷。</p>}
+    {filteredCandidates.map(candidate=><button className={s.candidate} key={candidate.id} disabled={detailBusy||busy} aria-pressed={sheet?.id===candidate.id} onClick={()=>void openSheet(candidate.id)}>
      <span><strong>{candidate.name}</strong><small>{candidate.totalScore!==null?candidate.totalScore+' / 100':candidate.reviewedAt?'评分中':'待评分'}</small></span>
      <span>{candidate.studentId} · {candidate.track}</span>
      <span>{candidate.department} {candidate.year}</span>

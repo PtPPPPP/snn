@@ -11,7 +11,7 @@
 .mobileMenu[open] .whenClosed { display:none; }
 .toggle { list-style:none; cursor:pointer; }
 .toggle::-webkit-details-marker { display:none; }
-.labBar { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:0 32px; min-height:48px; border-top:1px solid var(--border-default); color:var(--text-muted); font-size:11px; }.labBar nav { display:flex; align-items:center; gap:24px; }.labBar nav [aria-current],.labBar nav a:hover { color:var(--text-primary); }
+.labBar { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:0 32px; min-height:48px; border-top:1px solid var(--border-default); color:var(--text-muted); font-size:11px; }.labBar nav { display:flex; align-items:center; gap:24px; }.labBar nav a { display:inline-flex; align-items:center; gap:6px; }.labBar nav a[data-visited]::after { content:''; width:5px; height:5px; border-radius:50%; background:var(--status-success); opacity:.85; }.labBar nav [aria-current],.labBar nav a:hover { color:var(--text-primary); }
 @media(max-width:1050px){.bar{gap:16px;padding:0 24px}.links a{padding:0 9px}.links a[aria-current]::after{left:9px;right:9px}}
 @media(max-width:760px){
  .mobileMenu { display:block; margin-left:auto; }

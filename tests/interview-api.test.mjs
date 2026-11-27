@@ -8,6 +8,7 @@ import {CASES,COMMON_IDS,FORM_VERSION,OBJECTIVE_IDS,QUESTION_BANK_VERSION,QUESTI
 import {RUBRICS} from '../lib/interview/rubrics.ts';
 import {LEGACY_BANK_VERSION,LEGACY_COMMON_IDS,LEGACY_QUESTIONS,LEGACY_RUBRICS} from '../lib/interview/legacy-bank.ts';
 import {clearInterviewDraft,interviewDraftKey,loadInterviewDraft,saveInterviewDraft} from '../lib/interview/draft.ts';
+import {candidatesToCsv,filterCandidates} from '../lib/interview/export-csv.ts';
 const origin='https://interview.example.test';
 const admin={id:'reviewer-a',email:'reviewer@example.test'};
 const ordinaryUser={id:'ordinary-user',email:'ordinary@example.test'};
@@ -343,4 +344,23 @@ test('candidate draft auto-save persists bounded answers per identity and bank v
  assert.ok(loadInterviewDraft(id,QUESTION_BANK_VERSION,storage));
  clearInterviewDraft(id,QUESTION_BANK_VERSION,storage);
  assert.equal(loadInterviewDraft(id,QUESTION_BANK_VERSION,storage),null);
+});
+
+test('review candidate filtering and CSV export handle status, track, search, and formula injection',()=>{
+ const list=[
+  {id:'1',name:'张三',studentId:'20260001',department:'计算机',year:'大一',track:'AI 应用与工程',submittedAt:'2026-09-01T10:00:00Z',totalScore:88,reviewedAt:'2026-09-01T12:00:00Z',elapsedSeconds:1200,resultStatus:'admitted',candidateReply:'confirm'},
+  {id:'2',name:'=CMD()',studentId:'20260002',department:'自动化',year:'大二',track:'机器人与控制',submittedAt:'2026-09-01T11:00:00Z',totalScore:null,reviewedAt:'2026-09-01T11:30:00Z',elapsedSeconds:900,resultStatus:'pending',candidateReply:null},
+  {id:'3',name:'李四,同学',studentId:'20260003',department:'电子',year:'大一',track:'AI 应用与工程',submittedAt:'2026-09-01T11:20:00Z',totalScore:null,reviewedAt:null,elapsedSeconds:600,resultStatus:'pending',candidateReply:null},
+ ];
+ assert.equal(filterCandidates(list,{status:'graded'}).length,1);
+ assert.equal(filterCandidates(list,{status:'in_progress'}).length,1);
+ assert.equal(filterCandidates(list,{status:'pending'}).length,1);
+ assert.equal(filterCandidates(list,{track:'AI 应用与工程'}).length,2);
+ assert.equal(filterCandidates(list,{query:'20260003'}).length,1);
+
+ const csv=candidatesToCsv(list);
+ assert.ok(csv.startsWith('\uFEFF姓名,学号,'));
+ assert.match(csv,/'=CMD\(\)/);
+ assert.match(csv,/"李四,同学"/);
+ assert.match(csv,/已评分,88/);
 });

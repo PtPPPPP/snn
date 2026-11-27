@@ -2,6 +2,7 @@
 
 import {useCallback,useEffect,useId,useRef,useState,useSyncExternalStore} from 'react';
 import {AiClientError,getAiStatus,streamChatMessage,type AiChatMessage} from '../../../lib/ai-client';
+import {stageAiHandoff} from '../../../lib/ai-handoff';
 import MarkdownContent from '../../_components/lazy-markdown-content';
 import styles from './lesson-assistant.module.css';
 
@@ -134,12 +135,22 @@ export default function LessonAssistant({context,selectedText,getSnapshot,classN
 
  function stop(){if(request.current){request.current.reason='user';request.current.controller.abort();}}
  function suggest(value:string){setDraft(value);input.current?.focus();}
+ function openInAiWorkspace(){
+  const completed:AiChatMessage[]=turns.filter(t=>t.answer.trim().length>0).flatMap(t=>[
+   {role:'user' as const,content:`【神经网络学习笔记 · ${t.title}】${t.quote?`\n引用：「${t.quote}」`:''}\n问题：${t.question}`},
+   {role:'assistant' as const,content:t.answer},
+  ]);
+  const draftText=draft.trim()||(!completed.length?`我在学习《神经网络学习笔记 · ${context.title||'当前章节'}》${quote?`（引用：「${quote.slice(0,160)}」）`:''}，请帮我深入拆解这一节的核心原理：`:'');
+  if(stageAiHandoff({title:`课程答疑 · ${context.title||'神经网络'}`,messages:completed,draft:draftText})){
+   window.location.assign('/ai');
+  }
+ }
  const latest=turns.at(-1);
 
  return <section className={`${styles.assistant}${className?` ${className}`:''}`} aria-label="SNN AI 随页答疑" data-lesson-assistant>
   <header className={styles.header}>
    <div><span className={styles.identifier}>SNN / STUDY ASSISTANT</span><h2>随页答疑</h2></div>
-   <button type="button" className={styles.command} disabled={busy||connection==='checking'} onClick={()=>void checkConnection()} aria-label="重新检查 SNN AI 连接">[连接]</button>
+   <div style={{display:'flex',gap:6,flexWrap:'wrap'}}><button type="button" className={styles.command} onClick={openInAiWorkspace} title="带着当前上下文进入 SNN AI 工作台继续提问">[深聊 ↗]</button><button type="button" className={styles.command} disabled={busy||connection==='checking'} onClick={()=>void checkConnection()} aria-label="重新检查 SNN AI 连接">[连接]</button></div>
   </header>
   <div className={styles.context}>
    <span className={styles.meta}>当前提问对象</span><strong>{context.title||'当前课程'}</strong>

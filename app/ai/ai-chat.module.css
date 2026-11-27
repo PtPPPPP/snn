@@ -72,6 +72,13 @@
 .emptyLinks { display: flex; flex-wrap: wrap; gap: 0 calc(var(--snn-inline-step) * 6); margin-top: calc(var(--snn-block-step) * 5); padding-top: calc(var(--snn-block-step) * 3); border-top: 1px solid var(--border-subtle); }
 .emptyLinks a { min-height: var(--snn-control-size); display: flex; align-items: center; gap: calc(var(--snn-inline-step) * 3); color: var(--text-muted); font-size: var(--snn-type-meta); }
 .emptyLinks a:hover { color: var(--accent); }
+.presetGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: calc(var(--snn-block-step) * 4); max-width: calc(var(--snn-inline-step) * 145); }
+.presetCard { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px 14px; border: 1px solid var(--border-default); border-radius: var(--radius-2); background: var(--surface-1); box-shadow: var(--shadow-surface); text-align: left; cursor: pointer; transition: background var(--motion-fast) var(--ease), border-color var(--motion-fast) var(--ease); }
+.presetCard:hover { background: var(--surface-2); border-color: var(--border-active); }
+.presetCode { font: 10px/1.4 var(--font-geist-mono), monospace; color: var(--accent); letter-spacing: .04em; }
+.presetCard strong { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+.presetCard span:last-child { font-size: 11px; color: var(--text-secondary); line-height: 1.5; }
+@media (max-width: 620px) { .presetGrid { grid-template-columns: 1fr; } }
 .loadingState { padding-top: calc(var(--snn-block-step) * 17); width: min(480px,100%); display: grid; gap: calc(var(--snn-inline-step) * 5); }
 .loadingState span { display: block; width: 100%; height: 14px; background: var(--surface-3); border-radius: var(--radius-1); animation: statusPulse 1.1s ease-in-out infinite alternate; }
 .loadingState span:first-child { height: calc(var(--snn-block-step) * 6); width: 70%; }

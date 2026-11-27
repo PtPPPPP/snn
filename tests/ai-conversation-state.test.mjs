@@ -335,3 +335,44 @@ test("xlsx extracted text parser structures workbook sheets and cells in coordin
   assert.equal(sheets[1].name, "汇总");
   assert.equal(sheets[1].rows[0].cells.B.value, "42");
 });
+
+test("AI handoff and learning progress helpers persist, consume once, and track visited labs", async () => {
+  const source = readFileSync(new URL("../lib/ai-handoff.ts", import.meta.url), "utf8");
+  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const { stageAiHandoff, consumeAiHandoff, markLabVisited, readVisitedLabs } = await import(`data:text/javascript,${encodeURIComponent(compiled)}`);
+
+  const map = new Map();
+  const storage = {
+    getItem: (key) => map.get(key) ?? null,
+    setItem: (key, value) => { map.set(key, value); },
+    removeItem: (key) => { map.delete(key); },
+  };
+
+  assert.equal(stageAiHandoff({ title: "Empty", messages: [], draft: "   " }, storage), false);
+  assert.equal(
+    stageAiHandoff(
+      {
+        title: "课程答疑 · ReLU",
+        messages: [
+          { role: "user", content: "为什么需要 ReLU？" },
+          { role: "assistant", content: "为了让分数面产生折痕。" },
+        ],
+        draft: "那多层 ReLU 呢？",
+      },
+      storage,
+    ),
+    true,
+  );
+
+  const consumed = consumeAiHandoff(storage);
+  assert.ok(consumed);
+  assert.equal(consumed.title, "课程答疑 · ReLU");
+  assert.equal(consumed.messages.length, 2);
+  assert.equal(consumed.draft, "那多层 ReLU 呢？");
+  assert.equal(consumeAiHandoff(storage), null);
+
+  assert.deepEqual(readVisitedLabs(storage), []);
+  assert.deepEqual(markLabVisited("/learn/neural-networks/relu/", storage), ["/learn/neural-networks"]);
+  assert.deepEqual(markLabVisited("/play/rocket/explain", storage), ["/learn/neural-networks", "/play/rocket/explain"]);
+  assert.deepEqual(markLabVisited("/unrelated", storage), ["/learn/neural-networks", "/play/rocket/explain"]);
+});

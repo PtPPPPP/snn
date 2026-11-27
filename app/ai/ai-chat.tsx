@@ -16,6 +16,7 @@ import {
   type Conversation,
 } from "../../lib/ai-conversation-store";
 import {
+  CLUB_PRESETS,
   EMPTY_STATE,
   NODE_STATES,
   STATUS_DETAILS,
@@ -23,6 +24,7 @@ import {
   THINKING_MODE,
   UNAVAILABLE_REPLY,
 } from "../../lib/ai-copy";
+import { consumeAiHandoff } from "../../lib/ai-handoff";
 import ChatInput from "./chat-input";
 import ChatMessage, { type ChatMessageModel } from "./chat-message";
 import ConversationSidebar from "./conversation-sidebar";
@@ -138,6 +140,7 @@ export default function AiChat() {
   const [streamNotice, setStreamNotice] = useState<string | null>(null);
   const [storageNotice, setStorageNotice] = useState<string | null>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [externalDraft, setExternalDraft] = useState<{ text: string; seq: number } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   // Hydration-safe: server snapshot is always false; the persisted value is
@@ -231,6 +234,35 @@ export default function AiChat() {
         setStorageNotice("本次对话未保存");
       }
       if (cancelled) return;
+      const handoff = consumeAiHandoff();
+      if (handoff) {
+        const handoffConv: Conversation = {
+          ...createConversation(),
+          title: handoff.title,
+          messages: handoff.messages,
+        };
+        if (handoff.messages.length > 0) {
+          try {
+            await saveConversation(handoffConv);
+          } catch {
+            setStorageNotice("本次对话未保存");
+          }
+          if (cancelled) return;
+          const nextList = [handoffConv, ...list.filter((c) => c.id !== handoffConv.id)];
+          setConversations(nextList);
+        } else {
+          setConversations(list);
+        }
+        setActiveId(handoffConv.id);
+        activeIdRef.current = handoffConv.id;
+        setActiveConversationId(handoffConv.id);
+        setMessages(toUiMessages(handoff.messages));
+        if (handoff.draft) {
+          setExternalDraft({ text: handoff.draft, seq: now() });
+        }
+        setLoaded(true);
+        return;
+      }
       setConversations(list);
       const storedActiveId = getActiveConversationId();
       const target =
@@ -680,6 +712,25 @@ export default function AiChat() {
                       <span className={styles.emptyMark}>{EMPTY_STATE.mark}</span>
                       <h2>{EMPTY_STATE.title}</h2>
                       <p>{EMPTY_STATE.description}</p>
+                      <div className={styles.presetGrid} role="group" aria-label="SNN 场景预设">
+                        {CLUB_PRESETS.map((preset) => (
+                          <button
+                            key={preset.code}
+                            type="button"
+                            className={styles.presetCard}
+                            onClick={() => {
+                              if (preset.thinking && !thinkingMode) {
+                                handleThinkingChange(true);
+                              }
+                              setExternalDraft({ text: preset.prompt, seq: now() });
+                            }}
+                          >
+                            <span className={styles.presetCode}>{preset.code}</span>
+                            <strong>{preset.title}</strong>
+                            <span>{preset.summary}</span>
+                          </button>
+                        ))}
+                      </div>
                       <nav className={styles.emptyLinks} aria-label="探索 SNN">
                         <Link href="/#projects">探索开源项目 <span aria-hidden="true">↗</span></Link>
                         <Link href="/play/rocket/explain">理解神经网络 <span aria-hidden="true">↗</span></Link>
@@ -708,6 +759,7 @@ export default function AiChat() {
                   thinking={thinkingMode}
                   webSearch={webSearchMode}
                   webSearchAvailable={webSearchAvailable}
+                  externalDraft={externalDraft}
                   onSend={sendMessage}
                   onStop={stopGeneration}
                   onThinkingChange={handleThinkingChange}

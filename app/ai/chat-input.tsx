@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, KeyboardEvent, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import styles from "./ai-chat.module.css";
 
 type ChatInputProps = {
@@ -8,6 +8,7 @@ type ChatInputProps = {
   thinking: boolean;
   webSearch: boolean;
   webSearchAvailable: boolean;
+  externalDraft?: { text: string; seq: number } | null;
   onSend: (content: string) => void;
   onStop: () => void;
   onThinkingChange: (enabled: boolean) => void;
@@ -43,13 +44,26 @@ export default function ChatInput({
   thinking,
   webSearch,
   webSearchAvailable,
+  externalDraft,
   onSend,
   onStop,
   onThinkingChange,
   onWebSearchChange,
 }: ChatInputProps) {
   const [value, setValue] = useState("");
+  const [appliedSeq, setAppliedSeq] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  if (externalDraft && externalDraft.seq !== appliedSeq) {
+    setAppliedSeq(externalDraft.seq);
+    setValue(externalDraft.text);
+  }
+
+  useEffect(() => {
+    if (appliedSeq !== null) {
+      textareaRef.current?.focus();
+    }
+  }, [appliedSeq]);
 
   function submit() {
     const content = value.trim();
