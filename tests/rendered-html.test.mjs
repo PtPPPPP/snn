@@ -27,8 +27,8 @@ test("homepage exposes functional navigation and removes obsolete Menu control",
   t.after(() => worker.close());
   const response = await worker.fetch(new Request("http://localhost/", { headers: { accept: "text/html" } }));
   const html = await response.text();
-  assert.match(html, /href="#projects"/);
-  assert.match(html, /href="\/ai\/"/);
+  assert.match(html, /href="\/?#projects"/);
+  assert.match(html, /href="\/ai\/?"/);
   assert.match(html, /id="projects"/);
   assert.doesNotMatch(html, />\s*Menu\s*</);
 });

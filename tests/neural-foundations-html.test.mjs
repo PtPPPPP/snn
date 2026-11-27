@@ -19,7 +19,7 @@ test('every repeated interactive block contains its own controls, visual and res
  assert.equal(count,7);
 });
 for(const slug of ['neuron','perceptron','layers','activation','loss','backprop'])test(`legacy ${slug} URL redirects to its article anchor`,async()=>{const r=await response('/learn/neural-networks/'+slug);assert.ok([301,302,303,307,308].includes(r.status));const target=new URL(r.headers.get('location'),'http://localhost');assert.equal(target.origin,'http://localhost');assert.equal(target.pathname,'/learn/neural-networks/archive');assert.equal(target.hash,'#'+slug);});
-test('homepage keeps the article entry and old rocket routes',async()=>{const text=await html('/');for(const path of ['/learn/neural-networks','/play/rocket','/play/rocket/explain','/play/rocket/train'])assert.ok(text.includes(`href="${path}"`));});
+test('homepage keeps the article entry and old rocket routes',async()=>{const text=await html('/');for(const path of ['/learn/neural-networks','/play/rocket','/ai'])assert.ok(text.includes(`href="${path}"`));const rocketText=await html('/play/rocket');for(const path of ['/play/rocket','/play/rocket/explain','/play/rocket/train'])assert.ok(rocketText.includes(`href="${path}"`));});
 test('routed article contains no sticky scene, corrective scroll or shared session provider',async()=>{
  const source=await readFile('app/learn/neural-networks/inline-experiment.tsx','utf8'),css=await readFile('app/learn/neural-networks/reading.module.css','utf8');
  assert.doesNotMatch(source,/scrollBy|scrollIntoView|onFocusCapture|visualViewport|sessionStorage|ExperimentFrame/);

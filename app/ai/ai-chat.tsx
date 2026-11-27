@@ -657,15 +657,14 @@ export default function AiChat() {
           {mode === "agent" ? (
             <>
               <div className={styles.harnessToolbar} role="region" aria-label="SNN Harness Preset 与 Skill 选择器">
-                <div className={styles.harnessPresetPills} role="tablist" aria-label="SNN Agent Presets">
+                <div className={styles.harnessPresetPills} role="group" aria-label="SNN Agent Presets">
                   {agent.catalog.presets.map((preset) => {
                     const active = preset.id === agent.selectedPresetId;
                     return (
                       <button
                         key={preset.id}
                         type="button"
-                        role="tab"
-                        aria-selected={active}
+                        aria-pressed={active}
                         className={`${styles.harnessPresetPill} ${active ? styles.harnessPresetPillActive : ""}`}
                         onClick={() => agent.setSelectedPresetId(preset.id)}
                       >

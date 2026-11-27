@@ -167,6 +167,14 @@ async function createFrontendProxy(getBffBaseUrl) {
         result = await forwardToBff(incoming);
       } else {
         result = await worker.fetch(new Request(`http://127.0.0.1${url.pathname}${url.search}`, { method: request.method, headers: request.headers }));
+        if ((result.headers.get("content-type") || "").includes("text/html")) {
+          const html = await result.text();
+          const localHtml = html.replace(
+            /window\.__SNN_(AI|AGENT)_API_BASE_URL__\s*=\s*"[^"]*"/g,
+            (_match, kind) => `window.__SNN_${kind}_API_BASE_URL__ = ""`,
+          );
+          result = new Response(localHtml, { status: result.status, headers: result.headers });
+        }
       }
       const headers = {};
       result.headers.forEach((value, key) => {
