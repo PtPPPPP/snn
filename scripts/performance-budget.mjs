@@ -5,9 +5,9 @@ import path from 'node:path';
 // Compressed initial JS/CSS plus the route's primary fonts and logo. Dynamic
 // imports, document HTML and user-supplied content are deliberately excluded.
 const budgets = [
-  {name:'首页', entry:'app/design/unified-preview/production-home.tsx', fonts:['home'], limit:370*1024},
-  {name:'课程', entry:'app/learn/neural-networks/notebook.tsx', fonts:['home','course'], limit:560*1024},
-  {name:'SNN AI', entry:'app/ai/ai-chat.tsx', fonts:['home','course','site'], limit:700*1024},
+  {name:'首页', entry:'app/design/unified-preview/production-home.tsx', fonts:['sans','mono'], limit:370*1024},
+  {name:'课程', entry:'app/learn/neural-networks/notebook.tsx', fonts:['sans','mono','monoLatinExt'], limit:560*1024},
+  {name:'SNN AI', entry:'app/ai/ai-chat.tsx', fonts:['sans','mono'], limit:700*1024},
 ];
 const common = ['virtual:vinext-app-browser-entry', 'app/_sections/UnifiedNav.tsx',
   'node_modules/vinext/dist/shims/layout-segment-context.js'];

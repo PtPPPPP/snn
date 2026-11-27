@@ -125,6 +125,9 @@ for (const width of [1440, 390]) {
     await expect(markdown.locator(".katex-display")).toBeVisible();
     await expect(markdown.locator("pre")).toBeVisible();
     await expect(markdown.locator("ul > li")).toHaveCount(3);
+    await expect(markdown.locator("p").first()).toHaveCSS("font-family", /^"?Geist"?,/);
+    await expect(markdown.locator("pre code")).toHaveCSS("font-family", /^"Geist Mono",/);
+    await expect(markdown.locator("strong")).toHaveCSS("font-weight", "600");
     const overflow = await markdown.evaluate(element => {
       const pre = element.querySelector("pre");
       return { document: document.documentElement.scrollWidth > innerWidth, block: pre.scrollWidth > pre.clientWidth };

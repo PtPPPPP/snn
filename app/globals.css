@@ -8,7 +8,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text-primary);
-  font: 400 var(--type-body)/var(--snn-leading) var(--font-geist-sans), sans-serif;
+  font: 400 var(--type-body)/var(--snn-leading) var(--snn-font-body);
   -webkit-font-smoothing: antialiased;
 }
 a { color: inherit; text-decoration: none; }
@@ -55,14 +55,14 @@ body:has([data-site-shell][data-lab=true]) { --snn-shell-height: calc(var(--snn-
   }
 }
 
-/* Numeric alignment is a shared material rule. */
-output, input[type=number], code, pre { font-variant-numeric: tabular-nums; }
+pre, code, kbd, samp, output, input[type=number] {
+  font-family: var(--snn-font-mono);
+  font-variant-numeric: tabular-nums;
+  font-variant-ligatures: none;
+}
 button:disabled { opacity: .45; }
 
-/* Character-grid foundation applies to UI text; formulas retain math typography. */
 html { font-size: var(--snn-type-body); }
-body { font-kerning: none; font-variant-ligatures: none; font-synthesis: none; letter-spacing: 0; }
-button, input, select, textarea, pre, code, output { font-family: var(--snn-font-mono); font-variant-ligatures: none; letter-spacing: 0; }
 pre { tab-size: 2; }
 .button { min-height: var(--snn-control-size); padding-inline: calc(var(--snn-cw) * 3); }
 .button-primary { background: var(--snn-control); color: var(--snn-control-text); border-color: transparent; box-shadow: var(--shadow-button); }

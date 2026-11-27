@@ -113,7 +113,9 @@ fast_css = START + '\n' + '\n\n'.join(faces) + '\n' + END + '\n'
 (FONTS / 'snn-grid-fast.css').write_text(fast_css, encoding='utf-8')
 css_path.write_text(css.rstrip() + '\n\n' + fast_css, encoding='utf-8')
 (ROOT / 'lib' / 'design' / 'fast-fonts.json').write_text(
-    json.dumps({'home': '/fonts/' + home_file, 'course': '/fonts/' + course_file,
+    json.dumps({'sans': '/fonts/geist-98bbbccb.woff2', 'mono': '/fonts/geist-mono-013b2f2f.woff2',
+                'monoLatinExt': '/fonts/geist-mono-44745446.woff2',
+                'home': '/fonts/' + home_file, 'course': '/fonts/' + course_file,
                 'site': '/fonts/' + site_file, 'fallback': '/fonts/' + fallback_file}, indent=2) + '\n',
     encoding='utf-8',
 )

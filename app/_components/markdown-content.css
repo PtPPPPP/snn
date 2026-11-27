@@ -1,8 +1,8 @@
 .snn-markdown { white-space: normal; overflow-wrap: anywhere; min-width: 0; max-width: 100%; line-height: var(--snn-leading); color: inherit; }
 .snn-markdown p { font: inherit; color: inherit; margin: 0 0 .85em; }
 .snn-markdown > :last-child { margin-bottom: 0; }
-.snn-markdown :is(h1,h2,h3,h4) { font-size: 1.12em; line-height: var(--snn-leading); margin: 1.25em 0 .5em; color: inherit; font-weight: 400; letter-spacing: 0; }
-.snn-markdown strong { font-weight: 400; }
+.snn-markdown :is(h1,h2,h3,h4) { font-size: 1.12em; line-height: var(--snn-leading); margin: 1.25em 0 .5em; color: inherit; font-weight: 600; letter-spacing: 0; }
+.snn-markdown strong { font-weight: 600; }
 .snn-markdown :is(ul,ol) { padding-left: 1.5em; margin: .6em 0 1em; }
 .snn-markdown ul { list-style: disc; }
 .snn-markdown ol { list-style: decimal; }

@@ -43,8 +43,11 @@
   --type-body: var(--snn-type-body);
   --type-label: var(--snn-type-body);
   --type-caption: var(--snn-type-meta);
-  --font-geist-sans: "SNN Grid",monospace;
-  --font-geist-mono: "SNN Grid",monospace;
+  --snn-font-cjk: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", system-ui, "SNN Grid", "SNN Grid Fallback";
+  --snn-font-body: "Geist", var(--snn-font-cjk), sans-serif;
+  --snn-font-mono: "Geist Mono", ui-monospace, Consolas, var(--snn-font-cjk), monospace;
+  --font-geist-sans: var(--snn-font-body);
+  --font-geist-mono: var(--snn-font-mono);
   --motion-fast: 150ms;
   --motion-panel: 220ms;
   --motion-entrance: 420ms;
@@ -72,7 +75,7 @@
   --opening-radius: var(--radius-2);
   --opening-stroke: 1px;
   --opening-control-height: var(--snn-control-size);
-  --opening-mono: var(--snn-font-mono);
+  --opening-mono: var(--snn-font-canvas);
   --opening-body: var(--snn-type-body);
   --opening-label: var(--snn-type-body);
   --opening-meta: var(--snn-type-meta);

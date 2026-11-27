@@ -1,6 +1,6 @@
 .assistant {
  display:flex;flex-direction:column;min-width:0;min-height:0;height:100%;
- color:var(--text-primary);background:var(--bg);font-family:var(--snn-font-mono);font-size:13px;line-height:1.7;
+ color:var(--text-primary);background:var(--bg);font-size:13px;line-height:1.7;
 }
 .assistant * { box-sizing:border-box; }
 .header { display:flex;align-items:center;justify-content:space-between;gap:16px;padding:0 0 16px;border-bottom:1px solid var(--border-default); }

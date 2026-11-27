@@ -1,8 +1,19 @@
-import test from 'node:test';
+import test, {after} from 'node:test';
 import assert from 'node:assert/strict';
+import {fileURLToPath} from 'node:url';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import MarkdownContent from '../app/_components/markdown-content.mjs';
+import {createServer} from 'vite';
+
+// Load the renderer's Markdown and KaTeX styles through the same CSS pipeline as the app.
+const vite = await createServer({
+ root: fileURLToPath(new URL('../', import.meta.url)),
+ configFile: false,
+ server: {middlewareMode:true, hmr:false, watch:null},
+ optimizeDeps: {noDiscovery:true},
+});
+after(() => vite.close());
+const {default:MarkdownContent} = await vite.ssrLoadModule('/app/_components/markdown-content.mjs');
 const render=text=>renderToStaticMarkup(React.createElement(MarkdownContent,{text}));
 test('renders Markdown and both common math delimiters',()=>{
  const html=render('**重点**\n\n- 输入\n- 输出\n\n$a_1=1.05$，\\(6.3 \\times 10^{-9}\\)\n\n\\[y=x^2\\]\n\n| 输入 | 输出 |\n|---|---|\n|1|2|\n\n```js\nconst x = 1;\n```');
