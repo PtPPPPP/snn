@@ -1,6 +1,6 @@
 .studio{max-width:1440px;margin:0 auto;padding:22px 32px 28px;color:var(--snn-text,var(--text-primary));font-size:13px;line-height:1.6;background:var(--snn-bg,var(--surface-1))}
 .studio *{box-sizing:border-box}
-.studio button,.studio select{font:inherit;color:inherit;background:transparent;border:1px solid var(--border-default);border-radius:3px;min-height:36px;padding:5px 10px;cursor:pointer}
+.studio button,.studio select{font:inherit;color:inherit;background:transparent;border:1px solid var(--border-default);border-radius:var(--radius-2);min-height:36px;padding:5px 10px;cursor:pointer}
 .studio button:hover{background:var(--surface-3);border-color:var(--border-active)}
 .studio button:focus-visible,.studio select:focus-visible,.studio input:focus-visible,.studio summary:focus-visible,.diagramScroll:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .heading{display:flex;justify-content:space-between;align-items:center;padding-bottom:20px;gap:16px}

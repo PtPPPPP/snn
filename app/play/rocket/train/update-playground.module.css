@@ -2,7 +2,7 @@
 .intro summary{cursor:pointer;padding:10px 0;min-height:40px;box-sizing:border-box;}
 .intro summary>span{margin-left:16px;color:var(--text-secondary);font-size:11px;}
 .content{padding-bottom:14px;}
-.content button{border:1px solid var(--border-default);background:transparent;color:inherit;padding:7px 10px;cursor:pointer;font:inherit;min-height:36px;}
+.content button{border:1px solid var(--border-default);border-radius:var(--radius-2);background:transparent;color:inherit;padding:7px 10px;cursor:pointer;font:inherit;min-height:36px;}
 .content button[aria-pressed=true]{background:var(--surface-3);border-color:var(--accent);}
 .content button:focus-visible,.intro summary:focus-visible,.drawing [role=button]:focus-visible{outline:2px solid var(--accent);outline-offset:3px;}
 .functionStage{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border-block:1px solid var(--border-default);}

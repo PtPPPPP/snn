@@ -24,11 +24,11 @@
 .hero h1 { font-size:clamp(29px,3vw,42px); line-height:1.45; letter-spacing:0; margin:0 0 22px; font-weight:400; }
 .intro { color:var(--text-secondary); font-size:14px; line-height:2; margin:0; }
 .heroActions { display:flex; align-items:center; gap:28px; margin-top:32px; flex-wrap:wrap; }
-.primaryAction,.textAction { display:inline-flex; min-height:44px; align-items:center; justify-content:space-between; gap:28px; padding:0 16px; border:1px solid var(--border-active); background:var(--surface-2); color:var(--text-primary); font-size:12px; }
-.primaryAction:hover { background:var(--surface-3); }
-.textAction { padding:0; background:none; border:0; color:var(--text-secondary); }
+.primaryAction,.textAction { display:inline-flex; min-height:44px; align-items:center; justify-content:space-between; gap:28px; padding:0 16px; border:1px solid var(--border-active); border-radius:var(--radius-2); background:var(--surface-2); color:var(--text-primary); font-size:12px; transition:background var(--motion-fast) var(--ease), border-color var(--motion-fast) var(--ease); }
+.primaryAction:hover { background:var(--surface-3); border-color:var(--text-primary); }
+.textAction { padding:0; background:none; border:0; border-radius:0; color:var(--text-secondary); }
 .textAction:hover { color:var(--text-primary); }
-.heroFigure { min-width:0; border:1px solid var(--border-default); padding:18px 20px 12px; background:var(--surface-1); }
+.heroFigure { min-width:0; border:1px solid var(--border-default); border-radius:var(--radius-3); padding:18px 20px 12px; background:var(--surface-1); }
 .figureHeading,.figureCaption { display:flex; align-items:center; justify-content:space-between; gap:12px; color:var(--text-muted); font-size:11px; }
 .figureHeading { padding-bottom:12px; border-bottom:1px solid var(--border-subtle); }
 .figureCaption { border-top:1px solid var(--border-subtle); min-height:40px; }
@@ -40,7 +40,8 @@
 .sectionHeading h2 { margin:0; font-size:22px; font-weight:400; }
 .sectionHeading p { margin:0; color:var(--text-secondary); font-size:12px; line-height:1.8; }
 .entries { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); border-top:1px solid var(--border-default); border-bottom:1px solid var(--border-default); }
-.entries :is(button,a) { display:flex; min-height:190px; flex-direction:column; align-items:flex-start; text-align:left; gap:12px; border:0; border-right:1px solid var(--border-default); background:none; padding:24px; color:var(--text-secondary); font-size:12px; line-height:1.7; }
+.entries :is(button,a) { display:flex; min-height:190px; flex-direction:column; align-items:flex-start; text-align:left; gap:12px; border:0; border-right:1px solid var(--border-default); background:none; padding:24px; color:var(--text-secondary); font-size:12px; line-height:1.7; transition:background var(--motion-fast) var(--ease); }
+.entries :is(button,a):hover { background:var(--surface-1); }
 .entries :is(button,a):first-child { padding-left:0; }.entries :is(button,a):last-child { border-right:0; }
 .entries :is(button,a) strong { color:var(--text-primary); font-weight:400; font-size:16px; }
 .entries :is(button,a) b { margin-top:auto; color:var(--text-primary); font-size:11px; font-weight:400; }
@@ -50,7 +51,7 @@
 .rows a>span,.rows a>b { font-size:11px; color:var(--text-muted); font-weight:400; }.rows a>strong { font-size:14px; font-weight:400; }.rows a>p { color:var(--text-secondary); font-size:12px; line-height:1.7; margin:0; }.rows a:hover strong,.rows a:hover b { color:var(--text-primary); text-decoration:underline; text-underline-offset:5px; }
 .activities { display:grid; grid-template-columns:repeat(3,1fr); gap:32px; border-top:1px solid var(--border-default); padding-top:24px; }
 .activities h3 { font-size:16px; margin:14px 0 10px; }.activities p { margin:0; color:var(--text-secondary); font-size:12px; line-height:1.8; }
-.join { display:flex; justify-content:space-between; align-items:center; gap:48px; }.join h2 { font-size:28px; line-height:1.5; margin:0 0 16px; }.join p:not(.kicker) { color:var(--text-secondary); font-size:12px; line-height:1.8; margin-bottom:24px; }.qr { display:flex; align-items:center; gap:20px; color:var(--text-muted); font-size:11px; line-height:1.9; }.qr img { width:128px; height:128px; object-fit:cover; }
+.join { display:flex; justify-content:space-between; align-items:center; gap:48px; }.join h2 { font-size:28px; line-height:1.5; margin:0 0 16px; }.join p:not(.kicker) { color:var(--text-secondary); font-size:12px; line-height:1.8; margin-bottom:24px; }.qr { display:flex; align-items:center; gap:20px; color:var(--text-muted); font-size:11px; line-height:1.9; }.qr img { width:128px; height:128px; object-fit:cover; border-radius:var(--radius-2); }
 .footer { display:flex; align-items:center; gap:20px; border-top:1px solid var(--border-default); min-height:80px; color:var(--text-muted); font-size:10px; }.footer strong { color:var(--text-primary); font-size:14px; font-weight:400; }.footer a:first-of-type { margin-left:auto; }
 .loading { padding:40px; color:var(--text-muted); font-size:12px; }
 .mobileChapters { display:none; }
@@ -70,7 +71,7 @@
   .course :global([data-notebook-desktop] > aside[aria-label="学习章节"]) { display:none; }
   .course :global([data-notebook-desktop] > aside[aria-label="笔记 AI 问答"]) { display:none; position:fixed; top:auto; right:0; bottom:0; z-index:40; width:min(520px,100%); height:min(650px,calc(100dvh - var(--preview-header))); padding:24px 24px 80px; background:var(--bg); border:1px solid var(--border-default); }
   .course[data-assistant-open="true"] :global([data-notebook-desktop] > aside[aria-label="笔记 AI 问答"]) { display:block; }
-  .assistantToggle { display:block; position:fixed; z-index:41; right:20px; bottom:16px; min-height:44px; padding:0 14px; background:var(--surface-2); border:1px solid var(--border-active); color:var(--text-primary); font-size:12px; }
+  .assistantToggle { display:block; position:fixed; z-index:41; right:20px; bottom:16px; min-height:44px; padding:0 14px; background:var(--surface-2); border:1px solid var(--border-active); border-radius:var(--radius-2); color:var(--text-primary); font-size:12px; }
   .mobileChapters { display:block; max-width:720px; margin:0 auto; padding:0 20px; border-bottom:1px solid var(--border-default); font-size:12px; }
   .mobileChapters summary { display:flex; justify-content:space-between; align-items:center; min-height:48px; list-style:none; color:var(--text-secondary); }
   .mobileChapters summary::-webkit-details-marker { display:none; }.mobileChapters summary span { color:var(--text-muted); }

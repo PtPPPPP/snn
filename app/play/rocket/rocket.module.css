@@ -123,13 +123,13 @@
 .page { --flight-ink: var(--accent); --flight-line: var(--border-default); --flight-wash: var(--surface-2); --flight-muted: var(--text-secondary); }
 .sessionTools { color: var(--flight-muted); margin-bottom: var(--snn-block-step); }
 .sessionTools > span { font-weight: 400; color: var(--flight-ink); }
-.sessionTools button, .nextButton, .settings select { border: 1px solid var(--flight-line); border-radius: 4px; color: var(--flight-ink); background: var(--snn-bg); }
+.sessionTools button, .nextButton, .settings select { border: 1px solid var(--flight-line); border-radius: var(--radius-2); color: var(--flight-ink); background: var(--snn-bg); }
 .modeBar { gap: 0; border-color: var(--flight-line); }
 .modeBar button { flex: 1; color: var(--flight-muted); }
 .modeBar button[aria-pressed=true] { color: var(--flight-ink); background: var(--flight-wash); border-bottom-color: var(--flight-ink); font-weight: 400; }
 .mission h1 { color: var(--text-primary); font-weight: 400; letter-spacing: 0; }
 .mission p, .settings summary { color: var(--flight-muted); }
-.settings > div { border-color: var(--flight-line); border-radius: 4px; background: var(--snn-bg); }
+.settings > div { border-color: var(--flight-line); border-radius: var(--radius-2); background: var(--snn-bg); }
 .page button { transition: background-color 140ms, border-color 140ms, color 140ms; }
 .page button:hover:not(:disabled) { background: var(--flight-wash); border-color: var(--accent); color: var(--flight-ink); }
 .page button:focus-visible, .page select:focus-visible, .page input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
@@ -150,7 +150,7 @@
 .hoverMarker em { background: var(--flight-ink); border-radius: 3px; font-weight: 400; }
 .aiMarker em { color: var(--flight-ink); }
 .actionRow { padding-top: var(--snn-block-step); }
-.startButton { border-radius: 4px; background: var(--flight-ink); border-color: var(--flight-ink); color:var(--snn-control-text); }
+.startButton { border-radius: var(--radius-2); background: var(--flight-ink); border-color: var(--flight-ink); color:var(--snn-control-text); }
 .page .startButton:hover:not(:disabled) { background: var(--text-primary); border-color: var(--text-primary); color:var(--snn-control-text); }
 .debrief { border-top: 1px solid var(--flight-line); border-left: 2px solid var(--accent); padding: calc(var(--snn-block-step) * 2) calc(var(--snn-inline-step) * 4); background: var(--flight-wash); color: var(--flight-ink); border-radius: 0; }
 .debrief strong { font-weight: 400; }

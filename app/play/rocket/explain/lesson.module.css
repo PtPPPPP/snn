@@ -77,7 +77,7 @@
 .page button, .page select { transition: border-color 140ms, background-color 140ms, color 140ms; }
 .playbackLine button, .networkTools select, .tutor button, .graphOptions button {
   border-color: var(--lesson-line);
-  border-radius: 4px;
+  border-radius: var(--radius-2);
   color: var(--lesson-ink);
   background: var(--snn-bg);
 }
@@ -117,7 +117,7 @@
 .questionContext button { background: var(--snn-bg); }
 .tutor textarea {
   border: 1px solid var(--lesson-line);
-  border-radius: 4px;
+  border-radius: var(--radius-2);
   padding: 11px 12px;
   line-height: 1.65;
   color: var(--text-primary);
@@ -155,7 +155,7 @@
 .miniControls label { color: var(--lesson-muted); font-size: 11px; }
 .miniControls b { color: var(--lesson-ink); font-size: 15px; font-weight: 550; }
 .miniControls input { height: 36px; }
-.neuronIntro button { border-color: var(--lesson-line); border-radius: 4px; color: var(--lesson-ink); }
+.neuronIntro button { border-color: var(--lesson-line); border-radius: var(--radius-2); color: var(--lesson-ink); }
 .neuronIntro button[aria-pressed=true] { background: var(--lesson-wash); border-color: var(--accent); }
 .miniViewport { margin: 10px 0; color: var(--text-primary); }
 .miniViewport svg { font-variant-numeric: tabular-nums; }
@@ -184,7 +184,7 @@
 .quickGuide span { margin-left: 8px; }
 .networkPrompt { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 10px; min-width: 0; }
 .diagramControls { display: flex; align-items: center; gap: 5px; }
-.diagramControls button { min-height: 36px; padding: 5px 9px; border: 1px solid var(--lesson-line); border-radius: 4px; color: var(--lesson-ink); background: var(--snn-bg); cursor: pointer; }
+.diagramControls button { min-height: 36px; padding: 5px 9px; border: 1px solid var(--lesson-line); border-radius: var(--radius-2); color: var(--lesson-ink); background: var(--snn-bg); cursor: pointer; }
 .diagramControls button:first-child { background: var(--snn-control); color: var(--snn-control-text); }
 .diagramControls button:disabled { opacity: .45; cursor: default; }
 .diagramControls button:hover:not(:disabled) { border-color: var(--accent); }
