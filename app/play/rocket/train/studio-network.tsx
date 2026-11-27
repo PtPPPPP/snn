@@ -113,11 +113,11 @@ export default function StudioNetwork({ initial, before, after, inputs, selected
       <foreignObject x="0" y="0" width="940" height="420" pointerEvents="none"><canvas ref={canvas} width="1880" height="840" style={{width:940,height:420}}/></foreignObject>
       {['高度','速度','燃料','实际推力','刹车能力','燃料储备','安全速度'].map((name,i)=><g key={name} data-studio-input={i}>
         <text x="82" y={105+i*37} textAnchor="end" className={s.inputName}>{name}</text><text x="82" y={119+i*37} textAnchor="end" className={s.inputValue}>{inputs[i].toFixed(3)}</text>
-        <circle cx="104" cy={108+i*37} r="4" fill="#fbfcfd" stroke="#91a7b7"/>
-        <path d={`M 110 ${108+i*37} H 150`} stroke="#d9e1e6" strokeWidth=".7"/>
+        <circle cx="104" cy={108+i*37} r="4" fill="var(--surface-1)" stroke="var(--border-active)"/>
+        <path d={`M 110 ${108+i*37} H 150`} stroke="var(--border-default)" strokeWidth=".7"/>
       </g>)}
       {boards.map((b,l)=><g key={l}>
-        <rect x={b.x-.5} y={b.y-.5} width={b.w+1} height={b.h+1} fill="none" stroke={l===activeLayer?'#a2b4c4':'#dce4e9'} strokeWidth="1"/>
+        <rect x={b.x-.5} y={b.y-.5} width={b.w+1} height={b.h+1} fill="none" stroke={l===activeLayer?'var(--border-active)':'var(--border-default)'} strokeWidth="1"/>
         <text x={b.x+b.w/2} y="375" className={s.columnMeta}>{l===0?'128 × 7 个权重':l===1?'128 × 128 个权重':'128 个权重'}</text>
         {l===activeLayer&&<line data-studio-scan x1={b.x+(part===1?1:part*3%1)*b.w} x2={b.x+(part===1?1:part*3%1)*b.w} y1={b.y} y2={b.y+b.h} stroke={phase===0?'#6594af':'#a17f9f'} strokeWidth="1" opacity=".65"/>}
       </g>)}

@@ -45,7 +45,7 @@ function Home() {
     </section>
     <section className={s.section} id="projects" aria-labelledby="preview-projects-title">
       <div className={s.sectionHeading}><span>02 / PROJECTS</span><h2 id="preview-projects-title">我们的共创项目</h2><p>从软件到物理系统，把想法做成可以继续改进的作品。</p></div>
-      <div className={s.rows}>{projects.map(project => <a href={project.href} key={project.index} target="_blank" rel="noreferrer"><span>{project.index}</span><strong>{project.title}</strong><p>{project.summary}</p><b>GitHub ↗</b></a>)}</div>
+      <div className={s.rows}>{projects.map(project => <a href={project.href} key={project.index} target="_blank" rel="noreferrer"><span>{project.index}</span><strong>{project.title}</strong><div className={s.projectBody}><p>{project.summary}</p><div className={s.projectTags}>{project.tags.map(tag => <small key={tag}>{tag}</small>)}</div></div><b>GitHub ↗</b></a>)}</div>
     </section>
     <section className={s.section} id="activities" aria-labelledby="preview-activities-title">
       <div className={s.sectionHeading}><span>03 / COMMUNITY</span><h2 id="preview-activities-title">一起学，一起做，一起分享</h2><p>把经验分享给下一位同学。</p></div>

@@ -48,11 +48,11 @@ function LessonNetwork({before,after,stage,inputValues,liveAll=false,selected,pl
  },[paths,positiveColor,negativeColor]);
  function pickAt(group:SVGGElement,l:number,x:number,y:number){const svg=group.ownerSVGElement,matrix=svg?.getScreenCTM();if(!matrix)return;const pt=new DOMPoint(x,y).matrixTransform(matrix.inverse());const col=Math.max(0,Math.min(7,Math.round((pt.x-(l===0?236:445))/16))),row=Math.max(0,Math.min(15,Math.round((pt.y-83)/19)));onPick(l+1,row*8+col);}
  return <><div className={styles.networkViewSwitch}><span>{expanded?'按住层滑选 · 层外横滑查看网络':'点选神经元 · 放大后可按住层滑选'}</span><div><button onClick={()=>onPick(3,0)} aria-pressed={stage===3}>全网推理</button><button onClick={toggleZoom} aria-pressed={expanded}>{expanded?'全网概览':'放大选点'}</button></div></div><div ref={viewport} className={styles.networkViewport} data-expanded={expanded} data-playing={playing} tabIndex={0} aria-label="推理网络图，可横向滚动"><svg viewBox="0 0 730 435" role="group" aria-label="完整7输入、128、128、1网络，比较相邻时刻的计算结果"><g>
-  <path d="M122 227 H224 M363 227 H433 M572 227 H637" fill="none" stroke="#d6dce4" strokeWidth="2"/>
-  <rect x="221" y="60" width="143" height="326" rx="5" fill={stage===1?'#edf3f8':'#f5f6f8'}/>
-  <rect x="430" y="60" width="143" height="326" rx="5" fill={stage===2?'#edf3f8':'#f5f6f8'}/>
-  <g fontSize="13" fill="#263241" textAnchor="middle"><text x="93" y="29">读入 7 个数</text><text x="292" y="29">第一组 / 128 个</text><text x="501" y="29">第二组 / 128 个</text><text x="662" y="180">{nodeSignals?signalLabel:'最后一个结果'}</text></g>
-  <g fontSize="10" fill="#667181" textAnchor="middle"><text x="292" y="408">乘系数 → 相加 → 压缩</text><text x="501" y="408">乘系数 → 相加 → 压缩</text><text x="662" y="300">乘系数 → 相加</text></g>
+  <path d="M122 227 H224 M363 227 H433 M572 227 H637" fill="none" stroke="var(--border-default)" strokeWidth="2"/>
+  <rect x="221" y="60" width="143" height="326" rx="8" fill={stage===1?'var(--surface-3)':'var(--surface-2)'}/>
+  <rect x="430" y="60" width="143" height="326" rx="8" fill={stage===2?'var(--surface-3)':'var(--surface-2)'}/>
+  <g fontSize="13" fill="var(--text-primary)" textAnchor="middle"><text x="93" y="29">读入 7 个数</text><text x="292" y="29">第一组 / 128 个</text><text x="501" y="29">第二组 / 128 个</text><text x="662" y="180">{nodeSignals?signalLabel:'最后一个结果'}</text></g>
+  <g fontSize="10" fill="var(--text-secondary)" textAnchor="middle"><text x="292" y="408">乘系数 → 相加 → 压缩</text><text x="501" y="408">乘系数 → 相加 → 压缩</text><text x="662" y="300">乘系数 → 相加</text></g>
   <foreignObject x="0" y="0" width="730" height="435" pointerEvents="none" aria-hidden="true"><canvas ref={canvas} width={1460} height={870} style={{width:730,height:435}}/></foreignObject>
   <g pointerEvents="none" aria-label="按当前贡献深浅显示，低贡献连线省略">
    {paths.map((path,l)=>path.count>0&&<g key={l} data-connection-layer={l} data-edge-count={path.count} data-drawn-count={path.drawn}>
@@ -60,24 +60,24 @@ function LessonNetwork({before,after,stage,inputValues,liveAll=false,selected,pl
    </g>)}
   </g>
   {highlightConnection&&(()=>{const {layer,source,target}=highlightConnection,a=p(layer-1,source),b=p(layer,target),mid=(a.x+b.x)/2,v=edgeSignals?.[layer].weight[target][source]??0;return <path data-selected-weight d={`M${a.x} ${a.y}C${mid} ${a.y} ${mid} ${b.y} ${b.x} ${b.y}`} fill="none" stroke={v>=0?positiveColor:negativeColor} strokeWidth="2" opacity=".9" pointerEvents="none"/>;})()}
-  {after.inputs.map((v,i)=>{const point=p(-1,i),changed=Math.abs(v-before.inputs[i])>1e-7;return <g key={i} role="button" tabIndex={0} aria-label={`输入神经元：${labels[i]}`} onClick={()=>onPick(0,i)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onPick(0,i);}}}><rect x="0" y={point.y-17} width="127" height="36" fill="transparent"/>{stage===0&&selected===i&&<circle cx={point.x} cy={point.y} r="15" fill="none" stroke="#007f78" strokeWidth="2"/>}<text x="88" y={point.y-2} textAnchor="end" fontSize="11" fill={changed?'#315c80':'#667181'}>{labels[i]}</text><text x="88" y={point.y+11} textAnchor="end" fontSize="8" fill="#667181">{inputValues?.[i]??('换算后 '+v.toFixed(2))}</text><circle cx={point.x} cy={point.y} r="11" fill="none" stroke="#b8c0ca" strokeWidth="2"/><circle cx={point.x} cy={point.y} r="7" fill={allConnections?(v>=0?positiveColor:negativeColor):changed?'#315c80':'#b8c0ca'}/></g>;})}
+  {after.inputs.map((v,i)=>{const point=p(-1,i),changed=Math.abs(v-before.inputs[i])>1e-7;return <g key={i} role="button" tabIndex={0} aria-label={`输入神经元：${labels[i]}`} onClick={()=>onPick(0,i)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onPick(0,i);}}}><rect x="0" y={point.y-17} width="127" height="36" fill="transparent"/>{stage===0&&selected===i&&<circle cx={point.x} cy={point.y} r="15" fill="none" stroke="#007f78" strokeWidth="2"/>}<text x="88" y={point.y-2} textAnchor="end" fontSize="11" fill={changed?'var(--accent)':'var(--text-secondary)'}>{labels[i]}</text><text x="88" y={point.y+11} textAnchor="end" fontSize="8" fill="var(--text-secondary)">{inputValues?.[i]??('换算后 '+v.toFixed(2))}</text><circle cx={point.x} cy={point.y} r="11" fill="none" stroke="var(--border-active)" strokeWidth="2"/><circle cx={point.x} cy={point.y} r="7" fill={allConnections?(v>=0?positiveColor:negativeColor):changed?'#315c80':'var(--border-active)'}/></g>;})}
   {after.activations.slice(0,2).map((values,l)=><g key={l} data-touch-layer={l+1} style={{touchAction:'none'}} onPointerDown={e=>{if(e.button!==0||!e.isPrimary)return;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);pickAt(e.currentTarget,l,e.clientX,e.clientY);}} onPointerMove={e=>{if(e.currentTarget.hasPointerCapture(e.pointerId))pickAt(e.currentTarget,l,e.clientX,e.clientY);}} onPointerUp={e=>{if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}} onPointerCancel={e=>{if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}} onClick={e=>e.stopPropagation()}>
    <rect x={l===0?221:430} y="60" width="143" height="326" fill="transparent"/>
    {values.map((v,i)=>{
    const point=p(l,i),old=before.activations[l][i],display=liveAll||stage>=l+1?v:old,isSelected=stage===l+1&&i===selected;
    const signal=nodeSignals?.[l]?.[i],scale=nodeSignals?Math.max(1e-12,...nodeSignals[l].map(Math.abs),...(nodeReferenceSignals?.[l]??[]).map(Math.abs)):1;
    return <g key={l+'-'+i} role="button" tabIndex={0} aria-label={`第${l+1}层神经元${i+1}`}  onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onPick(l+1,i);}}}>
-    <circle cx={point.x} cy={point.y} r={nodeReferenceSignals?2+Math.abs(nodeReferenceSignals[l][i])/Math.max(scale,...nodeReferenceSignals[l].map(Math.abs))*2.8:nodeSignals?5:4+Math.abs(old)*2} fill="none" stroke="#b9c2cd" strokeWidth="1.3"/>
+    <circle cx={point.x} cy={point.y} r={nodeReferenceSignals?2+Math.abs(nodeReferenceSignals[l][i])/Math.max(scale,...nodeReferenceSignals[l].map(Math.abs))*2.8:nodeSignals?5:4+Math.abs(old)*2} fill="none" stroke="var(--border-active)" strokeWidth="1.3"/>
     <circle className={styles.neuron} cx={point.x} cy={point.y} r={signal===undefined?2+Math.abs(display)*2.8:2+Math.abs(signal)/scale*2.8} fill={(signal??display)>=0?positiveColor:negativeColor} opacity={liveAll||stage>=l+1?.95:.38}/>
     {isSelected&&<circle cx={point.x} cy={point.y} r="8" fill="none" stroke="#007f78" strokeWidth="2"/>}
     <title>{signal===undefined?`神经元 ${i+1}：${old.toFixed(4)} → ${v.toFixed(4)}`:`神经元 ${i+1} · ${signalLabel}：${signal.toExponential(3)}`}</title>
    </g>;
   })}</g>)}
   <g role="button" tabIndex={0} aria-label="输出神经元：油门" onClick={()=>onPick(3,0)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onPick(3,0);}}}>
-  <circle cx="662" cy="228" r="27" fill="none" stroke="#b8c0ca" strokeWidth="3"/>
+  <circle cx="662" cy="228" r="27" fill="none" stroke="var(--border-active)" strokeWidth="3"/>
   <circle cx="662" cy="228" r="22" fill={nodeSignals?(nodeSignals[2][0]>=0?positiveColor:negativeColor):allConnections||stage===3?'#315c80':'#8591a2'}/>
   <text x="662" y="232" textAnchor="middle" fill="white" fontSize="12">{nodeSignals?nodeSignals[2][0].toExponential(1):(liveAll||stage===3?after:before).activations[2][0].toFixed(3)}</text>
-  <text x="662" y="273" textAnchor="middle" fill="#667181" fontSize="9">{nodeSignals?'权重属于连线':`${comparisonLabel} ${before.activations[2][0].toFixed(3)}`}</text>
+  <text x="662" y="273" textAnchor="middle" fill="var(--text-secondary)" fontSize="9">{nodeSignals?'权重属于连线':`${comparisonLabel} ${before.activations[2][0].toFixed(3)}`}</text>
  </g></g></svg></div></>;
 }
 
