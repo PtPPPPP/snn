@@ -21,10 +21,10 @@ export function apply(ctx, config = {}) {
     name: "snn.sim.rocket",
     description: "Run the real SNN Rocket landing physics simulation (DT=0.01s, gravity 9.81 m/s^2, dry mass 10kg, max thrust 300N). Supports strategies: 'energy_ppo' (real trained PPO weights), 'energy_brake', or 'constant_throttle'. Returns terminal velocity, fuel consumption, first burn altitude, outcome, and trajectory keyframes.",
     parameters: {
-      initial_height: { type: "number", required: false, description: "Initial altitude in meters (10 to 120, default 50)." },
-      initial_fuel: { type: "number", required: false, description: "Initial fuel mass in kg (0.5 to 10, default 5)." },
-      strategy: { type: "string", required: false, description: "Control strategy: 'energy_ppo', 'energy_brake', or 'constant_throttle'." },
-      constant_throttle: { type: "number", required: false, description: "Throttle in [0, 1] when strategy is 'constant_throttle'." },
+      initial_height: { type: "number", description: "Initial altitude in meters (10 to 120, default 50)." },
+      initial_fuel: { type: "number", description: "Initial fuel mass in kg (0.5 to 10, default 5)." },
+      strategy: { type: "string", description: "Control strategy: 'energy_ppo', 'energy_brake', or 'constant_throttle'." },
+      constant_throttle: { type: "number", description: "Throttle in [0, 1] when strategy is 'constant_throttle'." },
     },
     output: { schema: { type: "string" }, render: (_args, value) => [{ type: "text", text: value }] },
     async execute(args) {
@@ -37,10 +37,10 @@ export function apply(ctx, config = {}) {
     name: "snn.lab.network",
     description: "Run a deterministic 2->3->1 neural network classification and gradient descent simulation on 'linear' or 'xor' datasets with 'relu', 'tanh', or 'linear' activation. Returns initial and final cross-entropy loss, accuracy, and sample predictions.",
     parameters: {
-      dataset: { type: "string", required: false, description: "Dataset id: 'xor' or 'linear' (default 'xor')." },
-      activation: { type: "string", required: false, description: "Hidden activation: 'relu', 'tanh', or 'linear' (default 'relu')." },
-      steps: { type: "number", required: false, description: "Gradient descent steps to run (0 to 400, default 120)." },
-      learning_rate: { type: "number", required: false, description: "Learning rate (0.01 to 1.0, default 0.25)." },
+      dataset: { type: "string", description: "Dataset id: 'xor' or 'linear' (default 'xor')." },
+      activation: { type: "string", description: "Hidden activation: 'relu', 'tanh', or 'linear' (default 'relu')." },
+      steps: { type: "number", description: "Gradient descent steps to run (0 to 400, default 120)." },
+      learning_rate: { type: "number", description: "Learning rate (0.01 to 1.0, default 0.25)." },
     },
     output: { schema: { type: "string" }, render: (_args, value) => [{ type: "text", text: value }] },
     async execute(args) {
@@ -54,8 +54,8 @@ export function apply(ctx, config = {}) {
     description: "Compare two UTF-8 text files in the assigned SNN workspace (file_path and compare_file_path) or compare a workspace text file against proposed_content, returning a structured line-by-line diff summary.",
     parameters: {
       file_path: { type: "string", required: true, description: "Relative path of the base text file inside the assigned workspace." },
-      compare_file_path: { type: "string", required: false, description: "Optional relative path of a second workspace text file to compare against." },
-      proposed_content: { type: "string", required: false, description: "Optional proposed new text content to diff against file_path." },
+      compare_file_path: { type: "string", description: "Optional relative path of a second workspace text file to compare against." },
+      proposed_content: { type: "string", description: "Optional proposed new text content to diff against file_path." },
     },
     output: { schema: { type: "string" }, render: (_args, value) => [{ type: "text", text: value }] },
     async execute(args) {
