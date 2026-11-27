@@ -9,5 +9,10 @@
 // This is the public Cloudflare AI Gateway entry point — safe to expose to
 // browsers (it appears in every visitor's network tab), never a secret.
 // Local development against a local AI Node: change to your node/gateway.
-window.__SNN_AI_API_BASE_URL__ = "https://api.snnai.cn/api/ai";
-window.__SNN_AGENT_API_BASE_URL__ = "https://api.snnai.cn/api/agent";
+if (typeof window !== "undefined" && window.location && window.location.hostname === "127.0.0.1") {
+  window.__SNN_AI_API_BASE_URL__ = "";
+  window.__SNN_AGENT_API_BASE_URL__ = "";
+} else {
+  window.__SNN_AI_API_BASE_URL__ = "https://api.snnai.cn/api/ai";
+  window.__SNN_AGENT_API_BASE_URL__ = "https://api.snnai.cn/api/agent";
+}
